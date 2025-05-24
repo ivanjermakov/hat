@@ -34,9 +34,15 @@ pub fn main() !void {
     const content: []u8 = buffer[0..file_len];
 
     const win = nc.initscr();
-    _ = win;
     _ = nc.printw(@ptrCast(content));
+    _ = nc.wmove(win, 0, 0);
     _ = nc.refresh();
-    _ = nc.getch();
-    _ = nc.endwin();
+
+    while (true) {
+        const key = nc.getch();
+        if (key == 'q') {
+            _ = nc.endwin();
+            return;
+        }
+    }
 }
