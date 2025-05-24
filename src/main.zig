@@ -3,6 +3,9 @@ const ts = @cImport({
     @cInclude("tree_sitter/api.h");
     @cInclude("tree_sitter/tree-sitter-c.h");
 });
+const nc = @cImport({
+    @cInclude("ncurses.h");
+});
 
 pub fn main() !void {
     const parser = ts.ts_parser_new();
@@ -18,3 +21,12 @@ pub fn main() !void {
     ts.ts_tree_delete(tree);
     ts.ts_parser_delete(parser);
 }
+
+// pub fn main() !void {
+//     const win = nc.initscr();
+//     _ = win;
+//     _ = nc.printw("hello, ncurses");
+//     _ = nc.refresh();
+//     _ = nc.getch();
+//     _ = nc.endwin();
+// }

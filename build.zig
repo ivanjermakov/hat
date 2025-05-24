@@ -13,6 +13,7 @@ pub fn build(b: *std.Build) void {
     exe.linkLibC();
     exe.linkSystemLibrary("tree-sitter");
     exe.linkSystemLibrary("tree-sitter-c");
+    exe.linkSystemLibrary("ncurses");
     b.installArtifact(exe);
 
     const run = b.addRunArtifact(exe);
