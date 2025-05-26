@@ -52,11 +52,11 @@ pub fn main() !void {
 
     const win = nc.initscr();
 
-    for (0..buffer.items.len) |line| {
-        const str: [*]u8 = @ptrCast(buffer.items[line].items);
+    for (0..buffer.items.len) |i| {
+        const line = buffer.items[i].items;
         // TODO: why this is necessary
-        if (buffer.items[line].items.len == 0) continue;
-        _ = nc.mvwaddstr(win, @intCast(line), 0, str);
+        if (line.len == 0) continue;
+        _ = nc.mvwaddstr(win, @intCast(i), 0, @ptrCast(line));
     }
 
     _ = nc.wmove(win, 0, 0);
