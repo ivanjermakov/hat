@@ -7,6 +7,22 @@ const nc = @cImport({
     @cInclude("ncurses.h");
 });
 
+const Buffer = std.ArrayList(Line);
+
+const Line = std.ArrayList(u8);
+
+fn buffer_new(content: []u8, alloc: std.mem.Allocator) !Buffer {
+    var lines_iter = std.mem.split(u8, content, "\n");
+    var lines: Buffer = std.ArrayList(Line).init(alloc);
+    while (true) {
+        const next: []u8 = @constCast(lines_iter.next() orelse break);
+        var line = std.ArrayList(u8).init(alloc);
+        try line.appendSlice(next);
+        try lines.append(line);
+    }
+    return lines;
+}
+
 // pub fn main() !void {
 //     const parser = ts.ts_parser_new();
 //     const language = ts.tree_sitter_c();
@@ -23,18 +39,26 @@ const nc = @cImport({
 // }
 
 pub fn main() !void {
+    const allocator = std.heap.page_allocator;
     var args = std.process.args();
     _ = args.skip();
     const path = args.next() orelse return error.NoPath;
 
     const file = try std.fs.cwd().openFile(path, .{ .mode = .read_write });
 
-    var buffer: []u8 = try std.heap.page_allocator.alloc(u8, 2048);
-    const file_len = try file.readAll(buffer);
-    const content: []u8 = buffer[0..file_len];
+    var buf: []u8 = try allocator.alloc(u8, 2048);
+    const file_len = try file.readAll(buf);
+    const buffer = try buffer_new(buf[0..file_len], allocator);
 
     const win = nc.initscr();
-    _ = nc.printw(@ptrCast(content));
+
+    for (0..buffer.items.len) |line| {
+        const str: [*]u8 = @ptrCast(buffer.items[line].items);
+        // TODO: why this is necessary
+        if (buffer.items[line].items.len == 0) continue;
+        _ = nc.mvwaddstr(win, @intCast(line), 0, str);
+    }
+
     _ = nc.wmove(win, 0, 0);
     _ = nc.refresh();
 
