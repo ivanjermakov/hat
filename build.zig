@@ -3,7 +3,6 @@ const std = @import("std");
 fn linkLibs(compile: *std.Build.Step.Compile) void {
     compile.linkLibC();
     compile.linkSystemLibrary("tree-sitter");
-    compile.linkSystemLibrary("tree-sitter-c");
     compile.linkSystemLibrary("ncurses");
 }
 

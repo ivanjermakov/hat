@@ -1,8 +1,8 @@
 const std = @import("std");
 const ts = @cImport({
     @cInclude("tree_sitter/api.h");
-    @cInclude("tree_sitter/tree-sitter-c.h");
 });
+const dl = std.DynLib;
 const nc = @cImport({
     @cInclude("ncurses.h");
 });
@@ -84,11 +84,12 @@ pub fn main() !void {
     // const buffer = try buffer_new(content, allocator);
 
     const parser = ts.ts_parser_new();
-    const language = ts.tree_sitter_c();
-    _ = ts.ts_parser_set_language(parser, language);
+    var language_lib = try dl.open("/usr/lib/tree_sitter/c.so");
+    var language: *const fn () *ts.struct_TSLanguage = undefined;
+    language = language_lib.lookup(@TypeOf(language), "tree_sitter_c") orelse return error.NoSymbol;
+    _ = ts.ts_parser_set_language(parser, language());
 
     const tree = ts.ts_parser_parse_string(parser, null, @ptrCast(content), @intCast(content.len));
-
     const root_node = ts.ts_tree_root_node(tree);
     std.debug.print("tree: {s}\n", .{@as([*:0]u8, ts.ts_node_string(root_node))});
 
