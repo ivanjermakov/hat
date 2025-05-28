@@ -41,13 +41,13 @@ fn make_spans(root_node: ts.struct_TSNode, alloc: std.mem.Allocator) !std.ArrayL
     var node = root_node;
 
     traverse: while (true) {
-        const node_type = ts.ts_node_type(node);
-        if (node_type == 0) continue;
+        const node_type = std.mem.span(ts.ts_node_type(node));
+        if (node_type.len == 0) continue;
 
         const start_byte = ts.ts_node_start_byte(node);
         const end_byte = ts.ts_node_end_byte(node);
         const span = .{ .start_byte = start_byte, .end_byte = end_byte };
-        try spans.append(.{ .span = span, .node_type = @constCast(node_type[0..std.mem.len(node_type)]) });
+        try spans.append(.{ .span = span, .node_type = @constCast(node_type) });
 
         if (ts.ts_tree_cursor_goto_first_child(&cursor)) {
             node = ts.ts_tree_cursor_current_node(&cursor);
@@ -72,13 +72,22 @@ fn make_spans(root_node: ts.struct_TSNode, alloc: std.mem.Allocator) !std.ArrayL
 
 pub fn main() !void {
     const allocator = std.heap.page_allocator;
+    var args = std.process.args();
+    _ = args.skip();
+    const path = args.next() orelse return error.NoPath;
+
+    const file = try std.fs.cwd().openFile(path, .{ .mode = .read_write });
+
+    var buf: []u8 = try allocator.alloc(u8, 2048);
+    const file_len = try file.readAll(buf);
+    const content = buf[0..file_len];
+    // const buffer = try buffer_new(content, allocator);
 
     const parser = ts.ts_parser_new();
     const language = ts.tree_sitter_c();
     _ = ts.ts_parser_set_language(parser, language);
 
-    const source_code = "int main() { return 0; }";
-    const tree = ts.ts_parser_parse_string(parser, null, source_code, source_code.len);
+    const tree = ts.ts_parser_parse_string(parser, null, @ptrCast(content), @intCast(content.len));
 
     const root_node = ts.ts_tree_root_node(tree);
     std.debug.print("tree: {s}\n", .{@as([*:0]u8, ts.ts_node_string(root_node))});
