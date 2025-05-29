@@ -8,5 +8,5 @@ pub fn try_move_cursor(try_cursor: main.Cursor) void {
     if (try_cursor.row < 0 or try_cursor.row > win_size.row - 1 or
         try_cursor.col < 0 or try_cursor.col > win_size.col - 1) return;
     (&main.cursor).* = try_cursor;
-    main.need_redraw = true;
+    main.needs_redraw = true;
 }
