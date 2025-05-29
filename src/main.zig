@@ -17,6 +17,15 @@ const color = enum(u8) {
     red,
     green,
     blue,
+
+    fn rgb_to_curses(x: u8) c_short {
+        const f: f32 = @as(f32, @floatFromInt(x)) / 256 * 1000;
+        return @intFromFloat(f);
+    }
+
+    pub fn init(self: color, r: u8, g: u8, b: u8) void {
+        _ = nc.init_color(@intFromEnum(self), rgb_to_curses(r), rgb_to_curses(g), rgb_to_curses(b));
+    }
 };
 
 const color_pair = enum(u8) {
@@ -24,6 +33,10 @@ const color_pair = enum(u8) {
     keyword,
     string,
     number,
+
+    pub fn init(self: color_pair, fg: color, bg: color) void {
+        _ = nc.init_pair(@intFromEnum(self), @intFromEnum(fg), @intFromEnum(bg));
+    }
 
     pub fn to_pair(self: color_pair) c_int {
         return @as(c_int, @intFromEnum(self)) * 256;
@@ -96,11 +109,6 @@ fn make_spans(root_node: ts.struct_TSNode, alloc: std.mem.Allocator) !std.ArrayL
     return spans;
 }
 
-fn rgb_to_curses(x: u8) c_short {
-    const f: f32 = @as(f32, @floatFromInt(x)) / 256 * 1000;
-    return @intFromFloat(f);
-}
-
 fn init_curses() !*nc.WINDOW {
     const win = nc.initscr() orelse return error.InitScr;
     _ = nc.noecho();
@@ -109,16 +117,16 @@ fn init_curses() !*nc.WINDOW {
         _ = nc.start_color();
     }
 
-    _ = nc.init_color(@intFromEnum(color.black), rgb_to_curses(0), rgb_to_curses(0), rgb_to_curses(0));
-    _ = nc.init_color(@intFromEnum(color.white), rgb_to_curses(255), rgb_to_curses(255), rgb_to_curses(255));
-    _ = nc.init_color(@intFromEnum(color.red), rgb_to_curses(255), rgb_to_curses(0), rgb_to_curses(0));
-    _ = nc.init_color(@intFromEnum(color.green), rgb_to_curses(0), rgb_to_curses(255), rgb_to_curses(0));
-    _ = nc.init_color(@intFromEnum(color.blue), rgb_to_curses(0), rgb_to_curses(0), rgb_to_curses(255));
+    color.black.init(0, 0, 0);
+    color.white.init(255, 255, 255);
+    color.red.init(255, 0, 0);
+    color.green.init(0, 255, 0);
+    color.blue.init(0, 0, 255);
 
-    _ = nc.init_pair(@intFromEnum(color_pair.text), @intFromEnum(color.white), @intFromEnum(color.black));
-    _ = nc.init_pair(@intFromEnum(color_pair.keyword), @intFromEnum(color.red), @intFromEnum(color.black));
-    _ = nc.init_pair(@intFromEnum(color_pair.string), @intFromEnum(color.green), @intFromEnum(color.black));
-    _ = nc.init_pair(@intFromEnum(color_pair.number), @intFromEnum(color.blue), @intFromEnum(color.black));
+    color_pair.text.init(color.white, color.black);
+    color_pair.keyword.init(color.red, color.black);
+    color_pair.string.init(color.green, color.black);
+    color_pair.number.init(color.blue, color.black);
 
     _ = nc.bkgd(@intCast(color_pair.text.to_pair()));
 
@@ -144,7 +152,9 @@ fn redraw(buffer: *const Buffer, spans: *const std.ArrayList(SpanNodeTypeTuple))
                         ch_attr = attr.keyword;
                         break;
                     }
-                    if (std.mem.eql(u8, span.node_type, "system_lib_string")) {
+                    if (std.mem.eql(u8, span.node_type, "system_lib_string") or
+                        std.mem.eql(u8, span.node_type, "string_literal"))
+                    {
                         ch_attr = attr.string;
                         break;
                     }
