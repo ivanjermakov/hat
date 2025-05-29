@@ -21,7 +21,8 @@ pub var need_reparse = false;
 
 pub const Line = std.ArrayList(u8);
 
-pub const Color = enum(u8) {
+pub const Color = enum(i16) {
+    none = -1,
     black = 1,
     white,
     red,
@@ -104,8 +105,10 @@ fn make_spans(root_node: ts.struct_TSNode, alloc: std.mem.Allocator) !std.ArrayL
 
         const start_byte = ts.ts_node_start_byte(node);
         const end_byte = ts.ts_node_end_byte(node);
-        const span: Span = .{ .start_byte = start_byte, .end_byte = end_byte };
-        try spans.append(.{ .span = span, .node_type = @constCast(node_type) });
+        try spans.append(.{
+            .span = .{ .start_byte = start_byte, .end_byte = end_byte },
+            .node_type = @constCast(node_type),
+        });
 
         if (ts.ts_tree_cursor_goto_first_child(&tree_cursor)) {
             node = ts.ts_tree_cursor_current_node(&tree_cursor);
@@ -130,6 +133,7 @@ fn make_spans(root_node: ts.struct_TSNode, alloc: std.mem.Allocator) !std.ArrayL
 
 fn init_curses() !*nc.WINDOW {
     const win = nc.initscr() orelse return error.InitScr;
+    _ = nc.use_default_colors();
     _ = nc.noecho();
 
     if (nc.has_colors()) {
@@ -142,10 +146,10 @@ fn init_curses() !*nc.WINDOW {
     Color.green.init(0, 255, 0);
     Color.blue.init(0, 0, 255);
 
-    ColorPair.text.init(Color.white, Color.black);
-    ColorPair.keyword.init(Color.red, Color.black);
-    ColorPair.string.init(Color.green, Color.black);
-    ColorPair.number.init(Color.blue, Color.black);
+    ColorPair.text.init(Color.white, Color.none);
+    ColorPair.keyword.init(Color.red, Color.none);
+    ColorPair.string.init(Color.green, Color.none);
+    ColorPair.number.init(Color.blue, Color.none);
 
     _ = nc.bkgd(@intCast(ColorPair.text.to_pair()));
 
