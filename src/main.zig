@@ -81,7 +81,7 @@ pub fn main() !void {
     var buf: []u8 = try allocator.alloc(u8, 2048);
     const file_len = try file.readAll(buf);
     const content = buf[0..file_len];
-    // const buffer = try buffer_new(content, allocator);
+    const buffer = try buffer_new(content, allocator);
 
     const parser = ts.ts_parser_new();
     var language_lib = try dl.open("/usr/lib/tree_sitter/c.so");
@@ -102,39 +102,26 @@ pub fn main() !void {
         }
     }
 
+    const win = nc.initscr();
+
+    for (0..buffer.items.len) |i| {
+        var line: []u8 = buffer.items[i].items;
+        // TODO: why this is necessary
+        if (line.len == 0) line = "";
+        _ = nc.mvwaddstr(win, @intCast(i), 0, @ptrCast(line));
+    }
+
+    _ = nc.wmove(win, 0, 0);
+    _ = nc.refresh();
+
+    while (true) {
+        const key = nc.getch();
+        if (key == 'q') {
+            _ = nc.endwin();
+            return;
+        }
+    }
+
     ts.ts_tree_delete(tree);
     ts.ts_parser_delete(parser);
 }
-
-// pub fn main() !void {
-//     const allocator = std.heap.page_allocator;
-//     var args = std.process.args();
-//     _ = args.skip();
-//     const path = args.next() orelse return error.NoPath;
-//
-//     const file = try std.fs.cwd().openFile(path, .{ .mode = .read_write });
-//
-//     var buf: []u8 = try allocator.alloc(u8, 2048);
-//     const file_len = try file.readAll(buf);
-//     const buffer = try buffer_new(buf[0..file_len], allocator);
-//
-//     const win = nc.initscr();
-//
-//     for (0..buffer.items.len) |i| {
-//         var line: []u8 = buffer.items[i].items;
-//         // TODO: why this is necessary
-//         if (line.len == 0) line = "";
-//         _ = nc.mvwaddstr(win, @intCast(i), 0, @ptrCast(line));
-//     }
-//
-//     _ = nc.wmove(win, 0, 0);
-//     _ = nc.refresh();
-//
-//     while (true) {
-//         const key = nc.getch();
-//         if (key == 'q') {
-//             _ = nc.endwin();
-//             return;
-//         }
-//     }
-// }
