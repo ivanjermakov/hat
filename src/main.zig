@@ -70,6 +70,11 @@ fn make_spans(root_node: ts.struct_TSNode, alloc: std.mem.Allocator) !std.ArrayL
     return spans;
 }
 
+fn rgb_to_curses(x: u8) c_short {
+    const f: f32 = @as(f32, @floatFromInt(x)) / 256 * 1000;
+    return @intFromFloat(f);
+}
+
 pub fn main() !void {
     const allocator = std.heap.page_allocator;
     var args = std.process.args();
@@ -84,34 +89,71 @@ pub fn main() !void {
     const buffer = try buffer_new(content, allocator);
 
     const parser = ts.ts_parser_new();
+    defer ts.ts_parser_delete(parser);
     var language_lib = try dl.open("/usr/lib/tree_sitter/c.so");
     var language: *const fn () *ts.struct_TSLanguage = undefined;
     language = language_lib.lookup(@TypeOf(language), "tree_sitter_c") orelse return error.NoSymbol;
     _ = ts.ts_parser_set_language(parser, language());
 
     const tree = ts.ts_parser_parse_string(parser, null, @ptrCast(content), @intCast(content.len));
+    defer ts.ts_tree_delete(tree);
     const root_node = ts.ts_tree_root_node(tree);
     std.debug.print("tree: {s}\n", .{@as([*:0]u8, ts.ts_node_string(root_node))});
 
     const spans = try make_spans(root_node, allocator);
 
-    const byte = 0;
-    for (spans.items) |span| {
-        if (span.span.start_byte <= byte and span.span.end_byte > byte) {
-            std.debug.print("{s}\n", .{span.node_type});
-        }
+    const win = nc.initscr();
+    _ = win;
+
+    if (nc.has_colors()) {
+        _ = nc.start_color();
     }
 
-    const win = nc.initscr();
+    const color = .{
+        .black = 0,
+        .white = 1,
+        .red = 2,
+    };
+    _ = nc.init_color(color.black, rgb_to_curses(0), rgb_to_curses(0), rgb_to_curses(0));
+    _ = nc.init_color(color.white, rgb_to_curses(255), rgb_to_curses(255), rgb_to_curses(255));
+    _ = nc.init_color(color.red, rgb_to_curses(255), rgb_to_curses(0), rgb_to_curses(0));
 
-    for (0..buffer.items.len) |i| {
-        var line: []u8 = buffer.items[i].items;
+    const color_pair = .{
+        .text = 1,
+        .keyword = 2,
+    };
+    _ = nc.init_pair(color_pair.text, color.white, color.black);
+    _ = nc.init_pair(color_pair.keyword, color.red, color.black);
+
+    const attr = .{
+        .text = nc.COLOR_PAIR(color_pair.text),
+        .keyword = nc.COLOR_PAIR(color_pair.keyword) | nc.A_BOLD,
+    };
+
+    _ = nc.bkgd(@intCast(nc.COLOR_PAIR(1)));
+
+    var byte: usize = 0;
+    for (0..buffer.items.len) |row| {
+        var line: []u8 = buffer.items[row].items;
         // TODO: why this is necessary
         if (line.len == 0) line = "";
-        _ = nc.mvwaddstr(win, @intCast(i), 0, @ptrCast(line));
+
+        for (0..line.len) |col| {
+            const ch = line[col];
+            for (spans.items) |span| {
+                if (span.span.start_byte <= byte and span.span.end_byte > byte) {
+                    // std.debug.print("{s}\n", .{span.node_type});
+                }
+            }
+            _ = nc.attrset(attr.keyword);
+            _ = nc.mvaddch(@intCast(row), @intCast(col), ch);
+            byte += 1;
+        }
+        byte += 1;
     }
 
-    _ = nc.wmove(win, 0, 0);
+    _ = nc.standend();
+    _ = nc.move(0, 0);
     _ = nc.refresh();
 
     while (true) {
@@ -121,7 +163,4 @@ pub fn main() !void {
             return;
         }
     }
-
-    ts.ts_tree_delete(tree);
-    ts.ts_parser_delete(parser);
 }
