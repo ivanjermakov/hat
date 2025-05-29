@@ -101,6 +101,9 @@ pub fn main() !void {
     std.debug.print("tree: {s}\n", .{@as([*:0]u8, ts.ts_node_string(root_node))});
 
     const spans = try make_spans(root_node, allocator);
+    for (spans.items) |span| {
+        std.debug.print("{s}\n", .{span.node_type});
+    }
 
     const win = nc.initscr();
     _ = win;
@@ -113,21 +116,31 @@ pub fn main() !void {
         .black = 0,
         .white = 1,
         .red = 2,
+        .green = 3,
+        .blue = 4,
     };
     _ = nc.init_color(color.black, rgb_to_curses(0), rgb_to_curses(0), rgb_to_curses(0));
     _ = nc.init_color(color.white, rgb_to_curses(255), rgb_to_curses(255), rgb_to_curses(255));
     _ = nc.init_color(color.red, rgb_to_curses(255), rgb_to_curses(0), rgb_to_curses(0));
+    _ = nc.init_color(color.green, rgb_to_curses(0), rgb_to_curses(255), rgb_to_curses(0));
+    _ = nc.init_color(color.blue, rgb_to_curses(0), rgb_to_curses(0), rgb_to_curses(255));
 
     const color_pair = .{
         .text = 1,
         .keyword = 2,
+        .string = 3,
+        .number = 4,
     };
     _ = nc.init_pair(color_pair.text, color.white, color.black);
     _ = nc.init_pair(color_pair.keyword, color.red, color.black);
+    _ = nc.init_pair(color_pair.string, color.green, color.black);
+    _ = nc.init_pair(color_pair.number, color.blue, color.black);
 
     const attr = .{
         .text = nc.COLOR_PAIR(color_pair.text),
         .keyword = nc.COLOR_PAIR(color_pair.keyword) | nc.A_BOLD,
+        .string = nc.COLOR_PAIR(color_pair.string),
+        .number = nc.COLOR_PAIR(color_pair.number),
     };
 
     _ = nc.bkgd(@intCast(nc.COLOR_PAIR(1)));
@@ -140,12 +153,27 @@ pub fn main() !void {
 
         for (0..line.len) |col| {
             const ch = line[col];
+            var ch_attr = attr.text;
             for (spans.items) |span| {
                 if (span.span.start_byte <= byte and span.span.end_byte > byte) {
-                    // std.debug.print("{s}\n", .{span.node_type});
+                    if (std.mem.eql(u8, span.node_type, "return") or
+                        std.mem.eql(u8, span.node_type, "primitive_type") or
+                        std.mem.eql(u8, span.node_type, "#include"))
+                    {
+                        ch_attr = attr.keyword;
+                        break;
+                    }
+                    if (std.mem.eql(u8, span.node_type, "system_lib_string")) {
+                        ch_attr = attr.string;
+                        break;
+                    }
+                    if (std.mem.eql(u8, span.node_type, "number_literal")) {
+                        ch_attr = attr.number;
+                        break;
+                    }
                 }
             }
-            _ = nc.attrset(attr.keyword);
+            _ = nc.attrset(ch_attr);
             _ = nc.mvaddch(@intCast(row), @intCast(col), ch);
             byte += 1;
         }
