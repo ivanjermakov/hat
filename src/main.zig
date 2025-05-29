@@ -61,7 +61,7 @@ const Attr = .{
 };
 
 fn buffer_new(content: []u8, alloc: std.mem.Allocator) !Buffer {
-    var lines_iter = std.mem.split(u8, content, "\n");
+    var lines_iter = std.mem.splitSequence(u8, content, "\n");
     var lines: Buffer = std.ArrayList(Line).init(alloc);
     while (true) {
         const next: []u8 = @constCast(lines_iter.next() orelse break);
@@ -104,7 +104,7 @@ fn make_spans(root_node: ts.struct_TSNode, alloc: std.mem.Allocator) !std.ArrayL
 
         const start_byte = ts.ts_node_start_byte(node);
         const end_byte = ts.ts_node_end_byte(node);
-        const span = .{ .start_byte = start_byte, .end_byte = end_byte };
+        const span: Span = .{ .start_byte = start_byte, .end_byte = end_byte };
         try spans.append(.{ .span = span, .node_type = @constCast(node_type) });
 
         if (ts.ts_tree_cursor_goto_first_child(&tree_cursor)) {
