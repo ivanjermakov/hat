@@ -11,6 +11,32 @@ const Buffer = std.ArrayList(Line);
 
 const Line = std.ArrayList(u8);
 
+const color = enum(u8) {
+    black = 1,
+    white,
+    red,
+    green,
+    blue,
+};
+
+const color_pair = enum(u8) {
+    text = 1,
+    keyword,
+    string,
+    number,
+
+    pub fn to_pair(self: color_pair) c_int {
+        return @as(c_int, @intFromEnum(self)) * 256;
+    }
+};
+
+const attr = .{
+    .text = color_pair.text.to_pair(),
+    .keyword = color_pair.keyword.to_pair() | nc.A_BOLD,
+    .string = color_pair.string.to_pair(),
+    .number = color_pair.number.to_pair(),
+};
+
 fn buffer_new(content: []u8, alloc: std.mem.Allocator) !Buffer {
     var lines_iter = std.mem.split(u8, content, "\n");
     var lines: Buffer = std.ArrayList(Line).init(alloc);
@@ -75,76 +101,31 @@ fn rgb_to_curses(x: u8) c_short {
     return @intFromFloat(f);
 }
 
-pub fn main() !void {
-    const allocator = std.heap.page_allocator;
-    var args = std.process.args();
-    _ = args.skip();
-    const path = args.next() orelse return error.NoPath;
-
-    const file = try std.fs.cwd().openFile(path, .{ .mode = .read_write });
-
-    var buf: []u8 = try allocator.alloc(u8, 2048);
-    const file_len = try file.readAll(buf);
-    const content = buf[0..file_len];
-    const buffer = try buffer_new(content, allocator);
-
-    const parser = ts.ts_parser_new();
-    defer ts.ts_parser_delete(parser);
-    var language_lib = try dl.open("/usr/lib/tree_sitter/c.so");
-    var language: *const fn () *ts.struct_TSLanguage = undefined;
-    language = language_lib.lookup(@TypeOf(language), "tree_sitter_c") orelse return error.NoSymbol;
-    _ = ts.ts_parser_set_language(parser, language());
-
-    const tree = ts.ts_parser_parse_string(parser, null, @ptrCast(content), @intCast(content.len));
-    defer ts.ts_tree_delete(tree);
-    const root_node = ts.ts_tree_root_node(tree);
-    std.debug.print("tree: {s}\n", .{@as([*:0]u8, ts.ts_node_string(root_node))});
-
-    const spans = try make_spans(root_node, allocator);
-    for (spans.items) |span| {
-        std.debug.print("{s}\n", .{span.node_type});
-    }
-
-    const win = nc.initscr();
-    _ = win;
+fn init_curses() !*nc.WINDOW {
+    const win = nc.initscr() orelse return error.InitScr;
+    _ = nc.noecho();
 
     if (nc.has_colors()) {
         _ = nc.start_color();
     }
 
-    const color = .{
-        .black = 0,
-        .white = 1,
-        .red = 2,
-        .green = 3,
-        .blue = 4,
-    };
-    _ = nc.init_color(color.black, rgb_to_curses(0), rgb_to_curses(0), rgb_to_curses(0));
-    _ = nc.init_color(color.white, rgb_to_curses(255), rgb_to_curses(255), rgb_to_curses(255));
-    _ = nc.init_color(color.red, rgb_to_curses(255), rgb_to_curses(0), rgb_to_curses(0));
-    _ = nc.init_color(color.green, rgb_to_curses(0), rgb_to_curses(255), rgb_to_curses(0));
-    _ = nc.init_color(color.blue, rgb_to_curses(0), rgb_to_curses(0), rgb_to_curses(255));
+    _ = nc.init_color(@intFromEnum(color.black), rgb_to_curses(0), rgb_to_curses(0), rgb_to_curses(0));
+    _ = nc.init_color(@intFromEnum(color.white), rgb_to_curses(255), rgb_to_curses(255), rgb_to_curses(255));
+    _ = nc.init_color(@intFromEnum(color.red), rgb_to_curses(255), rgb_to_curses(0), rgb_to_curses(0));
+    _ = nc.init_color(@intFromEnum(color.green), rgb_to_curses(0), rgb_to_curses(255), rgb_to_curses(0));
+    _ = nc.init_color(@intFromEnum(color.blue), rgb_to_curses(0), rgb_to_curses(0), rgb_to_curses(255));
 
-    const color_pair = .{
-        .text = 1,
-        .keyword = 2,
-        .string = 3,
-        .number = 4,
-    };
-    _ = nc.init_pair(color_pair.text, color.white, color.black);
-    _ = nc.init_pair(color_pair.keyword, color.red, color.black);
-    _ = nc.init_pair(color_pair.string, color.green, color.black);
-    _ = nc.init_pair(color_pair.number, color.blue, color.black);
+    _ = nc.init_pair(@intFromEnum(color_pair.text), @intFromEnum(color.white), @intFromEnum(color.black));
+    _ = nc.init_pair(@intFromEnum(color_pair.keyword), @intFromEnum(color.red), @intFromEnum(color.black));
+    _ = nc.init_pair(@intFromEnum(color_pair.string), @intFromEnum(color.green), @intFromEnum(color.black));
+    _ = nc.init_pair(@intFromEnum(color_pair.number), @intFromEnum(color.blue), @intFromEnum(color.black));
 
-    const attr = .{
-        .text = nc.COLOR_PAIR(color_pair.text),
-        .keyword = nc.COLOR_PAIR(color_pair.keyword) | nc.A_BOLD,
-        .string = nc.COLOR_PAIR(color_pair.string),
-        .number = nc.COLOR_PAIR(color_pair.number),
-    };
+    _ = nc.bkgd(@intCast(color_pair.text.to_pair()));
 
-    _ = nc.bkgd(@intCast(nc.COLOR_PAIR(1)));
+    return win;
+}
 
+fn redraw(buffer: *const Buffer, spans: *const std.ArrayList(SpanNodeTypeTuple)) void {
     var byte: usize = 0;
     for (0..buffer.items.len) |row| {
         var line: []u8 = buffer.items[row].items;
@@ -181,8 +162,45 @@ pub fn main() !void {
     }
 
     _ = nc.standend();
-    _ = nc.move(0, 0);
     _ = nc.refresh();
+}
+
+pub fn main() !void {
+    const allocator = std.heap.page_allocator;
+    var args = std.process.args();
+    _ = args.skip();
+    const path = args.next() orelse return error.NoPath;
+
+    const file = try std.fs.cwd().openFile(path, .{ .mode = .read_write });
+
+    var buf: []u8 = try allocator.alloc(u8, 2048);
+    const file_len = try file.readAll(buf);
+    const content = buf[0..file_len];
+    const buffer = try buffer_new(content, allocator);
+
+    const parser = ts.ts_parser_new();
+    defer ts.ts_parser_delete(parser);
+    var language_lib = try dl.open("/usr/lib/tree_sitter/c.so");
+    var language: *const fn () *ts.struct_TSLanguage = undefined;
+    language = language_lib.lookup(@TypeOf(language), "tree_sitter_c") orelse return error.NoSymbol;
+    _ = ts.ts_parser_set_language(parser, language());
+
+    const tree = ts.ts_parser_parse_string(parser, null, @ptrCast(content), @intCast(content.len));
+    defer ts.ts_tree_delete(tree);
+    const root_node = ts.ts_tree_root_node(tree);
+    std.debug.print("tree: {s}\n", .{@as([*:0]u8, ts.ts_node_string(root_node))});
+
+    const spans = try make_spans(root_node, allocator);
+    // for (spans.items) |span| {
+    //     std.debug.print("{s}\n", .{span.node_type});
+    // }
+
+    std.debug.print("AAAAAA {} {}\n", .{ nc.COLOR_PAIR(1), color_pair.text.to_pair() });
+    const win = try init_curses();
+    _ = win;
+
+    redraw(&buffer, &spans);
+    _ = nc.move(0, 0);
 
     while (true) {
         const key = nc.getch();
