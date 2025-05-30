@@ -1,5 +1,8 @@
 const std = @import("std");
 const posix = std.posix;
+const loc = @cImport({
+    @cInclude("locale.h");
+});
 const termios = @cImport({
     @cInclude("termios.h");
 });
@@ -12,6 +15,7 @@ const nc = @cImport({
 });
 const action = @import("action.zig");
 const input = @import("input.zig");
+const unicode = @import("unicode.zig");
 
 pub const Buffer = std.ArrayList(Line);
 
@@ -158,6 +162,7 @@ fn init_curses() !*nc.WINDOW {
     const win = nc.initscr() orelse return error.InitScr;
     _ = nc.use_default_colors();
     _ = nc.noecho();
+    _ = loc.setlocale(loc.LC_ALL, "");
 
     if (nc.has_colors()) {
         _ = nc.start_color();
@@ -196,15 +201,17 @@ fn ts_parse() !void {
     tree = ts.ts_parser_parse_string(parser, null, @ptrCast(content.items), @intCast(content.items.len));
 }
 
-fn redraw() void {
+fn redraw() !void {
     var byte: usize = 0;
     for (0..buffer.items.len) |row| {
         var line: []u8 = buffer.items[row].items;
         // TODO: why this is necessary
         if (line.len == 0) line = "";
+        const line_view = try std.unicode.Utf8View.init(line);
+        var line_iter = line_view.iterator();
 
-        for (0..line.len) |col| {
-            const ch = line[col];
+        var col: usize = 0;
+        while (line_iter.nextCodepoint()) |ch| {
             var ch_attr = Attr.text;
             for (spans.items) |span| {
                 if (span.span.start_byte <= byte and span.span.end_byte > byte) {
@@ -228,8 +235,10 @@ fn redraw() void {
                 }
             }
             _ = nc.attrset(ch_attr);
-            _ = nc.mvaddch(@intCast(row), @intCast(col), ch);
-            byte += 1;
+            const cchar = unicode.codepoint_to_cchar(ch);
+            _ = nc.mvadd_wch(@intCast(row), @intCast(col), @ptrCast(&cchar));
+            byte += try std.unicode.utf8CodepointSequenceLength(ch);
+            col += 1;
         }
         byte += 1;
     }
@@ -310,7 +319,7 @@ pub fn main() !void {
 
     try ts_parse();
     try make_spans();
-    redraw();
+    try redraw();
 
     while (true) {
         _ = nc.refresh();
@@ -345,7 +354,7 @@ pub fn main() !void {
             try make_spans();
         }
         if (needs_redraw) {
-            redraw();
+            try redraw();
         }
     }
 }
