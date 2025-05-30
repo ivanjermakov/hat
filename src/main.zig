@@ -76,6 +76,11 @@ const SpanNodeTypeTuple = struct {
     node_type: NodeType,
 };
 
+const Args = struct {
+    path: []u8,
+    log: bool,
+};
+
 pub const sleep_ns = 16 * 1e6;
 
 pub const allocator = std.heap.page_allocator;
@@ -87,6 +92,11 @@ pub var parser: ?*ts.TSParser = null;
 pub var tree: ?*ts.TSTree = null;
 pub var needs_redraw = false;
 pub var needs_reparse = false;
+pub var log_enabled = true;
+pub var args: Args = .{
+    .path = undefined,
+    .log = false,
+};
 
 fn update_buffer() !void {
     buffer.clearRetainingCapacity();
@@ -263,11 +273,18 @@ fn code_to_string(code: u8) ![]u8 {
 pub fn main() !void {
     defer dispose();
 
-    var args = std.process.args();
-    _ = args.skip();
-    const path = args.next() orelse return error.NoPath;
+    var cmd_args = std.process.args();
+    _ = cmd_args.skip();
+    while (cmd_args.next()) |arg| {
+        if (std.mem.eql(u8, arg, "-v")) {
+            args.log = true;
+            continue;
+        }
+        args.path = @constCast(arg);
+    }
+    log_enabled = args.log;
 
-    const file = try std.fs.cwd().openFile(path, .{ .mode = .read_write });
+    const file = try std.fs.cwd().openFile(args.path, .{ .mode = .read_write });
     const file_content = try file.readToEndAlloc(allocator, std.math.maxInt(usize));
     try content.appendSlice(file_content);
     try update_buffer();
@@ -289,6 +306,14 @@ pub fn main() !void {
             std.time.sleep(sleep_ns);
             continue;
         };
+
+        if (log_enabled) {
+            std.debug.print("input: ", .{});
+            for (input) |code| {
+                std.debug.print("{s}", .{try code_to_string(code)});
+            }
+            std.debug.print("\n", .{});
+        }
 
         if (input.len > 1) {
             // TODO: handle control seqs
