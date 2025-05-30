@@ -1,4 +1,8 @@
 const std = @import("std");
+const posix = std.posix;
+const termios = @cImport({
+    @cInclude("termios.h");
+});
 const ts = @cImport({
     @cInclude("tree_sitter/api.h");
 });
@@ -71,6 +75,8 @@ const SpanNodeTypeTuple = struct {
     span: Span,
     node_type: NodeType,
 };
+
+pub const sleep_ns = 16 * 1e6;
 
 pub const allocator = std.heap.page_allocator;
 pub var buffer: Buffer = std.ArrayList(Line).init(allocator);
@@ -221,6 +227,39 @@ fn redraw() void {
     _ = nc.move(@intCast(cursor.row), @intCast(cursor.col));
 }
 
+fn setup_terminal() !void {
+    var tty: termios.struct_termios = undefined;
+    _ = termios.tcgetattr(std.posix.STDIN_FILENO, &tty);
+    tty.c_lflag &= @bitCast(~(termios.ICANON | termios.ECHO));
+    _ = termios.tcsetattr(std.posix.STDIN_FILENO, termios.TCSANOW, &tty);
+
+    _ = try posix.fcntl(0, posix.F.SETFL, try posix.fcntl(0, posix.F.GETFL, 0) | posix.SOCK.NONBLOCK);
+}
+
+fn get_input() !?[]u8 {
+    var buf = std.ArrayList(u8).init(allocator);
+    while (true) {
+        var b: [1]u8 = undefined;
+        const bytes_read = std.posix.read(std.posix.STDIN_FILENO, b[0..1]) catch break;
+        if (bytes_read == 0) break;
+        try buf.appendSlice(b[0..]);
+        // 1ns seems to be enough wait time for stdin to fill up with the next code
+        std.time.sleep(1);
+    }
+    if (buf.items.len == 0) return null;
+    return buf.items;
+}
+
+fn code_to_string(code: u8) ![]u8 {
+    const is_printable = code >= 32 and code < 127;
+    var buf: [1024]u8 = undefined;
+    if (is_printable) {
+        return std.fmt.bufPrint(&buf, "{c}", .{@as(u7, @intCast(code))});
+    } else {
+        return std.fmt.bufPrint(&buf, "\\x{x}", .{code});
+    }
+}
+
 pub fn main() !void {
     defer dispose();
 
@@ -229,15 +268,11 @@ pub fn main() !void {
     const path = args.next() orelse return error.NoPath;
 
     const file = try std.fs.cwd().openFile(path, .{ .mode = .read_write });
-
-    const file_content = mk_content: {
-        var buf: []u8 = try allocator.alloc(u8, 2048);
-        const file_len = try file.readAll(buf);
-        break :mk_content buf[0..file_len];
-    };
+    const file_content = try file.readToEndAlloc(allocator, std.math.maxInt(usize));
     try content.appendSlice(file_content);
     try update_buffer();
 
+    try setup_terminal();
     const win = try init_curses();
     _ = win;
 
@@ -249,7 +284,17 @@ pub fn main() !void {
 
     while (true) {
         _ = nc.refresh();
-        const key = nc.getch();
+
+        const input = try get_input() orelse {
+            std.time.sleep(sleep_ns);
+            continue;
+        };
+
+        if (input.len > 1) {
+            // TODO: handle control seqs
+            continue;
+        }
+        const key = input[0];
         if (key == 'q') {
             _ = nc.endwin();
             return;
@@ -277,6 +322,8 @@ pub fn main() !void {
 }
 
 fn dispose() void {
-    defer ts.ts_parser_delete(parser);
-    defer buffer.clearAndFree();
+    ts.ts_parser_delete(parser);
+    buffer.deinit();
+    content.deinit();
+    spans.deinit();
 }
