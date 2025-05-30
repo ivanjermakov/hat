@@ -6,6 +6,7 @@ pub const KeyCode = enum {
     down,
     left,
     right,
+    backspace,
 };
 
 pub const Modifier = enum(u8) {
@@ -25,13 +26,29 @@ pub const Key = struct {
 };
 
 pub fn parse_ansi(input: *std.ArrayList(u8)) !Key {
-    const code = input.orderedRemove(0);
-    var buf = [1]u8{code};
-    const key: Key = .{
-        .printable = buf[0..],
+    var key: Key = .{
+        .printable = null,
         .code = null,
         .modifiers = 0,
     };
+    const code = input.orderedRemove(0);
+    switch (code) {
+        0...31 => {
+            // offset 96 converts \x1 to 'a', \x2 to 'b', and so on
+            var buf = [1]u8{code + 96};
+            // TODO: might not be printable
+            key.printable = buf[0..];
+            key.modifiers = @intFromEnum(Modifier.control);
+        },
+        32...126 => {
+            var buf = [1]u8{code};
+            key.printable = buf[0..];
+        },
+        0x7f => {
+            key.code = KeyCode.backspace;
+        },
+        else => unreachable,
+    }
     if (main.log_enabled) {
         std.debug.print("{any}\n", .{key});
     }

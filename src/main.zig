@@ -320,13 +320,12 @@ pub fn main() !void {
         const keys = try get_keys(codes);
         if (keys.len == 0) continue;
 
-        if (keys[0].printable.?.len != 1) {
+        if (keys[0].printable == null or keys[0].printable.?.len != 1) {
             // TODO: more complex mappings
             continue;
         }
         const ch = keys[0].printable.?[0];
         if (ch == 'q') {
-            _ = nc.endwin();
             return;
         }
         if (ch == 'i') {
@@ -356,4 +355,5 @@ fn dispose() void {
     buffer.deinit();
     content.deinit();
     spans.deinit();
+    _ = nc.endwin();
 }
