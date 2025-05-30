@@ -338,17 +338,22 @@ pub fn main() !void {
             return;
         }
         if (ch == 'i') {
-            action.try_move_cursor(.{ .row = cursor.row - 1, .col = cursor.col });
+            cursor.row -= 1;
+            needs_redraw = true;
         }
         if (ch == 'k') {
-            action.try_move_cursor(.{ .row = cursor.row + 1, .col = cursor.col });
+            cursor.row += 1;
+            needs_redraw = true;
         }
         if (ch == 'j') {
-            action.try_move_cursor(.{ .row = cursor.row, .col = cursor.col - 1 });
+            cursor.col -= 1;
+            needs_redraw = true;
         }
         if (ch == 'l') {
-            action.try_move_cursor(.{ .row = cursor.row, .col = cursor.col + 1 });
+            cursor.col += 1;
+            needs_redraw = true;
         }
+        action.validate_cursor();
         if (needs_reparse) {
             try ts_parse();
             try make_spans();
