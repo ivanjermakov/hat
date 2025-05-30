@@ -43,15 +43,20 @@ pub fn parse_ansi(input: *std.ArrayList(u8)) !Key {
             key.printable = buf[0..];
             key.modifiers = @intFromEnum(Modifier.control);
         },
-        32...126 => {
-            var buf = [1]u8{code};
-            key.printable = buf[0..];
-        },
         0x09 => key.code = KeyCode.tab,
         0x7f => key.code = KeyCode.backspace,
         0x0d => key.code = KeyCode.enter,
         0x1b => return error.TodoCsi,
-        else => unreachable,
+        else => {
+            var printable = std.ArrayList(u8).init(main.allocator);
+            try printable.append(code);
+            while (input.items.len > 0) {
+                if (input.items[0] == 0x1b) break;
+                const code2 = input.orderedRemove(0);
+                try printable.append(code2);
+            }
+            key.printable = try printable.toOwnedSlice();
+        },
     }
     if (main.log_enabled) {
         std.debug.print("{any}\n", .{key});
