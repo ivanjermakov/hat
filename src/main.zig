@@ -60,35 +60,6 @@ const Attr = .{
     .number = ColorPair.number.to_pair(),
 };
 
-pub var buffer: ?Buffer = null;
-pub var cursor: Cursor = .{ .row = 0, .col = 0 };
-pub var parser: ?*ts.TSParser = null;
-pub var tree: ?*ts.TSTree = null;
-pub var spans: ?std.ArrayList(SpanNodeTypeTuple) = null;
-pub var needs_redraw = false;
-pub var needs_reparse = false;
-
-fn buffer_new(content: []u8, alloc: std.mem.Allocator) !Buffer {
-    var lines_iter = std.mem.splitSequence(u8, content, "\n");
-    var lines: Buffer = std.ArrayList(Line).init(alloc);
-    while (true) {
-        const next: []u8 = @constCast(lines_iter.next() orelse break);
-        var line = std.ArrayList(u8).init(alloc);
-        try line.appendSlice(next);
-        try lines.append(line);
-    }
-    return lines;
-}
-
-fn buffer_content(alloc: std.mem.Allocator) ![]u8 {
-    var content = std.ArrayList(u8).init(alloc);
-    for (buffer.?.items) |line| {
-        try content.appendSlice(line.items);
-        try content.append('\n');
-    }
-    return content.items;
-}
-
 const Span = struct {
     start_byte: usize,
     end_byte: usize,
@@ -101,9 +72,44 @@ const SpanNodeTypeTuple = struct {
     node_type: NodeType,
 };
 
-fn make_spans(root_node: ts.struct_TSNode, alloc: std.mem.Allocator) !void {
+pub var buffer: ?Buffer = null;
+pub var spans: ?std.ArrayList(SpanNodeTypeTuple) = null;
+pub var content: ?std.ArrayList(u8) = null;
+pub var cursor: Cursor = .{ .row = 0, .col = 0 };
+pub var parser: ?*ts.TSParser = null;
+pub var tree: ?*ts.TSTree = null;
+pub var needs_redraw = false;
+pub var needs_reparse = false;
+pub const allocator = std.heap.page_allocator;
+
+fn init_globals() void {
+    buffer = std.ArrayList(Line).init(allocator);
+    spans = std.ArrayList(SpanNodeTypeTuple).init(allocator);
+    content = std.ArrayList(u8).init(allocator);
+}
+
+fn update_buffer() !void {
+    buffer.?.clearRetainingCapacity();
+    var lines_iter = std.mem.splitSequence(u8, content.?.items, "\n");
+    while (true) {
+        const next: []u8 = @constCast(lines_iter.next() orelse break);
+        var line = std.ArrayList(u8).init(allocator);
+        try line.appendSlice(next);
+        try buffer.?.append(line);
+    }
+}
+
+fn buffer_content() !void {
+    content.?.clearRetainingCapacity();
+    for (buffer.?.items) |line| {
+        try content.?.appendSlice(line.items);
+        try content.?.append('\n');
+    }
+}
+
+fn make_spans() !void {
+    const root_node = ts.ts_tree_root_node(tree);
     if (spans) |*old_spans| old_spans.clearRetainingCapacity();
-    spans = std.ArrayList(SpanNodeTypeTuple).init(alloc);
     var tree_cursor = ts.ts_tree_cursor_new(root_node);
     var node = root_node;
 
@@ -173,11 +179,10 @@ fn init_parser() !void {
     _ = ts.ts_parser_set_language(parser, language());
 }
 
-fn ts_parse(allocator: std.mem.Allocator) !void {
-    const content = try buffer_content(allocator);
-
+fn ts_parse() !void {
+    try buffer_content();
     if (tree) |old_tree| ts.ts_tree_delete(old_tree);
-    tree = ts.ts_parser_parse_string(parser, null, @ptrCast(content), @intCast(content.len));
+    tree = ts.ts_parser_parse_string(parser, null, @ptrCast(content.?.items), @intCast(content.?.items.len));
 }
 
 fn redraw() void {
@@ -223,26 +228,31 @@ fn redraw() void {
 }
 
 pub fn main() !void {
+    init_globals();
     defer dispose();
 
-    const allocator = std.heap.page_allocator;
     var args = std.process.args();
     _ = args.skip();
     const path = args.next() orelse return error.NoPath;
 
     const file = try std.fs.cwd().openFile(path, .{ .mode = .read_write });
 
-    var buf: []u8 = try allocator.alloc(u8, 2048);
-    const file_len = try file.readAll(buf);
-    buffer = try buffer_new(buf[0..file_len], allocator);
+    const file_content = mk_content: {
+        var buf: []u8 = try allocator.alloc(u8, 2048);
+        const file_len = try file.readAll(buf);
+        content = std.ArrayList(u8).init(allocator);
+        break :mk_content buf[0..file_len];
+    };
+    try content.?.appendSlice(file_content);
+    try update_buffer();
 
     const win = try init_curses();
     _ = win;
 
     try init_parser();
 
-    try ts_parse(allocator);
-    try make_spans(ts.ts_tree_root_node(tree), allocator);
+    try ts_parse();
+    try make_spans();
     redraw();
 
     while (true) {
@@ -265,8 +275,8 @@ pub fn main() !void {
             action.try_move_cursor(.{ .row = cursor.row, .col = cursor.col + 1 });
         }
         if (needs_reparse) {
-            try ts_parse(allocator);
-            try make_spans(ts.ts_tree_root_node(tree), allocator);
+            try ts_parse();
+            try make_spans();
         }
         if (needs_redraw) {
             redraw();
