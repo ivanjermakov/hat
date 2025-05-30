@@ -11,6 +11,7 @@ const nc = @cImport({
     @cInclude("ncurses.h");
 });
 const action = @import("action.zig");
+const input = @import("input.zig");
 
 pub const Buffer = std.ArrayList(Line);
 
@@ -246,7 +247,7 @@ fn setup_terminal() !void {
     _ = try posix.fcntl(0, posix.F.SETFL, try posix.fcntl(0, posix.F.GETFL, 0) | posix.SOCK.NONBLOCK);
 }
 
-fn get_input() !?[]u8 {
+fn get_codes() !?[]u8 {
     var buf = std.ArrayList(u8).init(allocator);
     while (true) {
         var b: [1]u8 = undefined;
@@ -257,17 +258,29 @@ fn get_input() !?[]u8 {
         std.time.sleep(1);
     }
     if (buf.items.len == 0) return null;
+
+    if (log_enabled) {
+        std.debug.print("input: ", .{});
+        for (buf.items) |code| {
+            std.debug.print("{s}", .{try input.ansi_code_to_string(code)});
+        }
+        std.debug.print("\n", .{});
+    }
+
     return buf.items;
 }
 
-fn code_to_string(code: u8) ![]u8 {
-    const is_printable = code >= 32 and code < 127;
-    var buf: [1024]u8 = undefined;
-    if (is_printable) {
-        return std.fmt.bufPrint(&buf, "{c}", .{@as(u7, @intCast(code))});
-    } else {
-        return std.fmt.bufPrint(&buf, "\\x{x}", .{code});
+fn get_keys(codes: []u8) ![]input.Key {
+    var keys = std.ArrayList(input.Key).init(allocator);
+
+    var cs = std.ArrayList(u8).init(allocator);
+    try cs.appendSlice(codes);
+
+    while (cs.items.len > 0) {
+        const key = try input.parse_ansi(&cs);
+        try keys.append(key);
     }
+    return keys.items;
 }
 
 pub fn main() !void {
@@ -301,39 +314,31 @@ pub fn main() !void {
 
     while (true) {
         _ = nc.refresh();
+        std.time.sleep(sleep_ns);
 
-        const input = try get_input() orelse {
-            std.time.sleep(sleep_ns);
-            continue;
-        };
+        const codes = try get_codes() orelse continue;
+        const keys = try get_keys(codes);
+        if (keys.len == 0) continue;
 
-        if (log_enabled) {
-            std.debug.print("input: ", .{});
-            for (input) |code| {
-                std.debug.print("{s}", .{try code_to_string(code)});
-            }
-            std.debug.print("\n", .{});
-        }
-
-        if (input.len > 1) {
-            // TODO: handle control seqs
+        if (keys[0].printable.?.len != 1) {
+            // TODO: more complex mappings
             continue;
         }
-        const key = input[0];
-        if (key == 'q') {
+        const ch = keys[0].printable.?[0];
+        if (ch == 'q') {
             _ = nc.endwin();
             return;
         }
-        if (key == 'i') {
+        if (ch == 'i') {
             action.try_move_cursor(.{ .row = cursor.row - 1, .col = cursor.col });
         }
-        if (key == 'k') {
+        if (ch == 'k') {
             action.try_move_cursor(.{ .row = cursor.row + 1, .col = cursor.col });
         }
-        if (key == 'j') {
+        if (ch == 'j') {
             action.try_move_cursor(.{ .row = cursor.row, .col = cursor.col - 1 });
         }
-        if (key == 'l') {
+        if (ch == 'l') {
             action.try_move_cursor(.{ .row = cursor.row, .col = cursor.col + 1 });
         }
         if (needs_reparse) {
