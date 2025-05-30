@@ -72,44 +72,38 @@ const SpanNodeTypeTuple = struct {
     node_type: NodeType,
 };
 
-pub var buffer: ?Buffer = null;
-pub var spans: ?std.ArrayList(SpanNodeTypeTuple) = null;
-pub var content: ?std.ArrayList(u8) = null;
+pub const allocator = std.heap.page_allocator;
+pub var buffer: Buffer = std.ArrayList(Line).init(allocator);
+pub var spans: std.ArrayList(SpanNodeTypeTuple) = std.ArrayList(SpanNodeTypeTuple).init(allocator);
+pub var content: std.ArrayList(u8) = std.ArrayList(u8).init(allocator);
 pub var cursor: Cursor = .{ .row = 0, .col = 0 };
 pub var parser: ?*ts.TSParser = null;
 pub var tree: ?*ts.TSTree = null;
 pub var needs_redraw = false;
 pub var needs_reparse = false;
-pub const allocator = std.heap.page_allocator;
-
-fn init_globals() void {
-    buffer = std.ArrayList(Line).init(allocator);
-    spans = std.ArrayList(SpanNodeTypeTuple).init(allocator);
-    content = std.ArrayList(u8).init(allocator);
-}
 
 fn update_buffer() !void {
-    buffer.?.clearRetainingCapacity();
-    var lines_iter = std.mem.splitSequence(u8, content.?.items, "\n");
+    buffer.clearRetainingCapacity();
+    var lines_iter = std.mem.splitSequence(u8, content.items, "\n");
     while (true) {
         const next: []u8 = @constCast(lines_iter.next() orelse break);
         var line = std.ArrayList(u8).init(allocator);
         try line.appendSlice(next);
-        try buffer.?.append(line);
+        try buffer.append(line);
     }
 }
 
 fn buffer_content() !void {
-    content.?.clearRetainingCapacity();
-    for (buffer.?.items) |line| {
-        try content.?.appendSlice(line.items);
-        try content.?.append('\n');
+    content.clearRetainingCapacity();
+    for (buffer.items) |line| {
+        try content.appendSlice(line.items);
+        try content.append('\n');
     }
 }
 
 fn make_spans() !void {
     const root_node = ts.ts_tree_root_node(tree);
-    if (spans) |*old_spans| old_spans.clearRetainingCapacity();
+    spans.clearRetainingCapacity();
     var tree_cursor = ts.ts_tree_cursor_new(root_node);
     var node = root_node;
 
@@ -119,7 +113,7 @@ fn make_spans() !void {
 
         const start_byte = ts.ts_node_start_byte(node);
         const end_byte = ts.ts_node_end_byte(node);
-        try spans.?.append(.{
+        try spans.append(.{
             .span = .{ .start_byte = start_byte, .end_byte = end_byte },
             .node_type = @constCast(node_type),
         });
@@ -182,20 +176,20 @@ fn init_parser() !void {
 fn ts_parse() !void {
     try buffer_content();
     if (tree) |old_tree| ts.ts_tree_delete(old_tree);
-    tree = ts.ts_parser_parse_string(parser, null, @ptrCast(content.?.items), @intCast(content.?.items.len));
+    tree = ts.ts_parser_parse_string(parser, null, @ptrCast(content.items), @intCast(content.items.len));
 }
 
 fn redraw() void {
     var byte: usize = 0;
-    for (0..buffer.?.items.len) |row| {
-        var line: []u8 = buffer.?.items[row].items;
+    for (0..buffer.items.len) |row| {
+        var line: []u8 = buffer.items[row].items;
         // TODO: why this is necessary
         if (line.len == 0) line = "";
 
         for (0..line.len) |col| {
             const ch = line[col];
             var ch_attr = Attr.text;
-            for ((spans orelse unreachable).items) |span| {
+            for (spans.items) |span| {
                 if (span.span.start_byte <= byte and span.span.end_byte > byte) {
                     if (std.mem.eql(u8, span.node_type, "return") or
                         std.mem.eql(u8, span.node_type, "primitive_type") or
@@ -228,7 +222,6 @@ fn redraw() void {
 }
 
 pub fn main() !void {
-    init_globals();
     defer dispose();
 
     var args = std.process.args();
@@ -240,10 +233,9 @@ pub fn main() !void {
     const file_content = mk_content: {
         var buf: []u8 = try allocator.alloc(u8, 2048);
         const file_len = try file.readAll(buf);
-        content = std.ArrayList(u8).init(allocator);
         break :mk_content buf[0..file_len];
     };
-    try content.?.appendSlice(file_content);
+    try content.appendSlice(file_content);
     try update_buffer();
 
     const win = try init_curses();
@@ -286,5 +278,5 @@ pub fn main() !void {
 
 fn dispose() void {
     defer ts.ts_parser_delete(parser);
-    defer buffer.?.clearAndFree();
+    defer buffer.clearAndFree();
 }
