@@ -371,6 +371,10 @@ pub fn main() !void {
                         try action.remove_prev_char();
                         needs_reparse = true;
                     }
+                    if (code == .enter) {
+                        try action.insert_newline();
+                        needs_reparse = true;
+                    }
                     if (key.printable) |printable| {
                         try action.insert_text(printable);
                         needs_reparse = true;

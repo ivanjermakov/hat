@@ -14,26 +14,55 @@ pub fn insert_text(text: []u8) !void {
     const view = try std.unicode.Utf8View.init(text);
     var iter = view.iterator();
     while (iter.nextCodepointSlice()) |ch| {
-        if (std.mem.eql(u8, ch, "\n")) return error.TodoNewLine;
-        var line = &main.buffer.items[@intCast(main.cursor.row)];
-        const col_byte = try utf8_byte_pos(line.items, @intCast(main.cursor.col));
-        try line.insertSlice(col_byte, ch);
-        main.cursor.col += 1;
+        const cbp = cursor_byte_pos();
+        var line = &main.buffer.items[@intCast(cbp.row)];
+        std.debug.print("{any}, {}\n", .{ line.items, main.cursor.col });
+
+        if (std.mem.eql(u8, ch, "\n")) {
+            try insert_newline();
+        } else {
+            try line.insertSlice(@intCast(cbp.col), ch);
+            main.cursor.col += 1;
+        }
     }
 }
 
+pub fn insert_newline() !void {
+    const cbp = cursor_byte_pos();
+    const row: usize = @intCast(main.cursor.row);
+    var line = try main.buffer.items[row].toOwnedSlice();
+    try main.buffer.items[row].appendSlice(line[0..@intCast(cbp.col)]);
+    var new_line = std.ArrayList(u8).init(main.allocator);
+    try new_line.appendSlice(line[@intCast(cbp.col)..]);
+    try main.buffer.insert(@intCast(cbp.row + 1), new_line);
+    main.cursor.row += 1;
+    main.cursor.col = 0;
+}
+
 pub fn remove_char() !void {
+    const cbp = cursor_byte_pos();
     var line = &main.buffer.items[@intCast(main.cursor.row)];
-    const col_byte = try utf8_byte_pos(line.items, @intCast(main.cursor.col));
-    _ = line.orderedRemove(col_byte);
+    _ = line.orderedRemove(@intCast(cbp.col));
 }
 
 pub fn remove_prev_char() !void {
-    if (main.cursor.col == 0) return;
+    const cbp = cursor_byte_pos();
+    if (cbp.col == 0) return;
     main.cursor.col -= 1;
     var line = &main.buffer.items[@intCast(main.cursor.row)];
     const col_byte = try utf8_byte_pos(line.items, @intCast(main.cursor.col));
     _ = line.orderedRemove(col_byte);
+}
+
+fn cursor_byte_pos() main.Cursor {
+    const row = main.cursor.row;
+    var col: i32 = 0;
+    b: {
+        if (row >= main.buffer.items.len) break :b;
+        const line = &main.buffer.items[@intCast(main.cursor.row)];
+        col = @intCast(utf8_byte_pos(line.items, @intCast(main.cursor.col)) catch break :b);
+    }
+    return .{ .row = row, .col = col };
 }
 
 /// Find a byte position of a codepoint at cp_index in a UTF-8 byte string
@@ -42,10 +71,11 @@ fn utf8_byte_pos(str: []u8, cp_index: usize) !usize {
     var iter = view.iterator();
     var pos: usize = 0;
     var i: usize = 0;
+    if (i == cp_index) return pos;
     while (iter.nextCodepointSlice()) |ch| {
-        if (i == cp_index) return pos;
         i += 1;
         pos += ch.len;
+        if (i == cp_index) return pos;
     }
     return error.OutOfBounds;
 }
