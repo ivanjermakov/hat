@@ -22,7 +22,13 @@ pub fn insert_text(text: []u8) !void {
     }
 }
 
-pub fn backspace() !void {
+pub fn remove_char() !void {
+    var line = &main.buffer.items[@intCast(main.cursor.row)];
+    const col_byte = try utf8_byte_pos(line.items, @intCast(main.cursor.col));
+    _ = line.orderedRemove(col_byte);
+}
+
+pub fn remove_prev_char() !void {
     if (main.cursor.col == 0) return;
     main.cursor.col -= 1;
     var line = &main.buffer.items[@intCast(main.cursor.row)];

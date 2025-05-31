@@ -187,7 +187,7 @@ fn init_curses() !*nc.WINDOW {
     ColorPair.text.init(Color.white, Color.none);
     ColorPair.keyword.init(Color.magenta, Color.none);
     ColorPair.string.init(Color.green, Color.none);
-    ColorPair.number.init(Color.orange, Color.none);
+    ColorPair.number.init(Color.yellow, Color.none);
 
     _ = nc.bkgd(@intCast(ColorPair.text.to_pair()));
 
@@ -365,8 +365,12 @@ pub fn main() !void {
                 },
                 .insert => {
                     if (code == .escape) mode = .normal;
+                    if (code == .delete) {
+                        try action.remove_char();
+                        needs_reparse = true;
+                    }
                     if (code == .backspace) {
-                        try action.backspace();
+                        try action.remove_prev_char();
                         needs_reparse = true;
                     }
                     if (key.printable) |printable| {

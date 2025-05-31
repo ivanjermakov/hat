@@ -19,6 +19,7 @@ pub const KeyCode = enum {
     left,
     right,
     backspace,
+    delete,
     enter,
     tab,
     escape,
@@ -71,6 +72,10 @@ pub fn parse_ansi(input: *std.ArrayList(u8)) !Key {
                     'B' => key.code = .down,
                     'C' => key.code = .right,
                     'D' => key.code = .left,
+                    '3' => {
+                        if (input.items.len > 0 and input.items[0] == '~') _ = input.orderedRemove(0);
+                        key.code = .delete;
+                    },
                     else => return error.TodoCsi,
                 }
                 break :s;
