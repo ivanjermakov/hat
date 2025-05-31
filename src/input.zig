@@ -1,6 +1,18 @@
 const std = @import("std");
 const main = @import("main.zig");
 
+/// See section about "CSI Ps SP q" at
+/// https://invisible-island.net/xterm/ctlseqs/ctlseqs.html#h3-Functions-using-CSI-_-ordered-by-the-final-character_s_
+pub const cursor_type = .{
+    .blinking_block = "\x1b[0 q",
+    .blinking_block2 = "\x1b[1 q",
+    .steady_block = "\x1b[2 q",
+    .blinking_underline = "\x1b[3 q",
+    .steady_underline = "\x1b[4 q",
+    .blinking_bar = "\x1b[5 q",
+    .steady_bar = "\x1b[6 q",
+};
+
 pub const KeyCode = enum {
     up,
     down,

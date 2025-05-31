@@ -74,6 +74,11 @@ const Span = struct {
     end_byte: usize,
 };
 
+const Mode = enum {
+    normal,
+    insert,
+};
+
 const NodeType = []u8;
 
 const SpanNodeTypeTuple = struct {
@@ -89,10 +94,12 @@ const Args = struct {
 pub const sleep_ns = 16 * 1e6;
 
 pub const allocator = std.heap.page_allocator;
+pub const std_out = std.io.getStdOut();
 pub var buffer: Buffer = std.ArrayList(Line).init(allocator);
 pub var spans: std.ArrayList(SpanNodeTypeTuple) = std.ArrayList(SpanNodeTypeTuple).init(allocator);
 pub var content: std.ArrayList(u8) = std.ArrayList(u8).init(allocator);
 pub var cursor: Cursor = .{ .row = 0, .col = 0 };
+pub var mode = Mode.normal;
 pub var parser: ?*ts.TSParser = null;
 pub var tree: ?*ts.TSTree = null;
 pub var needs_redraw = false;
@@ -204,9 +211,7 @@ fn ts_parse() !void {
 fn redraw() !void {
     var byte: usize = 0;
     for (0..buffer.items.len) |row| {
-        var line: []u8 = buffer.items[row].items;
-        // TODO: why this is necessary
-        if (line.len == 0) line = "";
+        const line: []u8 = buffer.items[row].items;
         const line_view = try std.unicode.Utf8View.init(line);
         var line_iter = line_view.iterator();
 
@@ -245,6 +250,11 @@ fn redraw() !void {
 
     _ = nc.standend();
     _ = nc.move(@intCast(cursor.row), @intCast(cursor.col));
+
+    switch (mode) {
+        .normal => _ = try std_out.write(input.cursor_type.steady_block),
+        .insert => _ = try std_out.write(input.cursor_type.steady_bar),
+    }
 }
 
 fn setup_terminal() !void {
@@ -353,6 +363,10 @@ pub fn main() !void {
             cursor.col += 1;
             needs_redraw = true;
         }
+        if (ch == 'e') {
+            mode = Mode.insert;
+            needs_redraw = true;
+        }
         action.validate_cursor();
         if (needs_reparse) {
             try ts_parse();
@@ -370,4 +384,5 @@ fn dispose() void {
     content.deinit();
     spans.deinit();
     _ = nc.endwin();
+    _ = std_out.write(input.cursor_type.steady_block) catch {};
 }
