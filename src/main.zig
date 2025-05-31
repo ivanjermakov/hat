@@ -346,13 +346,23 @@ pub fn main() !void {
             if (key.printable != null and key.printable.?.len == 1) {
                 ch = key.printable.?[0];
             }
-            if (ch == 'q') return;
-            if (ch == 'i') cursor.row -= 1;
-            if (ch == 'k') cursor.row += 1;
-            if (ch == 'j') cursor.col -= 1;
-            if (ch == 'l') cursor.col += 1;
-            if (ch == 'e') mode = Mode.insert;
-            if (code == input.KeyCode.escape) mode = Mode.normal;
+            switch (mode) {
+                .normal => {
+                    if (ch == 'q') return;
+                    if (ch == 'i') cursor.row -= 1;
+                    if (ch == 'k') cursor.row += 1;
+                    if (ch == 'j') cursor.col -= 1;
+                    if (ch == 'l') cursor.col += 1;
+                    if (ch == 'h') mode = Mode.insert;
+                },
+                .insert => {
+                    if (code == input.KeyCode.escape) mode = Mode.normal;
+                    if (key.printable) |printable| {
+                        try action.insert_text(printable);
+                        needs_reparse = true;
+                    }
+                },
+            }
         }
         action.validate_cursor();
         if (needs_reparse) {
