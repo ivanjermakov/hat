@@ -34,7 +34,6 @@ pub const Color = enum(i16) {
     green,
     blue,
     yellow,
-    orange,
     magenta,
 
     fn rgb_to_curses(x: u8) c_short {
@@ -177,11 +176,10 @@ fn init_curses() !*nc.WINDOW {
 
     Color.black.init(0, 0, 0);
     Color.white.init(255, 255, 255);
-    Color.red.init(255, 0, 0);
-    Color.green.init(0, 255, 0);
-    Color.blue.init(0, 0, 255);
-    Color.yellow.init(255, 255, 0);
-    Color.orange.init(230, 185, 157);
+    Color.red.init(245, 113, 113);
+    Color.green.init(166, 209, 137);
+    Color.blue.init(154, 163, 245);
+    Color.yellow.init(230, 185, 157);
     Color.magenta.init(211, 168, 239);
 
     ColorPair.text.init(Color.white, Color.none);
