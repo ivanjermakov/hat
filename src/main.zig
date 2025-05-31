@@ -209,6 +209,8 @@ fn ts_parse() !void {
 }
 
 fn redraw() !void {
+    _ = nc.clear();
+
     var byte: usize = 0;
     for (0..buffer.items.len) |row| {
         const line: []u8 = buffer.items[row].items;
@@ -296,7 +298,10 @@ fn get_keys(codes: []u8) ![]input.Key {
     try cs.appendSlice(codes);
 
     while (cs.items.len > 0) {
-        const key = try input.parse_ansi(&cs);
+        const key = input.parse_ansi(&cs) catch |e| {
+            if (log_enabled) std.debug.print("{}\n", .{e});
+            continue;
+        };
         try keys.append(key);
     }
     return keys.items;
@@ -343,9 +348,12 @@ pub fn main() !void {
         for (keys) |key| {
             const code = key.code;
             var ch: ?u8 = null;
-            if (key.printable != null and key.printable.?.len == 1) {
-                ch = key.printable.?[0];
-            }
+            if (key.printable != null and key.printable.?.len == 1) ch = key.printable.?[0];
+
+            if (code == .up) cursor.row -= 1;
+            if (code == .down) cursor.row += 1;
+            if (code == .left) cursor.col -= 1;
+            if (code == .right) cursor.col += 1;
             switch (mode) {
                 .normal => {
                     if (ch == 'q') return;
@@ -353,10 +361,14 @@ pub fn main() !void {
                     if (ch == 'k') cursor.row += 1;
                     if (ch == 'j') cursor.col -= 1;
                     if (ch == 'l') cursor.col += 1;
-                    if (ch == 'h') mode = Mode.insert;
+                    if (ch == 'h') mode = .insert;
                 },
                 .insert => {
-                    if (code == input.KeyCode.escape) mode = Mode.normal;
+                    if (code == .escape) mode = .normal;
+                    if (code == .backspace) {
+                        try action.backspace();
+                        needs_reparse = true;
+                    }
                     if (key.printable) |printable| {
                         try action.insert_text(printable);
                         needs_reparse = true;

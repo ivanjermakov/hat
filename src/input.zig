@@ -55,12 +55,24 @@ pub fn parse_ansi(input: *std.ArrayList(u8)) !Key {
             key.printable = buf[0..];
             key.modifiers = @intFromEnum(Modifier.control);
         },
-        0x09 => key.code = KeyCode.tab,
-        0x7f => key.code = KeyCode.backspace,
-        0x0d => key.code = KeyCode.enter,
+        0x09 => key.code = .tab,
+        0x7f => key.code = .backspace,
+        0x0d => key.code = .enter,
         0x1b => {
             if (input.items.len == 0) {
-                key.code = KeyCode.escape;
+                key.code = .escape;
+                break :s;
+            }
+            if (input.items.len > 0 and input.items[0] == '[') {
+                _ = input.orderedRemove(0);
+                const code3 = input.orderedRemove(0);
+                switch (code3) {
+                    'A' => key.code = .up,
+                    'B' => key.code = .down,
+                    'C' => key.code = .right,
+                    'D' => key.code = .left,
+                    else => return error.TodoCsi,
+                }
                 break :s;
             }
             return error.TodoCsi;

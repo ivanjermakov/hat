@@ -22,6 +22,14 @@ pub fn insert_text(text: []u8) !void {
     }
 }
 
+pub fn backspace() !void {
+    if (main.cursor.col == 0) return;
+    main.cursor.col -= 1;
+    var line = &main.buffer.items[@intCast(main.cursor.row)];
+    const col_byte = try utf8_byte_pos(line.items, @intCast(main.cursor.col));
+    _ = line.orderedRemove(col_byte);
+}
+
 /// Find a byte position of a codepoint at cp_index in a UTF-8 byte string
 fn utf8_byte_pos(str: []u8, cp_index: usize) !usize {
     const view = try std.unicode.Utf8View.init(str);
@@ -30,7 +38,6 @@ fn utf8_byte_pos(str: []u8, cp_index: usize) !usize {
     var i: usize = 0;
     while (iter.nextCodepointSlice()) |ch| {
         if (i == cp_index) return pos;
-        std.debug.print("{}\n", .{ch.len});
         i += 1;
         pos += ch.len;
     }
