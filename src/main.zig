@@ -338,34 +338,21 @@ pub fn main() !void {
         const codes = try get_codes() orelse continue;
         const keys = try get_keys(codes);
         if (keys.len == 0) continue;
+        needs_redraw = true;
 
-        if (keys[0].printable == null or keys[0].printable.?.len != 1) {
-            // TODO: more complex mappings
-            continue;
-        }
-        const ch = keys[0].printable.?[0];
-        if (ch == 'q') {
-            return;
-        }
-        if (ch == 'i') {
-            cursor.row -= 1;
-            needs_redraw = true;
-        }
-        if (ch == 'k') {
-            cursor.row += 1;
-            needs_redraw = true;
-        }
-        if (ch == 'j') {
-            cursor.col -= 1;
-            needs_redraw = true;
-        }
-        if (ch == 'l') {
-            cursor.col += 1;
-            needs_redraw = true;
-        }
-        if (ch == 'e') {
-            mode = Mode.insert;
-            needs_redraw = true;
+        for (keys) |key| {
+            const code = key.code;
+            var ch: ?u8 = null;
+            if (key.printable != null and key.printable.?.len == 1) {
+                ch = key.printable.?[0];
+            }
+            if (ch == 'q') return;
+            if (ch == 'i') cursor.row -= 1;
+            if (ch == 'k') cursor.row += 1;
+            if (ch == 'j') cursor.col -= 1;
+            if (ch == 'l') cursor.col += 1;
+            if (ch == 'e') mode = Mode.insert;
+            if (code == input.KeyCode.escape) mode = Mode.normal;
         }
         action.validate_cursor();
         if (needs_reparse) {

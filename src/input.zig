@@ -21,7 +21,7 @@ pub const KeyCode = enum {
     backspace,
     enter,
     tab,
-    esc,
+    escape,
 };
 
 pub const Modifier = enum(u8) {
@@ -47,7 +47,7 @@ pub fn parse_ansi(input: *std.ArrayList(u8)) !Key {
         .modifiers = 0,
     };
     const code = input.orderedRemove(0);
-    switch (code) {
+    s: switch (code) {
         0x00...0x08, 0x10...0x19 => {
             // offset 96 converts \x1 to 'a', \x2 to 'b', and so on
             var buf = [1]u8{code + 96};
@@ -58,7 +58,13 @@ pub fn parse_ansi(input: *std.ArrayList(u8)) !Key {
         0x09 => key.code = KeyCode.tab,
         0x7f => key.code = KeyCode.backspace,
         0x0d => key.code = KeyCode.enter,
-        0x1b => return error.TodoCsi,
+        0x1b => {
+            if (input.items.len == 0) {
+                key.code = KeyCode.escape;
+                break :s;
+            }
+            return error.TodoCsi;
+        },
         else => {
             var printable = std.ArrayList(u8).init(main.allocator);
             try printable.append(code);
