@@ -60,27 +60,42 @@ pub fn parse_ansi(input: *std.ArrayList(u8)) !Key {
         0x7f => key.code = .backspace,
         0x0d => key.code = .enter,
         0x1b => {
-            if (input.items.len == 0) {
-                key.code = .escape;
-                break :s;
-            }
             if (input.items.len > 0 and input.items[0] == '[') {
                 _ = input.orderedRemove(0);
-                const code3 = input.orderedRemove(0);
-                switch (code3) {
-                    'A' => key.code = .up,
-                    'B' => key.code = .down,
-                    'C' => key.code = .right,
-                    'D' => key.code = .left,
-                    '3' => {
-                        if (input.items.len > 0 and input.items[0] == '~') _ = input.orderedRemove(0);
-                        key.code = .delete;
-                    },
-                    else => return error.TodoCsi,
+                if (input.items.len > 0) {
+                    switch (input.items[0]) {
+                        'A' => {
+                            _ = input.orderedRemove(0);
+                            key.code = .up;
+                            break :s;
+                        },
+                        'B' => {
+                            _ = input.orderedRemove(0);
+                            key.code = .down;
+                            break :s;
+                        },
+                        'C' => {
+                            _ = input.orderedRemove(0);
+                            key.code = .right;
+                            break :s;
+                        },
+                        'D' => {
+                            _ = input.orderedRemove(0);
+                            key.code = .left;
+                            break :s;
+                        },
+                        '3' => {
+                            _ = input.orderedRemove(0);
+                            if (input.items.len > 0 and input.items[0] == '~') _ = input.orderedRemove(0);
+                            key.code = .delete;
+                            break :s;
+                        },
+                        else => return error.TodoCsi,
+                    }
                 }
-                break :s;
             }
-            return error.TodoCsi;
+            key.code = .escape;
+            break :s;
         },
         else => {
             var printable = std.ArrayList(u8).init(main.allocator);
