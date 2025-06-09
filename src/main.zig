@@ -86,7 +86,7 @@ const SpanNodeTypeTuple = struct {
 };
 
 const Args = struct {
-    path: []u8,
+    path: ?[]u8,
     log: bool,
 };
 
@@ -105,7 +105,7 @@ pub var needs_redraw = false;
 pub var needs_reparse = false;
 pub var log_enabled = true;
 pub var args: Args = .{
-    .path = undefined,
+    .path = null,
     .log = false,
 };
 
@@ -319,7 +319,8 @@ pub fn main() !void {
     }
     log_enabled = args.log;
 
-    const file = try std.fs.cwd().openFile(args.path, .{ .mode = .read_write });
+    const path = args.path orelse return error.NoPath;
+    const file = try std.fs.cwd().openFile(path, .{ .mode = .read_write });
     const file_content = try file.readToEndAlloc(allocator, std.math.maxInt(usize));
     try content.appendSlice(file_content);
     try update_buffer();
