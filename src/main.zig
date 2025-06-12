@@ -16,6 +16,7 @@ const nc = @cImport({
 const action = @import("action.zig");
 const input = @import("input.zig");
 const unicode = @import("unicode.zig");
+const file_type = @import("file_type.zig");
 
 pub const Buffer = std.ArrayList(Line);
 
@@ -194,9 +195,11 @@ fn init_curses() !*nc.WINDOW {
 
 fn init_parser() !void {
     parser = ts.ts_parser_new();
-    var language_lib = try dl.open("/usr/lib/tree_sitter/c.so");
+    const file_ext = std.fs.path.extension(args.path.?);
+    const ft = file_type.file_type.?.get(file_ext) orelse return error.NoFileType;
+    var language_lib = try dl.open(ft.lib_path);
     var language: *const fn () *ts.struct_TSLanguage = undefined;
-    language = language_lib.lookup(@TypeOf(language), "tree_sitter_c") orelse return error.NoSymbol;
+    language = language_lib.lookup(@TypeOf(language), @ptrCast(ft.lib_symbol)) orelse return error.NoSymbol;
     _ = ts.ts_parser_set_language(parser, language());
 }
 
@@ -307,6 +310,7 @@ fn get_keys(codes: []u8) ![]input.Key {
 
 pub fn main() !void {
     defer dispose();
+    try file_type.init_file_types();
 
     var cmd_args = std.process.args();
     _ = cmd_args.skip();
