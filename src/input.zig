@@ -116,10 +116,9 @@ pub fn parse_ansi(input: *std.ArrayList(u8)) !Key {
 
 pub fn ansi_code_to_string(code: u8) ![]u8 {
     const is_printable = code >= 32 and code < 127;
-    var buf: [1024]u8 = undefined;
     if (is_printable) {
-        return std.fmt.bufPrint(&buf, "{c}", .{@as(u7, @intCast(code))});
+        return std.fmt.allocPrint(main.allocator, "{c}", .{@as(u7, @intCast(code))});
     } else {
-        return std.fmt.bufPrint(&buf, "\\x{x}", .{code});
+        return std.fmt.allocPrint(main.allocator, "\\x{x}", .{code});
     }
 }

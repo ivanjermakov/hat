@@ -15,7 +15,7 @@ pub fn insert_text(text: []u8) !void {
     var iter = view.iterator();
     while (iter.nextCodepointSlice()) |ch| {
         const cbp = cursor_byte_pos();
-        var line = &main.buffer.items[@intCast(cbp.row)];
+        var line = &main.buffer.content.items[@intCast(cbp.row)];
         std.debug.print("{any}, {}\n", .{ line.items, main.cursor.col });
 
         if (std.mem.eql(u8, ch, "\n")) {
@@ -30,18 +30,18 @@ pub fn insert_text(text: []u8) !void {
 pub fn insert_newline() !void {
     const cbp = cursor_byte_pos();
     const row: usize = @intCast(main.cursor.row);
-    var line = try main.buffer.items[row].toOwnedSlice();
-    try main.buffer.items[row].appendSlice(line[0..@intCast(cbp.col)]);
+    var line = try main.buffer.content.items[row].toOwnedSlice();
+    try main.buffer.content.items[row].appendSlice(line[0..@intCast(cbp.col)]);
     var new_line = std.ArrayList(u8).init(main.allocator);
     try new_line.appendSlice(line[@intCast(cbp.col)..]);
-    try main.buffer.insert(@intCast(cbp.row + 1), new_line);
+    try main.buffer.content.insert(@intCast(cbp.row + 1), new_line);
     main.cursor.row += 1;
     main.cursor.col = 0;
 }
 
 pub fn remove_char() !void {
     const cbp = cursor_byte_pos();
-    var line = &main.buffer.items[@intCast(main.cursor.row)];
+    var line = &main.buffer.content.items[@intCast(main.cursor.row)];
     _ = line.orderedRemove(@intCast(cbp.col));
 }
 
@@ -49,7 +49,7 @@ pub fn remove_prev_char() !void {
     const cbp = cursor_byte_pos();
     if (cbp.col == 0) return;
     main.cursor.col -= 1;
-    var line = &main.buffer.items[@intCast(main.cursor.row)];
+    var line = &main.buffer.content.items[@intCast(main.cursor.row)];
     const col_byte = try utf8_byte_pos(line.items, @intCast(main.cursor.col));
     _ = line.orderedRemove(col_byte);
 }
@@ -58,8 +58,8 @@ fn cursor_byte_pos() main.Cursor {
     const row = main.cursor.row;
     var col: i32 = 0;
     b: {
-        if (row >= main.buffer.items.len) break :b;
-        const line = &main.buffer.items[@intCast(main.cursor.row)];
+        if (row >= main.buffer.content.items.len) break :b;
+        const line = &main.buffer.content.items[@intCast(main.cursor.row)];
         col = @intCast(utf8_byte_pos(line.items, @intCast(main.cursor.col)) catch break :b);
     }
     return .{ .row = row, .col = col };

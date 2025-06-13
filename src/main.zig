@@ -6,9 +6,6 @@ const loc = @cImport({
 const termios = @cImport({
     @cInclude("termios.h");
 });
-const ts = @cImport({
-    @cInclude("tree_sitter/api.h");
-});
 const dl = std.DynLib;
 const nc = @cImport({
     @cInclude("ncurses.h");
@@ -16,16 +13,13 @@ const nc = @cImport({
 const action = @import("action.zig");
 const input = @import("input.zig");
 const unicode = @import("unicode.zig");
-const file_type = @import("file_type.zig");
-
-pub const Buffer = std.ArrayList(Line);
+const ft = @import("file_type.zig");
+const buf = @import("buffer.zig");
 
 pub const Cursor = struct {
     row: i32,
     col: i32,
 };
-
-pub const Line = std.ArrayList(u8);
 
 pub const Color = enum(i16) {
     none = -1,
@@ -69,21 +63,9 @@ const Attr = .{
     .number = ColorPair.number.to_pair(),
 };
 
-const Span = struct {
-    start_byte: usize,
-    end_byte: usize,
-};
-
 const Mode = enum {
     normal,
     insert,
-};
-
-const NodeType = []u8;
-
-const SpanNodeTypeTuple = struct {
-    span: Span,
-    node_type: NodeType,
 };
 
 const Args = struct {
@@ -92,16 +74,12 @@ const Args = struct {
 };
 
 pub const sleep_ns = 16 * 1e6;
-
 pub const allocator = std.heap.page_allocator;
 pub const std_out = std.io.getStdOut();
-pub var buffer: Buffer = std.ArrayList(Line).init(allocator);
-pub var spans: std.ArrayList(SpanNodeTypeTuple) = std.ArrayList(SpanNodeTypeTuple).init(allocator);
-pub var content: std.ArrayList(u8) = std.ArrayList(u8).init(allocator);
+
+pub var buffer: buf.Buffer = undefined;
 pub var cursor: Cursor = .{ .row = 0, .col = 0 };
 pub var mode = Mode.normal;
-pub var parser: ?*ts.TSParser = null;
-pub var tree: ?*ts.TSTree = null;
 pub var needs_redraw = false;
 pub var needs_reparse = false;
 pub var log_enabled = true;
@@ -109,61 +87,6 @@ pub var args: Args = .{
     .path = null,
     .log = false,
 };
-
-fn update_buffer() !void {
-    buffer.clearRetainingCapacity();
-    var lines_iter = std.mem.splitSequence(u8, content.items, "\n");
-    while (true) {
-        const next: []u8 = @constCast(lines_iter.next() orelse break);
-        var line = std.ArrayList(u8).init(allocator);
-        try line.appendSlice(next);
-        try buffer.append(line);
-    }
-}
-
-fn buffer_content() !void {
-    content.clearRetainingCapacity();
-    for (buffer.items) |line| {
-        try content.appendSlice(line.items);
-        try content.append('\n');
-    }
-}
-
-fn make_spans() !void {
-    const root_node = ts.ts_tree_root_node(tree);
-    spans.clearRetainingCapacity();
-    var tree_cursor = ts.ts_tree_cursor_new(root_node);
-    var node = root_node;
-
-    traverse: while (true) {
-        const node_type = std.mem.span(ts.ts_node_type(node));
-        if (node_type.len == 0) continue;
-
-        const start_byte = ts.ts_node_start_byte(node);
-        const end_byte = ts.ts_node_end_byte(node);
-        try spans.append(.{
-            .span = .{ .start_byte = start_byte, .end_byte = end_byte },
-            .node_type = @constCast(node_type),
-        });
-
-        if (ts.ts_tree_cursor_goto_first_child(&tree_cursor)) {
-            node = ts.ts_tree_cursor_current_node(&tree_cursor);
-        } else {
-            while (true) {
-                if (ts.ts_tree_cursor_goto_next_sibling(&tree_cursor)) {
-                    node = ts.ts_tree_cursor_current_node(&tree_cursor);
-                    break;
-                } else {
-                    if (ts.ts_tree_cursor_goto_parent(&tree_cursor)) {
-                        node = ts.ts_tree_cursor_current_node(&tree_cursor);
-                    } else {
-                        break :traverse;
-                    }
-                }
-            }
-        }
-    }
-}
 
 fn init_curses() !*nc.WINDOW {
     const win = nc.initscr() orelse return error.InitScr;
@@ -193,35 +116,19 @@ fn init_curses() !*nc.WINDOW {
     return win;
 }
 
-fn init_parser() !void {
-    parser = ts.ts_parser_new();
-    const file_ext = std.fs.path.extension(args.path.?);
-    const ft = file_type.file_type.?.get(file_ext) orelse return error.NoFileType;
-    var language_lib = try dl.open(ft.lib_path);
-    var language: *const fn () *ts.struct_TSLanguage = undefined;
-    language = language_lib.lookup(@TypeOf(language), @ptrCast(ft.lib_symbol)) orelse return error.NoSymbol;
-    _ = ts.ts_parser_set_language(parser, language());
-}
-
-fn ts_parse() !void {
-    try buffer_content();
-    if (tree) |old_tree| ts.ts_tree_delete(old_tree);
-    tree = ts.ts_parser_parse_string(parser, null, @ptrCast(content.items), @intCast(content.items.len));
-}
-
 fn redraw() !void {
-    _ = nc.clear();
+    _ = nc.erase();
 
     var byte: usize = 0;
-    for (0..buffer.items.len) |row| {
-        const line: []u8 = buffer.items[row].items;
+    for (0..buffer.content.items.len) |row| {
+        const line: []u8 = buffer.content.items[row].items;
         const line_view = try std.unicode.Utf8View.init(line);
         var line_iter = line_view.iterator();
 
         var col: usize = 0;
         while (line_iter.nextCodepoint()) |ch| {
             var ch_attr = Attr.text;
-            for (spans.items) |span| {
+            for (buffer.spans.items) |span| {
                 if (span.span.start_byte <= byte and span.span.end_byte > byte) {
                     if (std.mem.eql(u8, span.node_type, "return") or
                         std.mem.eql(u8, span.node_type, "primitive_type") or
@@ -270,26 +177,26 @@ fn setup_terminal() !void {
 }
 
 fn get_codes() !?[]u8 {
-    var buf = std.ArrayList(u8).init(allocator);
+    var in_buf = std.ArrayList(u8).init(allocator);
     while (true) {
         var b: [1]u8 = undefined;
         const bytes_read = std.posix.read(std.posix.STDIN_FILENO, b[0..1]) catch break;
         if (bytes_read == 0) break;
-        try buf.appendSlice(b[0..]);
+        try in_buf.appendSlice(b[0..]);
         // 1ns seems to be enough wait time for stdin to fill up with the next code
-        std.time.sleep(1);
+        std.Thread.sleep(1);
     }
-    if (buf.items.len == 0) return null;
+    if (in_buf.items.len == 0) return null;
 
     if (log_enabled) {
         std.debug.print("input: ", .{});
-        for (buf.items) |code| {
+        for (in_buf.items) |code| {
             std.debug.print("{s}", .{try input.ansi_code_to_string(code)});
         }
         std.debug.print("\n", .{});
     }
 
-    return buf.items;
+    return in_buf.items;
 }
 
 fn get_keys(codes: []u8) ![]input.Key {
@@ -309,8 +216,8 @@ fn get_keys(codes: []u8) ![]input.Key {
 }
 
 pub fn main() !void {
-    defer dispose();
-    try file_type.init_file_types();
+    defer deinit();
+    try ft.init_file_types();
 
     var cmd_args = std.process.args();
     _ = cmd_args.skip();
@@ -326,17 +233,16 @@ pub fn main() !void {
     const path = args.path orelse return error.NoPath;
     const file = try std.fs.cwd().openFile(path, .{ .mode = .read_write });
     const file_content = try file.readToEndAlloc(allocator, std.math.maxInt(usize));
-    try content.appendSlice(file_content);
-    try update_buffer();
+
+    buffer = try buf.Buffer.init(allocator, file_content);
+    defer buffer.deinit();
+    try buffer.ts_parse();
+    try buffer.make_spans();
 
     try setup_terminal();
     const win = try init_curses();
     _ = win;
 
-    try init_parser();
-
-    try ts_parse();
-    try make_spans();
     try redraw();
 
     while (true) {
@@ -389,8 +295,8 @@ pub fn main() !void {
         }
         action.validate_cursor();
         if (needs_reparse) {
-            try ts_parse();
-            try make_spans();
+            try buffer.ts_parse();
+            try buffer.make_spans();
         }
         if (needs_redraw) {
             try redraw();
@@ -398,11 +304,7 @@ pub fn main() !void {
     }
 }
 
-fn dispose() void {
-    ts.ts_parser_delete(parser);
-    buffer.deinit();
-    content.deinit();
-    spans.deinit();
+fn deinit() void {
     _ = nc.endwin();
     _ = std_out.write(input.cursor_type.steady_block) catch {};
 }
