@@ -11,52 +11,11 @@ const inp = @import("input.zig");
 const uni = @import("unicode.zig");
 const ft = @import("file_type.zig");
 const buf = @import("buffer.zig");
+const co = @import("color.zig");
 
 pub const Cursor = struct {
     row: i32,
     col: i32,
-};
-
-pub const Color = enum(i16) {
-    none = -1,
-    black = 1,
-    white,
-    red,
-    green,
-    blue,
-    yellow,
-    magenta,
-
-    fn rgb_to_curses(x: u8) c_short {
-        const f: f32 = @as(f32, @floatFromInt(x)) / 256 * 1000;
-        return @intFromFloat(f);
-    }
-
-    pub fn init(self: Color, r: u8, g: u8, b: u8) void {
-        _ = c.init_color(@intFromEnum(self), rgb_to_curses(r), rgb_to_curses(g), rgb_to_curses(b));
-    }
-};
-
-pub const ColorPair = enum(u8) {
-    text = 1,
-    keyword,
-    string,
-    number,
-
-    pub fn init(self: ColorPair, fg: Color, bg: Color) void {
-        _ = c.init_pair(@intFromEnum(self), @intFromEnum(fg), @intFromEnum(bg));
-    }
-
-    pub fn to_pair(self: ColorPair) c_int {
-        return @as(c_int, @intFromEnum(self)) * 256;
-    }
-};
-
-const Attr = .{
-    .text = ColorPair.text.to_pair(),
-    .keyword = ColorPair.keyword.to_pair() | c.A_BOLD,
-    .string = ColorPair.string.to_pair(),
-    .number = ColorPair.number.to_pair(),
 };
 
 const Mode = enum {
@@ -94,20 +53,9 @@ fn init_curses() !*c.WINDOW {
         _ = c.start_color();
     }
 
-    Color.black.init(0, 0, 0);
-    Color.white.init(255, 255, 255);
-    Color.red.init(245, 113, 113);
-    Color.green.init(166, 209, 137);
-    Color.blue.init(154, 163, 245);
-    Color.yellow.init(230, 185, 157);
-    Color.magenta.init(211, 168, 239);
+    co.init_color();
 
-    ColorPair.text.init(Color.white, Color.none);
-    ColorPair.keyword.init(Color.magenta, Color.none);
-    ColorPair.string.init(Color.green, Color.none);
-    ColorPair.number.init(Color.yellow, Color.none);
-
-    _ = c.bkgd(@intCast(ColorPair.text.to_pair()));
+    _ = c.bkgd(@intCast(co.ColorPair.text.to_pair()));
 
     return win;
 }
@@ -123,24 +71,24 @@ fn redraw() !void {
 
         var col: usize = 0;
         while (line_iter.nextCodepoint()) |ch| {
-            var ch_attr = Attr.text;
+            var ch_attr = co.Attr.text;
             for (buffer.spans.items) |span| {
                 if (span.span.start_byte <= byte and span.span.end_byte > byte) {
                     if (std.mem.eql(u8, span.node_type, "return") or
                         std.mem.eql(u8, span.node_type, "primitive_type") or
                         std.mem.eql(u8, span.node_type, "#include"))
                     {
-                        ch_attr = Attr.keyword;
+                        ch_attr = co.Attr.keyword;
                         break;
                     }
                     if (std.mem.eql(u8, span.node_type, "system_lib_string") or
                         std.mem.eql(u8, span.node_type, "string_literal"))
                     {
-                        ch_attr = Attr.string;
+                        ch_attr = co.Attr.string;
                         break;
                     }
                     if (std.mem.eql(u8, span.node_type, "number_literal")) {
-                        ch_attr = Attr.number;
+                        ch_attr = co.Attr.number;
                         break;
                     }
                 }
