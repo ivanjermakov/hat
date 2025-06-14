@@ -1,9 +1,12 @@
 const std = @import("std");
 
-fn linkLibs(compile: *std.Build.Step.Compile) void {
+fn linkLibs(b: *std.Build, compile: *std.Build.Step.Compile) void {
     compile.linkLibC();
     compile.linkSystemLibrary("tree-sitter");
     compile.linkSystemLibrary("ncurses");
+
+    const lsp_codegen = b.dependency("lsp_codegen", .{});
+    compile.root_module.addImport("lsp", lsp_codegen.module("lsp"));
 }
 
 pub fn build(b: *std.Build) void {
@@ -16,7 +19,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    linkLibs(exe);
+    linkLibs(b, exe);
     b.installArtifact(exe);
 
     const run = b.addRunArtifact(exe);
@@ -42,7 +45,7 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/main.zig"),
         .target = target,
     });
-    linkLibs(check_exe);
+    linkLibs(b, check_exe);
     const check_step = b.step("check", "");
     check_step.dependOn(&check_exe.step);
 }
