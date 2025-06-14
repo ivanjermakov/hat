@@ -87,7 +87,7 @@ pub const Buffer = struct {
         );
         if (main.log_enabled) {
             const node = ts.ts.ts_tree_root_node(self.tree);
-            std.debug.print("{s}\n", .{std.mem.span(ts.ts.ts_node_string(node))});
+            std.debug.print("tree: {s}\n", .{std.mem.span(ts.ts.ts_node_string(node))});
         }
     }
 
