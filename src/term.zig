@@ -6,6 +6,7 @@ const c = @cImport({
     @cInclude("ncurses.h");
 });
 const co = @import("color.zig");
+const fs = @import("fs.zig");
 
 pub fn init_curses() !*c.WINDOW {
     const win = c.initscr() orelse return error.InitScr;
@@ -30,9 +31,5 @@ pub fn setup_terminal() !void {
     tty.c_lflag &= @bitCast(~(c.ICANON | c.ECHO));
     _ = c.tcsetattr(std.posix.STDIN_FILENO, c.TCSANOW, &tty);
 
-    _ = try posix.fcntl(
-        std.posix.STDIN_FILENO,
-        posix.F.SETFL,
-        try posix.fcntl(std.posix.STDIN_FILENO, posix.F.GETFL, 0) | posix.SOCK.NONBLOCK,
-    );
+    fs.make_nonblock(std.posix.STDIN_FILENO);
 }
