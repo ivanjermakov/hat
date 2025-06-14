@@ -57,13 +57,16 @@ fn redraw() !void {
                 if (span.span.start_byte <= byte and span.span.end_byte > byte) {
                     if (std.mem.eql(u8, span.node_type, "return") or
                         std.mem.eql(u8, span.node_type, "primitive_type") or
-                        std.mem.eql(u8, span.node_type, "#include"))
+                        std.mem.eql(u8, span.node_type, "#include") or
+                        std.mem.eql(u8, span.node_type, "export") or
+                        std.mem.eql(u8, span.node_type, "function"))
                     {
                         ch_attr = co.Attr.keyword;
                         break;
                     }
                     if (std.mem.eql(u8, span.node_type, "system_lib_string") or
-                        std.mem.eql(u8, span.node_type, "string_literal"))
+                        std.mem.eql(u8, span.node_type, "string_literal") or
+                        std.mem.eql(u8, span.node_type, "string"))
                     {
                         ch_attr = co.Attr.string;
                         break;
