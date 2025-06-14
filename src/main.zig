@@ -1,9 +1,6 @@
 const std = @import("std");
 const dl = std.DynLib;
-const posix = std.posix;
 const c = @cImport({
-    @cInclude("termios.h");
-    @cInclude("locale.h");
     @cInclude("ncurses.h");
 });
 const act = @import("action.zig");
@@ -12,6 +9,7 @@ const uni = @import("unicode.zig");
 const ft = @import("file_type.zig");
 const buf = @import("buffer.zig");
 const co = @import("color.zig");
+const te = @import("term.zig");
 
 pub const Cursor = struct {
     row: i32,
@@ -42,23 +40,6 @@ pub var args: Args = .{
     .path = null,
     .log = false,
 };
-
-fn init_curses() !*c.WINDOW {
-    const win = c.initscr() orelse return error.InitScr;
-    _ = c.use_default_colors();
-    _ = c.noecho();
-    _ = c.setlocale(c.LC_ALL, "");
-
-    if (c.has_colors()) {
-        _ = c.start_color();
-    }
-
-    co.init_color();
-
-    _ = c.bkgd(@intCast(co.ColorPair.text.to_pair()));
-
-    return win;
-}
 
 fn redraw() !void {
     _ = c.erase();
@@ -111,54 +92,6 @@ fn redraw() !void {
     }
 }
 
-fn setup_terminal() !void {
-    var tty: c.struct_termios = undefined;
-    _ = c.tcgetattr(std.posix.STDIN_FILENO, &tty);
-    tty.c_lflag &= @bitCast(~(c.ICANON | c.ECHO));
-    _ = c.tcsetattr(std.posix.STDIN_FILENO, c.TCSANOW, &tty);
-
-    _ = try posix.fcntl(0, posix.F.SETFL, try posix.fcntl(0, posix.F.GETFL, 0) | posix.SOCK.NONBLOCK);
-}
-
-fn get_codes() !?[]u8 {
-    var in_buf = std.ArrayList(u8).init(allocator);
-    while (true) {
-        var b: [1]u8 = undefined;
-        const bytes_read = std.posix.read(std.posix.STDIN_FILENO, b[0..1]) catch break;
-        if (bytes_read == 0) break;
-        try in_buf.appendSlice(b[0..]);
-        // 1ns seems to be enough wait time for stdin to fill up with the next code
-        std.Thread.sleep(1);
-    }
-    if (in_buf.items.len == 0) return null;
-
-    if (log_enabled) {
-        std.debug.print("input: ", .{});
-        for (in_buf.items) |code| {
-            std.debug.print("{s}", .{try inp.ansi_code_to_string(code)});
-        }
-        std.debug.print("\n", .{});
-    }
-
-    return in_buf.items;
-}
-
-fn get_keys(codes: []u8) ![]inp.Key {
-    var keys = std.ArrayList(inp.Key).init(allocator);
-
-    var cs = std.ArrayList(u8).init(allocator);
-    try cs.appendSlice(codes);
-
-    while (cs.items.len > 0) {
-        const key = inp.parse_ansi(&cs) catch |e| {
-            if (log_enabled) std.debug.print("{}\n", .{e});
-            continue;
-        };
-        try keys.append(key);
-    }
-    return keys.items;
-}
-
 pub fn main() !void {
     defer deinit();
     try ft.init_file_types();
@@ -183,8 +116,8 @@ pub fn main() !void {
     try buffer.ts_parse();
     try buffer.make_spans();
 
-    try setup_terminal();
-    const win = try init_curses();
+    try te.setup_terminal();
+    const win = try te.init_curses();
     _ = win;
 
     try redraw();
@@ -193,8 +126,8 @@ pub fn main() !void {
         _ = c.refresh();
         std.time.sleep(sleep_ns);
 
-        const codes = try get_codes() orelse continue;
-        const keys = try get_keys(codes);
+        const codes = try inp.get_codes() orelse continue;
+        const keys = try inp.get_keys(codes);
         if (keys.len == 0) continue;
         needs_redraw = true;
 

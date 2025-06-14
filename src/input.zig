@@ -122,3 +122,42 @@ pub fn ansi_code_to_string(code: u8) ![]u8 {
         return std.fmt.allocPrint(main.allocator, "\\x{x}", .{code});
     }
 }
+
+pub fn get_codes() !?[]u8 {
+    var in_buf = std.ArrayList(u8).init(main.allocator);
+    while (true) {
+        var b: [1]u8 = undefined;
+        const bytes_read = std.posix.read(std.posix.STDIN_FILENO, b[0..1]) catch break;
+        if (bytes_read == 0) break;
+        try in_buf.appendSlice(b[0..]);
+        // 1ns seems to be enough wait time for stdin to fill up with the next code
+        std.Thread.sleep(1);
+    }
+    if (in_buf.items.len == 0) return null;
+
+    if (main.log_enabled) {
+        std.debug.print("input: ", .{});
+        for (in_buf.items) |code| {
+            std.debug.print("{s}", .{try ansi_code_to_string(code)});
+        }
+        std.debug.print("\n", .{});
+    }
+
+    return in_buf.items;
+}
+
+pub fn get_keys(codes: []u8) ![]Key {
+    var keys = std.ArrayList(Key).init(main.allocator);
+
+    var cs = std.ArrayList(u8).init(main.allocator);
+    try cs.appendSlice(codes);
+
+    while (cs.items.len > 0) {
+        const key = parse_ansi(&cs) catch |e| {
+            if (main.log_enabled) std.debug.print("{}\n", .{e});
+            continue;
+        };
+        try keys.append(key);
+    }
+    return keys.items;
+}
