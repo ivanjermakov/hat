@@ -44,7 +44,7 @@ pub fn connect(config: *const LspConfig) !LspConnection {
 }
 
 pub fn poll(conn: *const LspConnection) !?[]u8 {
-    b: {
+    if (main.log_enabled) b: {
         const err = read_nonblock(conn.child.stderr.?) catch break :b;
         if (err) |e| {
             std.debug.print("lsp err: {s}\n", .{e});

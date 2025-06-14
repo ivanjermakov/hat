@@ -16,7 +16,6 @@ pub fn insert_text(text: []u8) !void {
     while (iter.nextCodepointSlice()) |ch| {
         const cbp = cursor_byte_pos();
         var line = &main.buffer.content.items[@intCast(cbp.row)];
-        std.debug.print("{any}, {}\n", .{ line.items, main.cursor.col });
 
         if (std.mem.eql(u8, ch, "\n")) {
             try insert_newline();
