@@ -10,7 +10,7 @@ pub const LspConfig = struct {
 
 pub const LspConnection = struct {
     child: std.process.Child,
-    messages_unreplied: std.AutoHashMap(lsp.JsonRPCMessage.ID, lsp.JsonRPCMessage),
+    messages_unreplied: std.AutoHashMap(i64, []u8),
 };
 
 var message_id: i64 = 0;
@@ -31,9 +31,9 @@ pub fn connect(allocator: std.mem.Allocator, config: *const LspConfig) !LspConne
     fs.make_nonblock(child.stdout.?.handle);
     fs.make_nonblock(child.stderr.?.handle);
 
-    const conn = LspConnection{
+    var conn = LspConnection{
         .child = child,
-        .messages_unreplied = std.AutoHashMap(lsp.JsonRPCMessage.ID, lsp.JsonRPCMessage).init(allocator),
+        .messages_unreplied = std.AutoHashMap(i64, []u8).init(allocator),
     };
 
     const request: lsp.TypedJsonRPCRequest(lsp.types.InitializeParams) = .{
@@ -44,24 +44,39 @@ pub fn connect(allocator: std.mem.Allocator, config: *const LspConfig) !LspConne
     const json_message = try std.json.stringifyAlloc(allocator, request, .{});
     defer allocator.free(json_message);
     const rpc_message = try std.fmt.allocPrint(allocator, "Content-Length: {}\r\n\r\n{s}", .{ json_message.len, json_message });
-    defer allocator.free(rpc_message);
     _ = try conn.child.stdin.?.write(rpc_message);
+    try conn.messages_unreplied.put(request.id.number, rpc_message);
 
     return conn;
 }
 
-pub fn update(allocator: std.mem.Allocator, conn: *const LspConnection) !void {
-    const msgs = try poll(allocator, conn) orelse return;
+pub fn update(allocator: std.mem.Allocator, conn: *LspConnection) !void {
+    const raw_msgs = try poll(allocator, conn) orelse return;
     defer {
-        for (msgs) |msg| allocator.free(msg);
-        allocator.free(msgs);
+        for (raw_msgs) |msg| allocator.free(msg);
+        allocator.free(raw_msgs);
     }
-    for (msgs) |msg| {
-        std.debug.print("lsp: {'}\n", .{std.zig.fmtEscapes(msg)});
+    for (raw_msgs) |raw_msg_json| {
+        std.debug.print("[lsp] raw message: {'}\n", .{std.zig.fmtEscapes(raw_msg_json)});
+        const msg_json = try std.json.parseFromSlice(lsp.JsonRPCMessage, allocator, raw_msg_json, .{});
+        defer msg_json.deinit();
+        const rpc_message: lsp.JsonRPCMessage = msg_json.value;
+        switch (rpc_message) {
+            .response => |resp| {
+                const response_id = resp.id.?.number;
+                const matched_request = conn.messages_unreplied.fetchRemove(response_id) orelse continue;
+                defer allocator.free(matched_request.value);
+                std.debug.print("[lsp] response: {}\n", .{rpc_message});
+            },
+            .notification => |notif| {
+                std.debug.print("[lsp] notification: {}\n", .{notif});
+            },
+            else => {},
+        }
     }
 }
 
-pub fn poll(allocator: std.mem.Allocator, conn: *const LspConnection) !?[][]u8 {
+fn poll(allocator: std.mem.Allocator, conn: *const LspConnection) !?[][]u8 {
     if (main.log_enabled) b: {
         const err = fs.read_nonblock(allocator, conn.child.stderr.?) catch break :b;
         if (err) |e| {
