@@ -41,7 +41,7 @@ pub fn connect(allocator: std.mem.Allocator, config: *const LspConfig) !LspConne
         .method = "initialize",
         .params = .{ .capabilities = .{} },
     };
-    const json_message = try std.json.stringifyAlloc(allocator, request, .{ .emit_null_optional_fields = false });
+    const json_message = try std.json.stringifyAlloc(allocator, request, .{});
     defer allocator.free(json_message);
     const rpc_message = try std.fmt.allocPrint(allocator, "Content-Length: {}\r\n\r\n{s}", .{ json_message.len, json_message });
     defer allocator.free(rpc_message);
@@ -50,7 +50,18 @@ pub fn connect(allocator: std.mem.Allocator, config: *const LspConfig) !LspConne
     return conn;
 }
 
-pub fn poll(allocator: std.mem.Allocator, conn: *const LspConnection) !?[][] u8 {
+pub fn update(allocator: std.mem.Allocator, conn: *const LspConnection) !void {
+    const msgs = try poll(allocator, conn) orelse return;
+    defer {
+        for (msgs) |msg| allocator.free(msg);
+        allocator.free(msgs);
+    }
+    for (msgs) |msg| {
+        std.debug.print("lsp: {'}\n", .{std.zig.fmtEscapes(msg)});
+    }
+}
+
+pub fn poll(allocator: std.mem.Allocator, conn: *const LspConnection) !?[][]u8 {
     if (main.log_enabled) b: {
         const err = fs.read_nonblock(allocator, conn.child.stderr.?) catch break :b;
         if (err) |e| {
