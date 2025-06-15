@@ -44,18 +44,36 @@ pub fn connect(allocator: std.mem.Allocator, config: *const LspConfig) !LspConne
     const json_message = try std.json.stringifyAlloc(allocator, request, .{ .emit_null_optional_fields = false });
     defer allocator.free(json_message);
     const rpc_message = try std.fmt.allocPrint(allocator, "Content-Length: {}\r\n\r\n{s}", .{ json_message.len, json_message });
+    defer allocator.free(rpc_message);
     _ = try conn.child.stdin.?.write(rpc_message);
 
     return conn;
 }
 
-pub fn poll(allocator: std.mem.Allocator, conn: *const LspConnection) !?[]u8 {
+pub fn poll(allocator: std.mem.Allocator, conn: *const LspConnection) !?[][] u8 {
     if (main.log_enabled) b: {
         const err = fs.read_nonblock(allocator, conn.child.stderr.?) catch break :b;
         if (err) |e| {
+            defer allocator.free(e);
             std.debug.print("lsp err: {s}\n", .{e});
         }
     }
 
-    return try fs.read_nonblock(main.allocator, conn.child.stdout.?);
+    const read = try fs.read_nonblock(allocator, conn.child.stdout.?) orelse return null;
+    defer allocator.free(read);
+    var read_stream = std.io.fixedBufferStream(read);
+    const reader = read_stream.reader();
+
+    var messages = std.ArrayList([]u8).init(allocator);
+    while (true) {
+        const header = lsp.BaseProtocolHeader.parse(reader) catch break;
+
+        const json_message = try allocator.alloc(u8, header.content_length);
+        errdefer allocator.free(json_message);
+
+        _ = try reader.readAll(json_message);
+        try messages.append(json_message);
+    }
+
+    return try messages.toOwnedSlice();
 }
