@@ -38,7 +38,52 @@ pub const Buffer = struct {
         _ = ts.ts.ts_parser_set_language(self.parser, language());
     }
 
-    pub fn make_spans(self: *Buffer) !void {
+    pub fn ts_parse(self: *Buffer) !void {
+        try self.update_raw();
+        if (self.parser == null) return;
+
+        if (self.tree) |old_tree| ts.ts.ts_tree_delete(old_tree);
+        self.tree = ts.ts.ts_parser_parse_string(
+            self.parser,
+            null,
+            @ptrCast(self.content_raw.items),
+            @intCast(self.content_raw.items.len),
+        );
+        if (main.log_enabled) {
+            const node = ts.ts.ts_tree_root_node(self.tree);
+            std.debug.print("tree: {s}\n", .{std.mem.span(ts.ts.ts_node_string(node))});
+        }
+        try self.make_spans();
+    }
+
+    pub fn update_content(self: *Buffer) !void {
+        var lines_iter = std.mem.splitSequence(u8, self.content_raw.items, "\n");
+        while (true) {
+            const next: []u8 = @constCast(lines_iter.next() orelse break);
+            var line = std.ArrayList(u8).init(self.allocator);
+            try line.appendSlice(next);
+            try self.content.append(line);
+        }
+    }
+
+    pub fn deinit(self: *Buffer) void {
+        if (self.parser) |p| ts.ts.ts_parser_delete(p);
+        if (self.tree) |t| ts.ts.ts_tree_delete(t);
+        for (self.content.items) |line| line.deinit();
+        self.content.deinit();
+        self.content_raw.deinit();
+        self.spans.deinit();
+    }
+
+    fn update_raw(self: *Buffer) !void {
+        self.content_raw.clearRetainingCapacity();
+        for (self.content.items) |line| {
+            try self.content_raw.appendSlice(line.items);
+            try self.content_raw.append('\n');
+        }
+    }
+
+    fn make_spans(self: *Buffer) !void {
         if (self.tree == null) return;
         self.spans.clearRetainingCapacity();
 
@@ -74,48 +119,6 @@ pub const Buffer = struct {
                 }
             }
         }
-    }
-
-    pub fn ts_parse(self: *Buffer) !void {
-        if (self.parser == null) return try self.update_raw();
-        if (self.tree) |old_tree| ts.ts.ts_tree_delete(old_tree);
-        self.tree = ts.ts.ts_parser_parse_string(
-            self.parser,
-            null,
-            @ptrCast(self.content_raw.items),
-            @intCast(self.content_raw.items.len),
-        );
-        if (main.log_enabled) {
-            const node = ts.ts.ts_tree_root_node(self.tree);
-            std.debug.print("tree: {s}\n", .{std.mem.span(ts.ts.ts_node_string(node))});
-        }
-    }
-
-    pub fn update_content(self: *Buffer) !void {
-        var lines_iter = std.mem.splitSequence(u8, self.content_raw.items, "\n");
-        while (true) {
-            const next: []u8 = @constCast(lines_iter.next() orelse break);
-            var line = std.ArrayList(u8).init(self.allocator);
-            try line.appendSlice(next);
-            try self.content.append(line);
-        }
-    }
-
-    pub fn update_raw(self: *Buffer) !void {
-        self.content_raw.clearRetainingCapacity();
-        for (self.content.items) |line| {
-            try self.content_raw.appendSlice(line.items);
-            try self.content_raw.append('\n');
-        }
-    }
-
-    pub fn deinit(self: *Buffer) void {
-        if (self.parser) |p| ts.ts.ts_parser_delete(p);
-        if (self.tree) |t| ts.ts.ts_tree_delete(t);
-        for (self.content.items) |line| line.deinit();
-        self.content.deinit();
-        self.content_raw.deinit();
-        self.spans.deinit();
     }
 };
 

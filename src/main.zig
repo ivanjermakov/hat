@@ -133,7 +133,6 @@ pub fn main() !void {
     buffer = try buf.Buffer.init(allocator, file_content);
     defer buffer.deinit();
     try buffer.ts_parse();
-    try buffer.make_spans();
 
     try te.setup_terminal();
     const win = try te.init_curses();
@@ -196,10 +195,11 @@ pub fn main() !void {
         }
         act.validate_cursor();
         if (needs_reparse) {
+            needs_reparse = false;
             try buffer.ts_parse();
-            try buffer.make_spans();
         }
         if (needs_redraw) {
+            needs_redraw = false;
             try redraw();
         }
     }
