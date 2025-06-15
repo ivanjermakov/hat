@@ -30,7 +30,7 @@ pub const Buffer = struct {
 
     fn init_parser(self: *Buffer) !void {
         const file_ext = std.fs.path.extension(main.args.path.?);
-        const file_type = ft.file_type.?.get(file_ext) orelse return;
+        const file_type = ft.file_type.get(file_ext) orelse return;
         var language_lib = try dl.open(file_type.lib_path);
         var language: *const fn () *ts.ts.struct_TSLanguage = undefined;
         language = language_lib.lookup(@TypeOf(language), @ptrCast(file_type.lib_symbol)) orelse return error.NoSymbol;
@@ -112,6 +112,7 @@ pub const Buffer = struct {
     pub fn deinit(self: *Buffer) void {
         if (self.parser) |p| ts.ts.ts_parser_delete(p);
         if (self.tree) |t| ts.ts.ts_tree_delete(t);
+        for (self.content.items) |line| line.deinit();
         self.content.deinit();
         self.content_raw.deinit();
         self.spans.deinit();

@@ -19,8 +19,8 @@ pub fn next_message_id() lsp.JsonRPCMessage.ID {
     return .{ .number = message_id };
 }
 
-pub fn connect(config: *const LspConfig) !LspConnection {
-    var child = std.process.Child.init(config.cmd, main.allocator);
+pub fn connect(allocator: std.mem.Allocator, config: *const LspConfig) !LspConnection {
+    var child = std.process.Child.init(config.cmd, allocator);
     child.stdin_behavior = .Pipe;
     child.stderr_behavior = .Pipe;
     child.stdout_behavior = .Pipe;
@@ -33,7 +33,7 @@ pub fn connect(config: *const LspConfig) !LspConnection {
 
     const conn = LspConnection{
         .child = child,
-        .messages_unreplied = std.AutoHashMap(lsp.JsonRPCMessage.ID, lsp.JsonRPCMessage).init(main.allocator),
+        .messages_unreplied = std.AutoHashMap(lsp.JsonRPCMessage.ID, lsp.JsonRPCMessage).init(allocator),
     };
 
     const request: lsp.TypedJsonRPCRequest(lsp.types.InitializeParams) = .{
@@ -41,17 +41,17 @@ pub fn connect(config: *const LspConfig) !LspConnection {
         .method = "initialize",
         .params = .{ .capabilities = .{} },
     };
-    const json_message = try std.json.stringifyAlloc(main.allocator, request, .{ .emit_null_optional_fields = false });
-    defer main.allocator.free(json_message);
-    const rpc_message = try std.fmt.allocPrint(main.allocator, "Content-Length: {}\r\n\r\n{s}", .{ json_message.len, json_message });
+    const json_message = try std.json.stringifyAlloc(allocator, request, .{ .emit_null_optional_fields = false });
+    defer allocator.free(json_message);
+    const rpc_message = try std.fmt.allocPrint(allocator, "Content-Length: {}\r\n\r\n{s}", .{ json_message.len, json_message });
     _ = try conn.child.stdin.?.write(rpc_message);
 
     return conn;
 }
 
-pub fn poll(conn: *const LspConnection) !?[]u8 {
+pub fn poll(allocator: std.mem.Allocator, conn: *const LspConnection) !?[]u8 {
     if (main.log_enabled) b: {
-        const err = fs.read_nonblock(main.allocator, conn.child.stderr.?) catch break :b;
+        const err = fs.read_nonblock(allocator, conn.child.stderr.?) catch break :b;
         if (err) |e| {
             std.debug.print("lsp err: {s}\n", .{e});
         }

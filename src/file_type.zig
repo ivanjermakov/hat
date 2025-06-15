@@ -9,23 +9,27 @@ pub const FileType = struct {
     lib_path: []const u8,
     lib_symbol: []const u8,
 
-    fn from_nvim(name: []const u8) !FileType {
+    fn from_nvim(allocator: std.mem.Allocator, name: []const u8) !FileType {
         return .{
             .name = name,
-            .lib_path = try env.expand(main.allocator, try std.fmt.allocPrint(main.allocator, "{s}{s}.so", .{ nvim_parser_path, name })),
-            .lib_symbol = try std.fmt.allocPrint(main.allocator, "tree_sitter_{s}", .{name}),
+            .lib_path = b: {
+                const str = try std.fmt.allocPrint(allocator, "{s}{s}.so", .{ nvim_parser_path, name });
+                defer allocator.free(str);
+                break :b try env.expand(allocator, str);
+            },
+            .lib_symbol = try std.fmt.allocPrint(allocator, "tree_sitter_{s}", .{name}),
         };
     }
 };
 
-pub var file_type: ?std.StringHashMap(FileType) = null;
+pub var file_type: std.StringHashMap(FileType) = undefined;
 
-pub fn init_file_types() !void {
-    file_type = std.StringHashMap(FileType).init(main.allocator);
-    try file_type.?.put(".c", FileType{
+pub fn init_file_types(allocator: std.mem.Allocator) !void {
+    file_type = std.StringHashMap(FileType).init(allocator);
+    try file_type.put(".c", FileType{
         .name = "c",
-        .lib_path = "/usr/lib/tree_sitter/c.so",
-        .lib_symbol = "tree_sitter_c",
+        .lib_path = try allocator.dupe(u8, "/usr/lib/tree_sitter/c.so"),
+        .lib_symbol = try allocator.dupe(u8, "tree_sitter_c"),
     });
-    try file_type.?.put(".ts", try FileType.from_nvim("typescript"));
+    try file_type.put(".ts", try FileType.from_nvim(allocator, "typescript"));
 }

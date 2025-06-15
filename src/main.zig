@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const dl = std.DynLib;
 const c = @cImport({
     @cInclude("ncurses.h");
@@ -10,6 +11,7 @@ const ft = @import("file_type.zig");
 const buf = @import("buffer.zig");
 const co = @import("color.zig");
 const te = @import("term.zig");
+const lsp = @import("lsp.zig");
 
 pub const Cursor = struct {
     row: i32,
@@ -27,7 +29,7 @@ const Args = struct {
 };
 
 pub const sleep_ns = 16 * 1e6;
-pub const allocator = std.heap.page_allocator;
+pub var allocator: std.mem.Allocator = undefined;
 pub const std_out = std.io.getStdOut();
 
 pub var buffer: buf.Buffer = undefined;
@@ -96,8 +98,21 @@ fn redraw() !void {
 }
 
 pub fn main() !void {
+    var debug_allocator: std.heap.DebugAllocator(.{ .stack_trace_frames = 10 }) = .init;
+    defer _ = debug_allocator.deinit();
+    allocator = if (builtin.mode == .Debug) debug_allocator.allocator() else std.heap.c_allocator;
+
     defer deinit();
-    try ft.init_file_types();
+
+    try ft.init_file_types(allocator);
+    defer {
+        var value_iter = ft.file_type.valueIterator();
+        while (value_iter.next()) |v| {
+            allocator.free(v.lib_path);
+            allocator.free(v.lib_symbol);
+        }
+        ft.file_type.deinit();
+    }
 
     var cmd_args = std.process.args();
     _ = cmd_args.skip();
@@ -113,6 +128,7 @@ pub fn main() !void {
     const path = args.path orelse return error.NoPath;
     const file = try std.fs.cwd().openFile(path, .{ .mode = .read_write });
     const file_content = try file.readToEndAlloc(allocator, std.math.maxInt(usize));
+    defer allocator.free(file_content);
 
     buffer = try buf.Buffer.init(allocator, file_content);
     defer buffer.deinit();
@@ -129,8 +145,13 @@ pub fn main() !void {
         _ = c.refresh();
         std.time.sleep(sleep_ns);
 
-        const codes = try inp.get_codes() orelse continue;
-        const keys = try inp.get_keys(codes);
+        const codes = try inp.get_codes(allocator) orelse continue;
+        defer allocator.free(codes);
+        const keys = try inp.get_keys(allocator, codes);
+        defer {
+            for (keys) |key| if (key.printable) |p| allocator.free(p);
+            allocator.free(keys);
+        }
         if (keys.len == 0) continue;
         needs_redraw = true;
 

@@ -41,7 +41,7 @@ pub const Key = struct {
     modifiers: u4,
 };
 
-pub fn parse_ansi(input: *std.ArrayList(u8)) !Key {
+pub fn parse_ansi(allocator: std.mem.Allocator, input: *std.ArrayList(u8)) !Key {
     var key: Key = .{
         .printable = null,
         .code = null,
@@ -98,7 +98,9 @@ pub fn parse_ansi(input: *std.ArrayList(u8)) !Key {
             break :s;
         },
         else => {
-            var printable = std.ArrayList(u8).init(main.allocator);
+            var printable = std.ArrayList(u8).init(allocator);
+            defer printable.deinit();
+
             try printable.append(code);
             while (input.items.len > 0) {
                 if (input.items[0] == 0x1b) break;
@@ -114,17 +116,17 @@ pub fn parse_ansi(input: *std.ArrayList(u8)) !Key {
     return key;
 }
 
-pub fn ansi_code_to_string(code: u8) ![]u8 {
+pub fn ansi_code_to_string(allocator: std.mem.Allocator, code: u8) ![]u8 {
     const is_printable = code >= 32 and code < 127;
     if (is_printable) {
-        return std.fmt.allocPrint(main.allocator, "{c}", .{@as(u7, @intCast(code))});
+        return std.fmt.allocPrint(allocator, "{c}", .{@as(u7, @intCast(code))});
     } else {
-        return std.fmt.allocPrint(main.allocator, "\\x{x}", .{code});
+        return std.fmt.allocPrint(allocator, "\\x{x}", .{code});
     }
 }
 
-pub fn get_codes() !?[]u8 {
-    var in_buf = std.ArrayList(u8).init(main.allocator);
+pub fn get_codes(allocator: std.mem.Allocator) !?[]u8 {
+    var in_buf = std.ArrayList(u8).init(allocator);
     while (true) {
         var b: [1]u8 = undefined;
         const bytes_read = std.posix.read(std.posix.STDIN_FILENO, b[0..1]) catch break;
@@ -138,26 +140,29 @@ pub fn get_codes() !?[]u8 {
     if (main.log_enabled) {
         std.debug.print("input: ", .{});
         for (in_buf.items) |code| {
-            std.debug.print("{s}", .{try ansi_code_to_string(code)});
+            const code_str = try ansi_code_to_string(allocator, code);
+            defer allocator.free(code_str);
+            std.debug.print("{s}", .{code_str});
         }
         std.debug.print("\n", .{});
     }
 
-    return in_buf.items;
+    return try in_buf.toOwnedSlice();
 }
 
-pub fn get_keys(codes: []u8) ![]Key {
-    var keys = std.ArrayList(Key).init(main.allocator);
+pub fn get_keys(allocator: std.mem.Allocator, codes: []u8) ![]Key {
+    var keys = std.ArrayList(Key).init(allocator);
 
-    var cs = std.ArrayList(u8).init(main.allocator);
+    var cs = std.ArrayList(u8).init(allocator);
+    defer cs.deinit();
     try cs.appendSlice(codes);
 
     while (cs.items.len > 0) {
-        const key = parse_ansi(&cs) catch |e| {
+        const key = parse_ansi(allocator, &cs) catch |e| {
             if (main.log_enabled) std.debug.print("{}\n", .{e});
             continue;
         };
         try keys.append(key);
     }
-    return keys.items;
+    return try keys.toOwnedSlice();
 }

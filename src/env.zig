@@ -5,10 +5,11 @@ const w = @cImport({
 
 pub fn expand(allocator: std.mem.Allocator, str: []u8) ![]u8 {
     var we: w.wordexp_t = undefined;
+    defer w.wordfree(&we);
     const res = w.wordexp(@ptrCast(str), &we, 0);
     if (res != 0) return error.Wordexp;
-    const word = std.mem.sliceTo(@as([*c]u8, we.we_wordv[0]), 0);
-    const expanded = try allocator.dupeZ(u8, word);
-    w.wordfree(&we);
+
+    const word = std.mem.span(we.we_wordv[0]);
+    const expanded = try allocator.dupe(u8, word);
     return expanded;
 }
