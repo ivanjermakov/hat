@@ -209,3 +209,7 @@ fn deinit() void {
     _ = c.endwin();
     _ = std_out.write(inp.cursor_type.steady_block) catch {};
 }
+
+comptime {
+    std.testing.refAllDecls(@This());
+}

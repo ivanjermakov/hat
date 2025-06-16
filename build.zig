@@ -35,7 +35,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-
+    linkLibs(b, tests);
     const run_tests = b.addRunArtifact(tests);
     const test_step = b.step("test", "");
     test_step.dependOn(&run_tests.step);
