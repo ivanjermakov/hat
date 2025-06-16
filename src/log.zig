@@ -10,9 +10,21 @@ pub fn log(comptime caller: type, comptime fmt: []const u8, args: anytype) void 
     defer allocator.free(now_str);
 
     const caller_name = @typeName(caller);
+    const caller_name_colored = color(allocator, caller_name, 2) catch "";
+    defer allocator.free(caller_name_colored);
 
     const str = std.fmt.allocPrint(allocator, fmt, args) catch "";
     defer allocator.free(str);
 
-    std.debug.print("{s} [{s}] {s}", .{ now_str, caller_name, str });
+    std.debug.print("{s} [{s}] {s}", .{ now_str, caller_name_colored, str });
+}
+
+fn color(allocator: std.mem.Allocator, str: []const u8, color_code: u8) ![]const u8 {
+    const escapeCode = "\x1b[38;5;";
+    const resetCode = "\x1b[0m";
+    return try std.fmt.allocPrint(
+        allocator,
+        "{s}{}{s}{s}{s}",
+        .{ escapeCode, color_code, "m", str, resetCode },
+    );
 }
