@@ -1302,7 +1302,7 @@ pub const Datetime = struct {
     // Formats a timestamp in the format used by HTTP.
     // eg "Tue, 15 Nov 1994 08:12:31 GMT"
     pub fn formatHttp(self: Datetime, allocator: Allocator) ![]const u8 {
-        return try std.fmt.allocPrint(allocator, "{s}, {d} {s} {d} {d:0>2}:{d:0>2}:{d:0>2} {s}", .{
+        return try std.fmt.allocPrint(allocator, "{s}, {d} {s} {d} {d:0>2}:{d:0>2}:{d:0>2}", .{
             self.date.weekdayName()[0..3],
             self.date.day,
             self.date.monthName()[0..3],
@@ -1314,7 +1314,7 @@ pub const Datetime = struct {
     }
 
     pub fn formatHttpBuf(self: Datetime, buf: []u8) ![]const u8 {
-        return try std.fmt.bufPrint(buf, "{s}, {d} {s} {d} {d:0>2}:{d:0>2}:{d:0>2} {s}", .{
+        return try std.fmt.bufPrint(buf, "{s}, {d} {s} {d} {d:0>2}:{d:0>2}:{d:0>2}", .{
             self.date.weekdayName()[0..3],
             self.date.day,
             self.date.monthName()[0..3],
@@ -1430,7 +1430,7 @@ test "datetime-from-seconds" {
 }
 
 test "datetime-shift" {
-    var dt = try Datetime.create(2019, 12, 2, 11, 51, 13, 466545, null);
+    var dt = try Datetime.create(2019, 12, 2, 11, 51, 13, 466545);
 
     try testing.expect(dt.shiftYears(0).eql(dt));
     try testing.expect(dt.shiftDays(0).eql(dt));
@@ -1462,8 +1462,8 @@ test "datetime-shift" {
 }
 
 test "datetime-subtract" {
-    var a = try Datetime.create(2019, 12, 2, 11, 51, 13, 466545, null);
-    var b = try Datetime.create(2019, 12, 5, 11, 51, 13, 466545, null);
+    var a = try Datetime.create(2019, 12, 2, 11, 51, 13, 466545);
+    var b = try Datetime.create(2019, 12, 5, 11, 51, 13, 466545);
     var delta = a.sub(b);
     try testing.expectEqual(delta.days, -3);
     try testing.expectEqual(delta.totalSeconds(), -3 * time.s_per_day);
@@ -1471,7 +1471,7 @@ test "datetime-subtract" {
     try testing.expectEqual(delta.days, 3);
     try testing.expectEqual(delta.totalSeconds(), 3 * time.s_per_day);
 
-    b = try Datetime.create(2019, 12, 2, 11, 0, 0, 466545, null);
+    b = try Datetime.create(2019, 12, 2, 11, 0, 0, 466545);
     delta = a.sub(b);
     try testing.expectEqual(delta.totalSeconds(), 13 + 51 * time.s_per_min);
 }
@@ -1501,66 +1501,41 @@ test "datetime-parse-modified-since" {
     try testing.expectError(error.InvalidFormat, Datetime.parseModifiedSince("21/10/2015"));
 }
 
-test "file-modified-date" {
-    var f = try std.fs.cwd().openFile("README.md", .{});
-    const stat = try f.stat();
-    var buf: [32]u8 = undefined;
-    const str = try Datetime.formatHttpFromModifiedDate(&buf, stat.mtime);
-    std.log.warn("Modtime: {s}\n", .{str});
-}
-
-test "readme-example" {
-    const allocator = std.testing.allocator;
-    const date = try Date.create(2019, 12, 25);
-    const next_year = date.shiftDays(7);
-    assert(next_year.year == 2020);
-    assert(next_year.month == 1);
-    assert(next_year.day == 1);
-
-    // In UTC
-    const now = Datetime.now();
-    const now_str = try now.formatHttp(allocator);
-    defer allocator.free(now_str);
-    std.log.warn("The time is now: {s}\n", .{now_str});
-    // The time is now: Fri, 20 Dec 2019 22:03:02 UTC
-
-}
-
 test "datetime-format-ISO8601" {
     const allocator = std.testing.allocator;
 
-    var dt = try Datetime.create(2023, 6, 10, 9, 12, 52, 49612000, null);
+    var dt = try Datetime.create(2023, 6, 10, 9, 12, 52, 49612000);
     var dt_str = try dt.formatISO8601(allocator, false);
-    try testing.expectEqualStrings("2023-06-10T09:12:52+00:00", dt_str);
+    try testing.expectEqualStrings("2023-06-10T09:12:52", dt_str);
     allocator.free(dt_str);
 
     // test positive tz
     dt = try Datetime.create(2023, 6, 10, 18, 12, 52, 49612000);
     dt_str = try dt.formatISO8601(allocator, false);
-    try testing.expectEqualStrings("2023-06-10T18:12:52+09:00", dt_str);
+    try testing.expectEqualStrings("2023-06-10T18:12:52", dt_str);
     allocator.free(dt_str);
 
     // test negative tz
     dt = try Datetime.create(2023, 6, 10, 6, 12, 52, 49612000);
     dt_str = try dt.formatISO8601(allocator, false);
-    try testing.expectEqualStrings("2023-06-10T06:12:52-03:00", dt_str);
+    try testing.expectEqualStrings("2023-06-10T06:12:52", dt_str);
     allocator.free(dt_str);
 
     // test tz offset div and mod
     dt = try Datetime.create(2023, 6, 10, 22, 57, 52, 49612000);
     dt_str = try dt.formatISO8601(allocator, false);
-    try testing.expectEqualStrings("2023-06-10T22:57:52+12:45", dt_str);
+    try testing.expectEqualStrings("2023-06-10T22:57:52", dt_str);
     allocator.free(dt_str);
 
     // test microseconds
     dt = try Datetime.create(2023, 6, 10, 5, 57, 52, 49612000);
     dt_str = try dt.formatISO8601(allocator, true);
-    try testing.expectEqualStrings("2023-06-10T05:57:52.049612-04:00", dt_str);
+    try testing.expectEqualStrings("2023-06-10T05:57:52.049612", dt_str);
     allocator.free(dt_str);
 
     // test format buf
     var buf: [64]u8 = undefined;
     dt = try Datetime.create(2023, 6, 10, 14, 6, 40, 15006000);
     dt_str = try dt.formatISO8601Buf(&buf, true);
-    try testing.expectEqualStrings("2023-06-10T14:06:40.015006+08:00", dt_str);
+    try testing.expectEqualStrings("2023-06-10T14:06:40.015006", dt_str);
 }
