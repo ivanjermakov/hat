@@ -3,6 +3,7 @@ const dl = std.DynLib;
 const main = @import("main.zig");
 const ft = @import("file_type.zig");
 const ts = @import("ts.zig");
+const log = @import("log.zig");
 
 pub const Buffer = struct {
     content: BufferContent,
@@ -51,7 +52,7 @@ pub const Buffer = struct {
         );
         if (main.log_enabled) {
             const node = ts.ts.ts_tree_root_node(self.tree);
-            std.debug.print("tree: {s}\n", .{std.mem.span(ts.ts.ts_node_string(node))});
+            log.log(@This(), "tree: {s}\n", .{std.mem.span(ts.ts.ts_node_string(node))});
         }
         try self.make_spans();
     }

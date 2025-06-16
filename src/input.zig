@@ -1,5 +1,6 @@
 const std = @import("std");
 const main = @import("main.zig");
+const log = @import("log.zig");
 
 /// See section about "CSI Ps SP q" at
 /// https://invisible-island.net/xterm/ctlseqs/ctlseqs.html#h3-Functions-using-CSI-_-ordered-by-the-final-character_s_
@@ -110,9 +111,7 @@ pub fn parse_ansi(allocator: std.mem.Allocator, input: *std.ArrayList(u8)) !Key 
             key.printable = try printable.toOwnedSlice();
         },
     }
-    if (main.log_enabled) {
-        std.debug.print("{any}\n", .{key});
-    }
+    log.log(@This(), "{any}\n", .{key});
     return key;
 }
 
@@ -138,7 +137,7 @@ pub fn get_codes(allocator: std.mem.Allocator) !?[]u8 {
     if (in_buf.items.len == 0) return null;
 
     if (main.log_enabled) {
-        std.debug.print("input: ", .{});
+        log.log(@This(), "input: ", .{});
         for (in_buf.items) |code| {
             const code_str = try ansi_code_to_string(allocator, code);
             defer allocator.free(code_str);
@@ -159,7 +158,7 @@ pub fn get_keys(allocator: std.mem.Allocator, codes: []u8) ![]Key {
 
     while (cs.items.len > 0) {
         const key = parse_ansi(allocator, &cs) catch |e| {
-            if (main.log_enabled) std.debug.print("{}\n", .{e});
+            log.log(@This(), "{}\n", .{e});
             continue;
         };
         try keys.append(key);

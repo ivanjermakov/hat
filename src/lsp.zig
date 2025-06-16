@@ -2,6 +2,7 @@ const std = @import("std");
 const posix = std.posix;
 const main = @import("main.zig");
 const fs = @import("fs.zig");
+const log = @import("log.zig");
 const lsp = @import("lsp");
 
 pub const LspConfig = struct {
@@ -57,7 +58,7 @@ pub fn update(allocator: std.mem.Allocator, conn: *LspConnection) !void {
         allocator.free(raw_msgs);
     }
     for (raw_msgs) |raw_msg_json| {
-        std.debug.print("[lsp] raw message: {'}\n", .{std.zig.fmtEscapes(raw_msg_json)});
+        log.log(@This(), "raw message: {'}\n", .{std.zig.fmtEscapes(raw_msg_json)});
         const msg_json = try std.json.parseFromSlice(lsp.JsonRPCMessage, allocator, raw_msg_json, .{});
         defer msg_json.deinit();
         const rpc_message: lsp.JsonRPCMessage = msg_json.value;
@@ -66,10 +67,10 @@ pub fn update(allocator: std.mem.Allocator, conn: *LspConnection) !void {
                 const response_id = resp.id.?.number;
                 const matched_request = conn.messages_unreplied.fetchRemove(response_id) orelse continue;
                 defer allocator.free(matched_request.value);
-                std.debug.print("[lsp] response: {}\n", .{rpc_message});
+                log.log(@This(), "response: {}\n", .{rpc_message});
             },
             .notification => |notif| {
-                std.debug.print("[lsp] notification: {}\n", .{notif});
+                log.log(@This(), "notification: {}\n", .{notif});
             },
             else => {},
         }
@@ -81,7 +82,7 @@ fn poll(allocator: std.mem.Allocator, conn: *const LspConnection) !?[][]u8 {
         const err = fs.read_nonblock(allocator, conn.child.stderr.?) catch break :b;
         if (err) |e| {
             defer allocator.free(e);
-            std.debug.print("lsp err: {s}\n", .{e});
+            log.log(@This(), "err: {s}\n", .{e});
         }
     }
 
