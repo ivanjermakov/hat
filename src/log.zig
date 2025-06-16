@@ -4,11 +4,15 @@ const dt = @import("datetime.zig");
 
 pub fn log(comptime caller: type, comptime fmt: []const u8, args: anytype) void {
     if (!main.log_enabled) return;
-    const str = std.fmt.allocPrint(main.allocator, fmt, args) catch "";
-    defer main.allocator.free(str);
+    const allocator = main.allocator;
+
+    const now_str = dt.Datetime.now().formatISO8601(allocator, false) catch "";
+    defer allocator.free(now_str);
+
     const caller_name = @typeName(caller);
-    const now = dt.Datetime.now();
-    const now_str = now.formatISO8601(main.allocator, false) catch "";
-    defer main.allocator.free(now_str);
+
+    const str = std.fmt.allocPrint(allocator, fmt, args) catch "";
+    defer allocator.free(str);
+
     std.debug.print("{s} [{s}] {s}", .{ now_str, caller_name, str });
 }
