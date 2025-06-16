@@ -9,9 +9,14 @@ pub const LspConfig = struct {
     cmd: []const []const u8,
 };
 
+pub const LspRequest = struct {
+    method: []const u8,
+    message: []const u8,
+};
+
 pub const LspConnection = struct {
     child: std.process.Child,
-    messages_unreplied: std.AutoHashMap(i64, []u8),
+    messages_unreplied: std.AutoHashMap(i64, LspRequest),
 };
 
 var message_id: i64 = 0;
@@ -34,21 +39,48 @@ pub fn connect(allocator: std.mem.Allocator, config: *const LspConfig) !LspConne
 
     var conn = LspConnection{
         .child = child,
-        .messages_unreplied = std.AutoHashMap(i64, []u8).init(allocator),
+        .messages_unreplied = std.AutoHashMap(i64, LspRequest).init(allocator),
     };
+    try send_request(allocator, &conn, "initialize", .{ .capabilities = .{} });
 
-    const request: lsp.TypedJsonRPCRequest(lsp.types.InitializeParams) = .{
+    return conn;
+}
+
+fn send_request(
+    allocator: std.mem.Allocator,
+    conn: *LspConnection,
+    comptime method: []const u8,
+    comptime params: lsp.types.getRequestMetadata(method).?.Params.?,
+) !void {
+    const request: lsp.TypedJsonRPCRequest(@TypeOf(params)) = .{
         .id = next_message_id(),
-        .method = "initialize",
-        .params = .{ .capabilities = .{} },
+        .method = method,
+        .params = params,
+    };
+    const json_message = try std.json.stringifyAlloc(allocator, request, .{});
+    log.log(@This(), "> raw request: {s}\n", .{json_message});
+    const rpc_message = try std.fmt.allocPrint(allocator, "Content-Length: {}\r\n\r\n{s}", .{ json_message.len, json_message });
+    _ = try conn.child.stdin.?.write(rpc_message);
+    defer allocator.free(rpc_message);
+    try conn.messages_unreplied.put(request.id.number, .{ .method = method, .message = json_message });
+}
+
+fn send_notification(
+    allocator: std.mem.Allocator,
+    conn: *LspConnection,
+    comptime method: []const u8,
+    comptime params: lsp.types.getNotificationMetadata(method).?.Params.?,
+) !void {
+    const request: lsp.TypedJsonRPCNotification(@TypeOf(params)) = .{
+        .method = method,
+        .params = params,
     };
     const json_message = try std.json.stringifyAlloc(allocator, request, .{});
     defer allocator.free(json_message);
+    log.log(@This(), "> raw notification: {s}\n", .{json_message});
     const rpc_message = try std.fmt.allocPrint(allocator, "Content-Length: {}\r\n\r\n{s}", .{ json_message.len, json_message });
     _ = try conn.child.stdin.?.write(rpc_message);
-    try conn.messages_unreplied.put(request.id.number, rpc_message);
-
-    return conn;
+    defer allocator.free(rpc_message);
 }
 
 pub fn update(allocator: std.mem.Allocator, conn: *LspConnection) !void {
@@ -58,7 +90,7 @@ pub fn update(allocator: std.mem.Allocator, conn: *LspConnection) !void {
         allocator.free(raw_msgs);
     }
     for (raw_msgs) |raw_msg_json| {
-        log.log(@This(), "raw message: {'}\n", .{std.zig.fmtEscapes(raw_msg_json)});
+        log.log(@This(), "< raw message: {'}\n", .{std.zig.fmtEscapes(raw_msg_json)});
         const msg_json = try std.json.parseFromSlice(lsp.JsonRPCMessage, allocator, raw_msg_json, .{});
         defer msg_json.deinit();
         const rpc_message: lsp.JsonRPCMessage = msg_json.value;
@@ -66,8 +98,18 @@ pub fn update(allocator: std.mem.Allocator, conn: *LspConnection) !void {
             .response => |resp| {
                 const response_id = resp.id.?.number;
                 const matched_request = conn.messages_unreplied.fetchRemove(response_id) orelse continue;
-                defer allocator.free(matched_request.value);
-                log.log(@This(), "response: {}\n", .{rpc_message});
+                defer allocator.free(matched_request.value.message);
+                log.log(@This(), "response: {}\n", .{resp});
+
+                if (std.mem.eql(u8, matched_request.value.method, "initialize")) {
+                    const method = "initialize";
+                    const resp_type = lsp.types.getRequestMetadata(method).?.Result;
+                    const resp_typed = try std.json.parseFromValue(resp_type, allocator, resp.result_or_error.result.?, .{});
+                    defer resp_typed.deinit();
+                    log.log(@This(), "init response: {}\n", .{resp_typed.value});
+
+                    try send_notification(allocator, conn, "initialized", .{});
+                }
             },
             .notification => |notif| {
                 log.log(@This(), "notification: {}\n", .{notif});
