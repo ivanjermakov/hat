@@ -6,6 +6,7 @@ const ts = @import("ts.zig");
 const log = @import("log.zig");
 
 pub const Buffer = struct {
+    path: []const u8,
     content: BufferContent,
     content_raw: std.ArrayList(u8),
     spans: std.ArrayList(ts.SpanNodeTypeTuple),
@@ -13,10 +14,11 @@ pub const Buffer = struct {
     tree: ?*ts.ts.TSTree,
     allocator: std.mem.Allocator,
 
-    pub fn init(allocator: std.mem.Allocator, content_raw: []u8) !Buffer {
+    pub fn init(allocator: std.mem.Allocator, path: []const u8, content_raw: []u8) !Buffer {
         var raw = std.ArrayList(u8).init(allocator);
         try raw.appendSlice(content_raw);
         var buffer = Buffer{
+            .path = path,
             .content = std.ArrayList(Line).init(allocator),
             .content_raw = raw,
             .spans = std.ArrayList(ts.SpanNodeTypeTuple).init(allocator),

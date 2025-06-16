@@ -50,7 +50,7 @@ fn send_request(
     allocator: std.mem.Allocator,
     conn: *LspConnection,
     comptime method: []const u8,
-    comptime params: lsp.types.getRequestMetadata(method).?.Params.?,
+    params: lsp.types.getRequestMetadata(method).?.Params.?,
 ) !void {
     const request: lsp.TypedJsonRPCRequest(@TypeOf(params)) = .{
         .id = next_message_id(),
@@ -69,7 +69,7 @@ fn send_notification(
     allocator: std.mem.Allocator,
     conn: *LspConnection,
     comptime method: []const u8,
-    comptime params: lsp.types.getNotificationMetadata(method).?.Params.?,
+    params: lsp.types.getNotificationMetadata(method).?.Params.?,
 ) !void {
     const request: lsp.TypedJsonRPCNotification(@TypeOf(params)) = .{
         .method = method,
@@ -106,6 +106,17 @@ pub fn update(allocator: std.mem.Allocator, conn: *LspConnection) !void {
                     defer resp_typed.deinit();
                     log.log(@This(), "got init response\n", .{});
                     try send_notification(allocator, conn, "initialized", .{});
+
+                    const buffer_uri = try std.fmt.allocPrint(allocator, "file://{s}", .{main.buffer.path});
+                    defer allocator.free(buffer_uri);
+                    try send_notification(allocator, conn, "textDocument/didOpen", .{
+                        .textDocument = .{
+                            .uri = buffer_uri,
+                            .languageId = "",
+                            .version = 0,
+                            .text = main.buffer.content_raw.items,
+                        },
+                    });
                 }
             },
             .notification => |notif| {
