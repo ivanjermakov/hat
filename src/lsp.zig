@@ -90,7 +90,7 @@ pub fn update(allocator: std.mem.Allocator, conn: *LspConnection) !void {
         allocator.free(raw_msgs);
     }
     for (raw_msgs) |raw_msg_json| {
-        log.log(@This(), "< raw message: {'}\n", .{std.zig.fmtEscapes(raw_msg_json)});
+        log.log(@This(), "< raw message: {s}\n", .{raw_msg_json});
         const msg_json = try std.json.parseFromSlice(lsp.JsonRPCMessage, allocator, raw_msg_json, .{});
         defer msg_json.deinit();
         const rpc_message: lsp.JsonRPCMessage = msg_json.value;
@@ -102,17 +102,14 @@ pub fn update(allocator: std.mem.Allocator, conn: *LspConnection) !void {
                 log.log(@This(), "response: {}\n", .{resp});
 
                 if (std.mem.eql(u8, matched_request.value.method, "initialize")) {
-                    const method = "initialize";
-                    const resp_type = lsp.types.getRequestMetadata(method).?.Result;
-                    const resp_typed = try std.json.parseFromValue(resp_type, allocator, resp.result_or_error.result.?, .{});
+                    const resp_typed = try std.json.parseFromValue(lsp.types.InitializeResult, allocator, resp.result_or_error.result.?, .{});
                     defer resp_typed.deinit();
-                    log.log(@This(), "init response: {}\n", .{resp_typed.value});
-
+                    log.log(@This(), "got init response\n", .{});
                     try send_notification(allocator, conn, "initialized", .{});
                 }
             },
             .notification => |notif| {
-                log.log(@This(), "notification: {}\n", .{notif});
+                log.log(@This(), "notification: {s}\n", .{notif.method});
             },
             else => {},
         }
@@ -139,7 +136,6 @@ fn poll(allocator: std.mem.Allocator, conn: *const LspConnection) !?[][]u8 {
 
         const json_message = try allocator.alloc(u8, header.content_length);
         errdefer allocator.free(json_message);
-
         _ = try reader.readAll(json_message);
         try messages.append(json_message);
     }

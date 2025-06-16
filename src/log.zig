@@ -10,13 +10,15 @@ pub fn log(comptime caller: type, comptime fmt: []const u8, args: anytype) void 
     defer allocator.free(now_str);
 
     const caller_name = @typeName(caller);
-    const caller_name_colored = color(allocator, caller_name, 2) catch "";
+    const caller_name_colored = color(allocator, caller_name, 5) catch "";
     defer allocator.free(caller_name_colored);
+    const caller_name_bracketed = std.fmt.allocPrint(allocator, "[{s}]", .{caller_name_colored}) catch "";
+    defer allocator.free(caller_name_bracketed);
 
     const str = std.fmt.allocPrint(allocator, fmt, args) catch "";
     defer allocator.free(str);
 
-    std.debug.print("{s} [{s}] {s}", .{ now_str, caller_name_colored, str });
+    std.debug.print("{s} {s: <30} {s}", .{ now_str, caller_name_bracketed, str });
 }
 
 fn color(allocator: std.mem.Allocator, str: []const u8, color_code: u8) ![]const u8 {
