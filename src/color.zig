@@ -5,6 +5,8 @@ const c = @cImport({
 pub const Color = enum(i16) {
     none = -1,
     black = 1,
+    gray1,
+    gray2,
     white,
     red,
     green,
@@ -24,6 +26,7 @@ pub const Color = enum(i16) {
 
 pub const ColorPair = enum(u8) {
     text = 1,
+    selection,
     keyword,
     string,
     number,
@@ -37,15 +40,18 @@ pub const ColorPair = enum(u8) {
     }
 };
 
-pub const Attr = .{
-    .text = ColorPair.text.to_pair(),
-    .keyword = ColorPair.keyword.to_pair() | c.A_BOLD,
-    .string = ColorPair.string.to_pair(),
-    .number = ColorPair.number.to_pair(),
+pub const Attr = enum(c_int) {
+    text = ColorPair.text.to_pair(),
+    selection = ColorPair.selection.to_pair(),
+    keyword = ColorPair.keyword.to_pair() | c.A_BOLD,
+    string = ColorPair.string.to_pair(),
+    number = ColorPair.number.to_pair(),
 };
 
 pub fn init_color() void {
     Color.black.init(0, 0, 0);
+    Color.gray1.init(40, 40, 40);
+    Color.gray2.init(80, 80, 80);
     Color.white.init(255, 255, 255);
     Color.red.init(245, 113, 113);
     Color.green.init(166, 209, 137);
@@ -54,6 +60,7 @@ pub fn init_color() void {
     Color.magenta.init(211, 168, 239);
 
     ColorPair.text.init(Color.white, Color.none);
+    ColorPair.selection.init(Color.none, Color.gray2);
     ColorPair.keyword.init(Color.magenta, Color.none);
     ColorPair.string.init(Color.green, Color.none);
     ColorPair.number.init(Color.yellow, Color.none);

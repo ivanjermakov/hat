@@ -8,6 +8,25 @@ const log = @import("log.zig");
 pub const Position = struct {
     line: usize,
     character: usize,
+
+    pub fn order(self: Position, other: Position) std.math.Order {
+        if (std.meta.eql(self, other)) return .eq;
+        if (self.line == other.line) {
+            return std.math.order(self.character, other.character);
+        }
+        return std.math.order(self.line, other.line);
+    }
+};
+
+pub const SelectionSpan = struct {
+    start: Position,
+    end: Position,
+
+    pub fn in_range(self: SelectionSpan, pos: Position) bool {
+        const start = self.start.order(pos);
+        const end = self.end.order(pos);
+        return start != .gt and end != .lt;
+    }
 };
 
 pub const Buffer = struct {
@@ -18,6 +37,7 @@ pub const Buffer = struct {
     spans: std.ArrayList(ts.SpanNodeTypeTuple),
     parser: ?*ts.ts.TSParser,
     tree: ?*ts.ts.TSTree,
+    selection: ?SelectionSpan,
     allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator, path: []const u8, content_raw: []u8) !Buffer {
@@ -33,6 +53,7 @@ pub const Buffer = struct {
             .spans = std.ArrayList(ts.SpanNodeTypeTuple).init(allocator),
             .parser = null,
             .tree = null,
+            .selection = null,
             .allocator = allocator,
         };
         try buffer.init_parser();

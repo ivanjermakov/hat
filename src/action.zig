@@ -3,10 +3,28 @@ const main = @import("main.zig");
 const nc = @cImport({
     @cInclude("ncurses.h");
 });
+const log = @import("log.zig");
+const buf = @import("buffer.zig");
 
 pub fn move_cursor(new_cursor: main.Cursor) void {
+    const old_position = main.buffer.position();
     (&main.cursor).* = new_cursor;
     validate_cursor();
+
+    if (main.mode == .select) {
+        const selection = &main.buffer.selection.?;
+        const cursor_was_at_start = std.meta.eql(selection.start, old_position);
+        if (cursor_was_at_start) {
+            selection.start = main.buffer.position();
+        } else {
+            selection.end = main.buffer.position();
+        }
+        if (selection.start.order(selection.end) == .gt) {
+            const tmp = selection.start;
+            selection.start = selection.end;
+            selection.end = tmp;
+        }
+    }
     main.needs_redraw = true;
 }
 
@@ -55,6 +73,11 @@ pub fn remove_prev_char() !void {
     const col_byte = try utf8_byte_pos(line.items, @intCast(main.cursor.col));
     _ = line.orderedRemove(col_byte);
     main.needs_reparse = true;
+}
+
+pub fn select_char() !void {
+    const pos = main.buffer.position();
+    main.buffer.selection = .{ .start = pos, .end = pos };
 }
 
 fn cursor_byte_pos() main.Cursor {

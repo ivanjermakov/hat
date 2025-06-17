@@ -40,6 +40,12 @@ pub const Key = struct {
     code: ?KeyCode,
     /// Bit mask of Modifier enum
     modifiers: u4,
+
+    pub fn clone(self: *const Key, allocator: std.mem.Allocator) !Key {
+        var k = self.*;
+        if (self.printable) |p| k.printable = try allocator.dupe(u8, p);
+        return k;
+    }
 };
 
 pub fn parse_ansi(allocator: std.mem.Allocator, input: *std.ArrayList(u8)) !Key {
