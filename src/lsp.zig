@@ -15,7 +15,6 @@ pub const LspRequest = struct {
 };
 
 pub const LspConnectionStatus = enum {
-    Created,
     Connected,
     Disconnecting,
     Closed,
@@ -40,7 +39,7 @@ pub const LspConnection = struct {
         fs.make_nonblock(child.stderr.?.handle);
 
         var conn = LspConnection{
-            .status = .Created,
+            .status = .Connected,
             .child = child,
             .messages_unreplied = std.AutoHashMap(i64, LspRequest).init(allocator),
             .allocator = allocator,
@@ -98,6 +97,10 @@ pub const LspConnection = struct {
                 else => {},
             }
         }
+    }
+
+    pub fn deinit(self: *LspConnection) void {
+        self.messages_unreplied.deinit();
     }
 
     fn poll(self: *LspConnection) !?[][]u8 {
