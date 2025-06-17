@@ -35,7 +35,7 @@ pub const std_out = std.io.getStdOut();
 
 pub var buffer: buf.Buffer = undefined;
 pub var cursor: Cursor = .{ .row = 0, .col = 0 };
-pub var mode = Mode.normal;
+pub var mode: Mode = .normal;
 pub var needs_redraw = false;
 pub var needs_reparse = false;
 pub var log_enabled = true;
@@ -161,11 +161,14 @@ pub fn main() !void {
         if (try inp.get_codes(allocator)) |codes| {
             defer allocator.free(codes);
             const new_keys = try inp.get_keys(allocator, codes);
+            defer allocator.free(new_keys);
             try keys.appendSlice(new_keys);
         }
 
         handle_mappings: while (keys.items.len > 0) {
             const key = keys.orderedRemove(0);
+            defer if (key.printable) |p| allocator.free(p);
+
             const code = key.code;
             var ch: ?u8 = null;
             if (key.printable != null and key.printable.?.len == 1) ch = key.printable.?[0];
