@@ -104,7 +104,7 @@ pub fn parse_ansi(allocator: std.mem.Allocator, input: *std.ArrayList(u8)) !Key 
 
             try printable.append(code);
             while (input.items.len > 0) {
-                if (input.items[0] == 0x1b) break;
+                if (is_printable_ascii(input.items[0])) break;
                 const code2 = input.orderedRemove(0);
                 try printable.append(code2);
             }
@@ -113,15 +113,6 @@ pub fn parse_ansi(allocator: std.mem.Allocator, input: *std.ArrayList(u8)) !Key 
     }
     log.log(@This(), "{any}\n", .{key});
     return key;
-}
-
-pub fn ansi_code_to_string(allocator: std.mem.Allocator, code: u8) ![]u8 {
-    const is_printable = code >= 32 and code < 127;
-    if (is_printable) {
-        return std.fmt.allocPrint(allocator, "{c}", .{@as(u7, @intCast(code))});
-    } else {
-        return std.fmt.allocPrint(allocator, "\\x{x}", .{code});
-    }
 }
 
 pub fn get_codes(allocator: std.mem.Allocator) !?[]u8 {
@@ -164,4 +155,17 @@ pub fn get_keys(allocator: std.mem.Allocator, codes: []u8) ![]Key {
         try keys.append(key);
     }
     return try keys.toOwnedSlice();
+}
+
+fn ansi_code_to_string(allocator: std.mem.Allocator, code: u8) ![]u8 {
+    const is_printable = code >= 32 and code < 127;
+    if (is_printable) {
+        return std.fmt.allocPrint(allocator, "{c}", .{@as(u7, @intCast(code))});
+    } else {
+        return std.fmt.allocPrint(allocator, "\\x{x}", .{code});
+    }
+}
+
+fn is_printable_ascii(code: u8) bool {
+    return code >= 0x21 and code <= 0x7e;
 }
