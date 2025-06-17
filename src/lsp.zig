@@ -44,7 +44,13 @@ pub const LspConnection = struct {
             .messages_unreplied = std.AutoHashMap(i64, LspRequest).init(allocator),
             .allocator = allocator,
         };
-        try conn.send_request("initialize", .{ .capabilities = .{} });
+        try conn.send_request("initialize", .{
+            .capabilities = .{
+                .textDocument = .{
+                    .definition = .{},
+                },
+            },
+        });
 
         return conn;
     }
@@ -61,9 +67,15 @@ pub const LspConnection = struct {
             for (raw_msgs) |msg| self.allocator.free(msg);
             self.allocator.free(raw_msgs);
         }
+
+        const arena = try self.allocator.create(std.heap.ArenaAllocator);
+        defer self.allocator.destroy(arena);
+        arena.* = std.heap.ArenaAllocator.init(self.allocator);
+        defer arena.deinit();
+
         for (raw_msgs) |raw_msg_json| {
             log.log(@This(), "< raw message: {s}\n", .{raw_msg_json});
-            const msg_json = try std.json.parseFromSlice(lsp.JsonRPCMessage, self.allocator, raw_msg_json, .{});
+            const msg_json = try std.json.parseFromSlice(lsp.JsonRPCMessage, arena.allocator(), raw_msg_json, .{});
             defer msg_json.deinit();
             const rpc_message: lsp.JsonRPCMessage = msg_json.value;
             switch (rpc_message) {
@@ -74,21 +86,59 @@ pub const LspConnection = struct {
                     log.log(@This(), "response: {}\n", .{resp});
 
                     if (std.mem.eql(u8, matched_request.value.method, "initialize")) {
-                        const resp_typed = try std.json.parseFromValue(lsp.types.InitializeResult, self.allocator, resp.result_or_error.result.?, .{});
-                        defer resp_typed.deinit();
-                        log.log(@This(), "got init response\n", .{});
+                        const resp_typed = try std.json.parseFromValue(
+                            lsp.types.InitializeResult,
+                            arena.allocator(),
+                            resp.result_or_error.result.?,
+                            .{},
+                        );
+                        log.log(@This(), "got init response: {}\n", .{resp_typed});
                         try self.send_notification("initialized", .{});
 
-                        const buffer_uri = try std.fmt.allocPrint(self.allocator, "file://{s}", .{main.buffer.path});
-                        defer self.allocator.free(buffer_uri);
                         try self.send_notification("textDocument/didOpen", .{
                             .textDocument = .{
-                                .uri = buffer_uri,
+                                .uri = main.buffer.uri,
                                 .languageId = "",
                                 .version = 0,
                                 .text = main.buffer.content_raw.items,
                             },
                         });
+                    } else if (std.mem.eql(u8, matched_request.value.method, "textDocument/definition")) {
+                        const ResponseType = union(enum) {
+                            Definition: lsp.types.Definition,
+                            array_of_DefinitionLink: []const lsp.types.DefinitionLink,
+                        };
+
+                        const resp_typed = try lsp.parser.UnionParser(ResponseType).jsonParseFromValue(
+                            arena.allocator(),
+                            resp.result_or_error.result.?,
+                            .{},
+                        );
+                        log.log(@This(), "got definition response: {}\n", .{resp_typed});
+
+                        const location = b: switch (resp_typed.Definition) {
+                            .Location => |location| {
+                                break :b location;
+                            },
+                            .array_of_Location => |locations| {
+                                if (locations.len == 0) break :b null;
+                                if (locations.len > 1) log.log(@This(), "TODO: multiple locations\n", .{});
+                                break :b locations[0];
+                            },
+                        };
+                        if (location) |loc| {
+                            if (std.mem.eql(u8, loc.uri, main.buffer.uri)) {
+                                log.log(@This(), "jump to {}\n", .{loc.range.start});
+                                const new_cursor = main.buffer.inv_position(.{
+                                    .line = loc.range.start.line,
+                                    .character = loc.range.start.character,
+                                });
+                                (&main.cursor).* = new_cursor;
+                                main.needs_redraw = true;
+                            } else {
+                                log.log(@This(), "TODO: jump to another file {s}\n", .{loc.uri});
+                            }
+                        }
                     }
                 },
                 .notification => |notif| {
@@ -100,7 +150,22 @@ pub const LspConnection = struct {
     }
 
     pub fn deinit(self: *LspConnection) void {
+        var iter = self.messages_unreplied.valueIterator();
+        while (iter.next()) |value| {
+            self.allocator.free(value.message);
+        }
         self.messages_unreplied.deinit();
+    }
+
+    pub fn go_to_definition(self: *LspConnection) !void {
+        const position = main.buffer.position();
+        try self.send_request("textDocument/definition", .{
+            .textDocument = .{ .uri = main.buffer.uri },
+            .position = .{
+                .line = @intCast(position.line),
+                .character = @intCast(position.line),
+            },
+        });
     }
 
     fn poll(self: *LspConnection) !?[][]u8 {

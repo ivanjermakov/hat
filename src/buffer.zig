@@ -5,8 +5,14 @@ const ft = @import("file_type.zig");
 const ts = @import("ts.zig");
 const log = @import("log.zig");
 
+pub const Position = struct {
+    line: usize,
+    character: usize,
+};
+
 pub const Buffer = struct {
     path: []const u8,
+    uri: []const u8,
     content: BufferContent,
     content_raw: std.ArrayList(u8),
     spans: std.ArrayList(ts.SpanNodeTypeTuple),
@@ -17,8 +23,11 @@ pub const Buffer = struct {
     pub fn init(allocator: std.mem.Allocator, path: []const u8, content_raw: []u8) !Buffer {
         var raw = std.ArrayList(u8).init(allocator);
         try raw.appendSlice(content_raw);
+
+        const uri = try std.fmt.allocPrint(allocator, "file://{s}", .{path});
         var buffer = Buffer{
             .path = path,
+            .uri = uri,
             .content = std.ArrayList(Line).init(allocator),
             .content_raw = raw,
             .spans = std.ArrayList(ts.SpanNodeTypeTuple).init(allocator),
@@ -76,6 +85,23 @@ pub const Buffer = struct {
         self.content.deinit();
         self.content_raw.deinit();
         self.spans.deinit();
+        self.allocator.free(self.uri);
+    }
+
+    pub fn position(self: *Buffer) Position {
+        _ = self;
+        return .{
+            .line = @intCast(main.cursor.row),
+            .character = @intCast(main.cursor.col),
+        };
+    }
+
+    pub fn inv_position(self: *Buffer, pos: Position) main.Cursor {
+        _ = self;
+        return .{
+            .row = @intCast(pos.line),
+            .col = @intCast(pos.character),
+        };
     }
 
     fn update_raw(self: *Buffer) !void {
