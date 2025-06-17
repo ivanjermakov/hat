@@ -95,14 +95,7 @@ pub const LspConnection = struct {
                         log.log(@This(), "got init response: {}\n", .{resp_typed});
                         try self.send_notification("initialized", .{});
 
-                        try self.send_notification("textDocument/didOpen", .{
-                            .textDocument = .{
-                                .uri = main.buffer.uri,
-                                .languageId = "",
-                                .version = 0,
-                                .text = main.buffer.content_raw.items,
-                            },
-                        });
+                        try self.did_open();
                     } else if (std.mem.eql(u8, matched_request.value.method, "textDocument/definition")) {
                         const ResponseType = union(enum) {
                             Definition: lsp.types.Definition,
@@ -165,6 +158,27 @@ pub const LspConnection = struct {
                 .line = @intCast(position.line),
                 .character = @intCast(position.line),
             },
+        });
+    }
+
+    pub fn did_open(self: *LspConnection) !void {
+        try self.send_notification("textDocument/didOpen", .{
+            .textDocument = .{
+                .uri = main.buffer.uri,
+                .languageId = "",
+                .version = 0,
+                .text = main.buffer.content_raw.items,
+            },
+        });
+    }
+
+    pub fn did_change(self: *LspConnection) !void {
+        const changes = [_]lsp.types.TextDocumentContentChangeEvent{
+            .{ .literal_1 = .{ .text = main.buffer.content_raw.items } },
+        };
+        try self.send_notification("textDocument/didChange", .{
+            .textDocument = .{ .uri = main.buffer.uri, .version = 0 },
+            .contentChanges = &changes,
         });
     }
 

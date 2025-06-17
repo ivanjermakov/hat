@@ -208,6 +208,7 @@ pub fn main() !void {
         if (needs_reparse) {
             needs_reparse = false;
             try buffer.ts_parse();
+            try conn.did_change();
         }
         if (needs_redraw) {
             needs_redraw = false;
