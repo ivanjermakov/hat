@@ -43,6 +43,7 @@ pub var args: Args = .{
     .path = null,
     .log = false,
 };
+pub var keys: std.ArrayList(inp.Key) = undefined;
 
 fn redraw() !void {
     _ = c.erase();
@@ -105,10 +106,6 @@ pub fn main() !void {
     defer _ = debug_allocator.deinit();
     allocator = if (builtin.mode == .Debug) debug_allocator.allocator() else std.heap.c_allocator;
 
-    const conf = lsp.LspConfig{ .cmd = &[_][]const u8{ "typescript-language-server", "--stdio" } };
-    var conn = try lsp.LspConnection.connect(allocator, &conf);
-    defer conn.deinit();
-
     try ft.init_file_types(allocator);
     defer {
         var value_iter = ft.file_type.valueIterator();
@@ -130,6 +127,12 @@ pub fn main() !void {
     }
     log_enabled = args.log;
 
+    keys = std.ArrayList(inp.Key).init(allocator);
+    defer {
+        for (keys.items) |key| if (key.printable) |p| allocator.free(p);
+        keys.deinit();
+    }
+
     const path = args.path orelse return error.NoPath;
     const file = try std.fs.cwd().openFile(path, .{ .mode = .read_write });
     const file_content = try file.readToEndAlloc(allocator, std.math.maxInt(usize));
@@ -145,70 +148,99 @@ pub fn main() !void {
 
     try redraw();
 
+    const lsp_conf = lsp.LspConfig{ .cmd = &[_][]const u8{ "typescript-language-server", "--stdio" } };
+    var lsp_conn = try lsp.LspConnection.connect(allocator, &lsp_conf);
+    defer lsp_conn.deinit();
+
     main_loop: while (true) {
         _ = c.refresh();
         std.time.sleep(sleep_ns);
 
-        try conn.update();
+        try lsp_conn.update();
 
-        handle_input: {
-            const codes = try inp.get_codes(allocator) orelse break :handle_input;
+        if (try inp.get_codes(allocator)) |codes| {
             defer allocator.free(codes);
-            const keys = try inp.get_keys(allocator, codes);
-            defer {
-                for (keys) |key| if (key.printable) |p| allocator.free(p);
-                allocator.free(keys);
-            }
-            if (keys.len == 0) break :handle_input;
-            needs_redraw = true;
+            const new_keys = try inp.get_keys(allocator, codes);
+            try keys.appendSlice(new_keys);
+        }
 
-            for (keys) |key| {
-                const code = key.code;
-                var ch: ?u8 = null;
-                if (key.printable != null and key.printable.?.len == 1) ch = key.printable.?[0];
+        handle_mappings: while (keys.items.len > 0) {
+            const key = keys.orderedRemove(0);
+            const code = key.code;
+            var ch: ?u8 = null;
+            if (key.printable != null and key.printable.?.len == 1) ch = key.printable.?[0];
 
-                if (code == .up) cursor.row -= 1;
-                if (code == .down) cursor.row += 1;
-                if (code == .left) cursor.col -= 1;
-                if (code == .right) cursor.col += 1;
-                switch (mode) {
-                    .normal => {
-                        if (ch == 'q') break :main_loop;
-                        if (ch == 'i') cursor.row -= 1;
-                        if (ch == 'k') cursor.row += 1;
-                        if (ch == 'j') cursor.col -= 1;
-                        if (ch == 'l') cursor.col += 1;
-                        if (ch == 'h') mode = .insert;
-                        if (ch == 'd') try conn.go_to_definition();
-                    },
-                    .insert => {
-                        if (code == .escape) mode = .normal;
-                        if (code == .delete) {
-                            try act.remove_char();
-                            needs_reparse = true;
-                        }
-                        if (code == .backspace) {
-                            try act.remove_prev_char();
-                            needs_reparse = true;
-                        }
-                        if (code == .enter) {
-                            try act.insert_newline();
-                            needs_reparse = true;
-                        }
-                        if (key.printable) |printable| {
-                            try act.insert_text(printable);
-                            needs_reparse = true;
-                        }
-                    },
+            const multiple_key = keys.items.len > 0;
+            var key2: ?inp.Key = null;
+            if (multiple_key) key2 = keys.items[0];
+            var ch2: ?u8 = null;
+            if (key2 != null and key2.?.printable != null and key2.?.printable.?.len == 1) ch2 = key2.?.printable.?[0];
+
+            // TODO: crazy comptime
+
+            // single-key global
+            if (code == .up) {
+                act.move_cursor(.{ .row = cursor.row - 1, .col = cursor.col });
+            } else if (code == .down) {
+                act.move_cursor(.{ .row = cursor.row + 1, .col = cursor.col });
+            } else if (code == .left) {
+                act.move_cursor(.{ .row = cursor.row, .col = cursor.col - 1 });
+            } else if (code == .right) {
+                act.move_cursor(.{ .row = cursor.row, .col = cursor.col + 1 });
+
+                // single-key normal mode
+            } else if (mode == .normal and ch == 'q') {
+                break :main_loop;
+            } else if (mode == .normal and ch == 'i') {
+                act.move_cursor(.{ .row = cursor.row - 1, .col = cursor.col });
+            } else if (mode == .normal and ch == 'k') {
+                act.move_cursor(.{ .row = cursor.row + 1, .col = cursor.col });
+            } else if (mode == .normal and ch == 'j') {
+                act.move_cursor(.{ .row = cursor.row, .col = cursor.col - 1 });
+            } else if (mode == .normal and ch == 'l') {
+                act.move_cursor(.{ .row = cursor.row, .col = cursor.col + 1 });
+            } else if (mode == .normal and ch == 'h') {
+                mode = .insert;
+                needs_redraw = true;
+
+                // single-key insert mode
+            } else if (mode == .insert and code == .escape) {
+                mode = .normal;
+                needs_redraw = true;
+            } else if (mode == .insert and code == .delete) {
+                try act.remove_char();
+            } else if (mode == .insert and code == .backspace) {
+                try act.remove_prev_char();
+            } else if (mode == .insert and code == .enter) {
+                try act.insert_newline();
+            } else if (mode == .insert and key.printable != null) {
+                try act.insert_text(key.printable.?);
+            } else if (multiple_key and mode == .normal and ch == ' ') {
+                // multiple-key normal mode
+                _ = keys.orderedRemove(0);
+                if (ch2 == 'd') {
+                    try lsp_conn.go_to_definition();
+                } else {
+                    // no matches, reinsert key2 and try it as a single key mapping on next iteration
+                    try keys.insert(0, key2.?);
+                    continue :handle_mappings;
+                }
+            } else {
+                if (keys.items.len == 0) {
+                    // no matches, reinsert key and wait for more keys
+                    try keys.insert(0, key);
+                    break :handle_mappings;
+                } else {
+                    continue :handle_mappings;
                 }
             }
         }
 
-        act.validate_cursor();
+        needs_redraw = needs_redraw or needs_reparse;
         if (needs_reparse) {
             needs_reparse = false;
             try buffer.ts_parse();
-            try conn.did_change();
+            try lsp_conn.did_change();
         }
         if (needs_redraw) {
             needs_redraw = false;
@@ -217,10 +249,10 @@ pub fn main() !void {
     }
 
     log.log(@This(), "disconnecting lsp client\n", .{});
-    try conn.disconnect();
+    try lsp_conn.disconnect();
     disconnect_loop: while (true) {
-        if (conn.status == .Closed) break :disconnect_loop;
-        try conn.update();
+        if (lsp_conn.status == .Closed) break :disconnect_loop;
+        try lsp_conn.update();
     }
 }
 

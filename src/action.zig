@@ -4,10 +4,10 @@ const nc = @cImport({
     @cInclude("ncurses.h");
 });
 
-pub fn validate_cursor() void {
-    const win_size = .{ .row = nc.getmaxy(nc.stdscr), .col = nc.getmaxx(nc.stdscr) };
-    main.cursor.row = std.math.clamp(main.cursor.row, 0, win_size.row - 1);
-    main.cursor.col = std.math.clamp(main.cursor.col, 0, win_size.col - 1);
+pub fn move_cursor(new_cursor: main.Cursor) void {
+    (&main.cursor).* = new_cursor;
+    validate_cursor();
+    main.needs_redraw = true;
 }
 
 pub fn insert_text(text: []u8) !void {
@@ -24,6 +24,7 @@ pub fn insert_text(text: []u8) !void {
             main.cursor.col += 1;
         }
     }
+    main.needs_reparse = true;
 }
 
 pub fn insert_newline() !void {
@@ -36,12 +37,14 @@ pub fn insert_newline() !void {
     try main.buffer.content.insert(@intCast(cbp.row + 1), new_line);
     main.cursor.row += 1;
     main.cursor.col = 0;
+    main.needs_reparse = true;
 }
 
 pub fn remove_char() !void {
     const cbp = cursor_byte_pos();
     var line = &main.buffer.content.items[@intCast(main.cursor.row)];
     _ = line.orderedRemove(@intCast(cbp.col));
+    main.needs_reparse = true;
 }
 
 pub fn remove_prev_char() !void {
@@ -51,6 +54,7 @@ pub fn remove_prev_char() !void {
     var line = &main.buffer.content.items[@intCast(main.cursor.row)];
     const col_byte = try utf8_byte_pos(line.items, @intCast(main.cursor.col));
     _ = line.orderedRemove(col_byte);
+    main.needs_reparse = true;
 }
 
 fn cursor_byte_pos() main.Cursor {
@@ -77,4 +81,10 @@ fn utf8_byte_pos(str: []u8, cp_index: usize) !usize {
         if (i == cp_index) return pos;
     }
     return error.OutOfBounds;
+}
+
+fn validate_cursor() void {
+    const win_size = .{ .row = nc.getmaxy(nc.stdscr), .col = nc.getmaxx(nc.stdscr) };
+    main.cursor.row = std.math.clamp(main.cursor.row, 0, win_size.row - 1);
+    main.cursor.col = std.math.clamp(main.cursor.col, 0, win_size.col - 1);
 }
