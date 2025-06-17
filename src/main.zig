@@ -12,6 +12,7 @@ const buf = @import("buffer.zig");
 const co = @import("color.zig");
 const te = @import("term.zig");
 const lsp = @import("lsp.zig");
+const log = @import("log.zig");
 
 pub const Cursor = struct {
     row: i32,
@@ -98,11 +99,15 @@ fn redraw() !void {
 }
 
 pub fn main() !void {
+    defer deinit();
+
     var debug_allocator: std.heap.DebugAllocator(.{ .stack_trace_frames = 10 }) = .init;
     defer _ = debug_allocator.deinit();
     allocator = if (builtin.mode == .Debug) debug_allocator.allocator() else std.heap.c_allocator;
 
-    defer deinit();
+    const conf = lsp.LspConfig{ .cmd = &[_][]const u8{ "typescript-language-server", "--stdio" } };
+    var conn = try lsp.LspConnection.connect(allocator, &conf);
+    defer conn.deinit();
 
     try ft.init_file_types(allocator);
     defer {
@@ -130,7 +135,7 @@ pub fn main() !void {
     const file_content = try file.readToEndAlloc(allocator, std.math.maxInt(usize));
     defer allocator.free(file_content);
 
-    buffer = try buf.Buffer.init(allocator, file_content);
+    buffer = try buf.Buffer.init(allocator, path, file_content);
     defer buffer.deinit();
     try buffer.ts_parse();
 
@@ -140,59 +145,65 @@ pub fn main() !void {
 
     try redraw();
 
-    while (true) {
+    main_loop: while (true) {
         _ = c.refresh();
         std.time.sleep(sleep_ns);
 
-        const codes = try inp.get_codes(allocator) orelse continue;
-        defer allocator.free(codes);
-        const keys = try inp.get_keys(allocator, codes);
-        defer {
-            for (keys) |key| if (key.printable) |p| allocator.free(p);
-            allocator.free(keys);
-        }
-        if (keys.len == 0) continue;
-        needs_redraw = true;
+        try conn.update();
 
-        for (keys) |key| {
-            const code = key.code;
-            var ch: ?u8 = null;
-            if (key.printable != null and key.printable.?.len == 1) ch = key.printable.?[0];
+        handle_input: {
+            const codes = try inp.get_codes(allocator) orelse break :handle_input;
+            defer allocator.free(codes);
+            const keys = try inp.get_keys(allocator, codes);
+            defer {
+                for (keys) |key| if (key.printable) |p| allocator.free(p);
+                allocator.free(keys);
+            }
+            if (keys.len == 0) break :handle_input;
+            needs_redraw = true;
 
-            if (code == .up) cursor.row -= 1;
-            if (code == .down) cursor.row += 1;
-            if (code == .left) cursor.col -= 1;
-            if (code == .right) cursor.col += 1;
-            switch (mode) {
-                .normal => {
-                    if (ch == 'q') return;
-                    if (ch == 'i') cursor.row -= 1;
-                    if (ch == 'k') cursor.row += 1;
-                    if (ch == 'j') cursor.col -= 1;
-                    if (ch == 'l') cursor.col += 1;
-                    if (ch == 'h') mode = .insert;
-                },
-                .insert => {
-                    if (code == .escape) mode = .normal;
-                    if (code == .delete) {
-                        try act.remove_char();
-                        needs_reparse = true;
-                    }
-                    if (code == .backspace) {
-                        try act.remove_prev_char();
-                        needs_reparse = true;
-                    }
-                    if (code == .enter) {
-                        try act.insert_newline();
-                        needs_reparse = true;
-                    }
-                    if (key.printable) |printable| {
-                        try act.insert_text(printable);
-                        needs_reparse = true;
-                    }
-                },
+            for (keys) |key| {
+                const code = key.code;
+                var ch: ?u8 = null;
+                if (key.printable != null and key.printable.?.len == 1) ch = key.printable.?[0];
+
+                if (code == .up) cursor.row -= 1;
+                if (code == .down) cursor.row += 1;
+                if (code == .left) cursor.col -= 1;
+                if (code == .right) cursor.col += 1;
+                switch (mode) {
+                    .normal => {
+                        if (ch == 'q') break :main_loop;
+                        if (ch == 'i') cursor.row -= 1;
+                        if (ch == 'k') cursor.row += 1;
+                        if (ch == 'j') cursor.col -= 1;
+                        if (ch == 'l') cursor.col += 1;
+                        if (ch == 'h') mode = .insert;
+                        if (ch == 'd') try conn.go_to_definition();
+                    },
+                    .insert => {
+                        if (code == .escape) mode = .normal;
+                        if (code == .delete) {
+                            try act.remove_char();
+                            needs_reparse = true;
+                        }
+                        if (code == .backspace) {
+                            try act.remove_prev_char();
+                            needs_reparse = true;
+                        }
+                        if (code == .enter) {
+                            try act.insert_newline();
+                            needs_reparse = true;
+                        }
+                        if (key.printable) |printable| {
+                            try act.insert_text(printable);
+                            needs_reparse = true;
+                        }
+                    },
+                }
             }
         }
+
         act.validate_cursor();
         if (needs_reparse) {
             needs_reparse = false;
@@ -202,6 +213,13 @@ pub fn main() !void {
             needs_redraw = false;
             try redraw();
         }
+    }
+
+    log.log(@This(), "disconnecting lsp client\n", .{});
+    try conn.disconnect();
+    disconnect_loop: while (true) {
+        if (conn.status == .Closed) break :disconnect_loop;
+        try conn.update();
     }
 }
 
