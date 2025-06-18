@@ -65,23 +65,19 @@ pub const Term = struct {
     }
 
     pub fn clear(self: *Term) !void {
-        try self.format("\x1b[2J", .{});
+        try self.write("\x1b[2J");
     }
 
     pub fn clear_until_line_end(self: *Term) !void {
-        try self.format("\x1b[0K", .{});
+        try self.write("\x1b[0K");
     }
 
     pub fn switch_buf(self: *Term, alternative: bool) !void {
-        if (alternative) {
-            try self.format("\x1b[?1049h", .{});
-        } else {
-            try self.format("\x1b[?1049l", .{});
-        }
+        try self.write(if (alternative) "\x1b[?1049h" else "\x1b[?1049l");
     }
 
     pub fn reset_attributes(self: *Term) !void {
-        try self.format("\x1b[0m", .{});
+        try self.write("\x1b[0m");
     }
 
     pub fn move_cursor(self: *Term, cursor: main.Cursor) !void {
