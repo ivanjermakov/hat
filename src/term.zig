@@ -74,9 +74,9 @@ pub const Term = struct {
 
     pub fn switch_buf(self: *Term, alternative: bool) !void {
         if (alternative) {
-            try self.format("\x1b[rj1049h", .{});
+            try self.format("\x1b[?1049h", .{});
         } else {
-            try self.format("\x1b[rj1049l", .{});
+            try self.format("\x1b[?1049l", .{});
         }
     }
 
