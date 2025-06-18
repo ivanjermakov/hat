@@ -85,6 +85,8 @@ fn redraw() !void {
                 }
             }
             try term.write_attrs(ch_attr);
+            defer term.reset_attributes() catch {};
+
             if (mode == .select) {
                 if (buffer.selection.?.in_range(.{ .line = row, .character = col })) {
                     try term.write_attrs(co.attributes.selection);
@@ -98,7 +100,6 @@ fn redraw() !void {
         byte += 1;
     }
 
-    try term.reset_attributes();
     try term.move_cursor(cursor);
 
     switch (mode) {
