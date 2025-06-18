@@ -62,8 +62,16 @@ pub fn insert_newline() !void {
 pub fn remove_char() !void {
     const cbp = cursor_byte_pos();
     var line = &main.buffer.content.items[@intCast(main.cursor.row)];
-    _ = line.orderedRemove(@intCast(cbp.col));
-    main.needs_reparse = true;
+    if (main.cursor.col == line.items.len) {
+        if (main.cursor.row < main.buffer.content.items.len - 1) {
+            try join_with_line_below(@intCast(main.cursor.row));
+        } else {
+            return;
+        }
+    } else {
+        _ = line.orderedRemove(@intCast(cbp.col));
+        main.needs_reparse = true;
+    }
 }
 
 pub fn remove_prev_char() !void {
@@ -82,8 +90,8 @@ pub fn remove_prev_char() !void {
         main.cursor.col -= 1;
         const col_byte = try utf8_byte_pos(line.items, @intCast(main.cursor.col));
         _ = line.orderedRemove(col_byte);
+        main.needs_reparse = true;
     }
-    main.needs_reparse = true;
 }
 
 pub fn join_with_line_below(row: usize) !void {
@@ -91,6 +99,7 @@ pub fn join_with_line_below(row: usize) !void {
     var next_line = main.buffer.content.orderedRemove(row + 1);
     defer next_line.deinit();
     try line.appendSlice(next_line.items);
+    main.needs_reparse = true;
 }
 
 pub fn select_char() !void {
