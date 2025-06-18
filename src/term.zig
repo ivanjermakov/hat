@@ -48,8 +48,10 @@ pub const Term = struct {
     }
 
     pub fn deinit(self: *Term) void {
+        self.clear() catch {};
         self.switch_buf(false) catch {};
         self.write(cursor_type.steady_block) catch {};
+        self.flush() catch {};
     }
 
     pub fn terminal_size(self: *const Term) !TerminalDimensions {
