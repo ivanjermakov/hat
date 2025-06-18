@@ -1,67 +1,61 @@
-const c = @cImport({
-    @cInclude("ncurses.h");
-});
+const std = @import("std");
 
-pub const Color = enum(i16) {
-    none = -1,
-    black = 1,
-    gray1,
-    gray2,
-    white,
-    red,
-    green,
-    blue,
-    yellow,
-    magenta,
+pub const RgbColor = struct {
+    r: u8,
+    g: u8,
+    b: u8,
 
-    fn rgb_to_curses(x: u8) c_short {
-        const f: f32 = @as(f32, @floatFromInt(x)) / 256 * 1000;
-        return @intFromFloat(f);
+    pub fn from_hex(hex: u24) RgbColor {
+        return .{
+            .r = (hex >> 16) & 0xff,
+            .g = (hex >> 8) & 0xff,
+            .b = (hex >> 0) & 0xff,
+        };
     }
 
-    pub fn init(self: Color, r: u8, g: u8, b: u8) void {
-        _ = c.init_color(@intFromEnum(self), rgb_to_curses(r), rgb_to_curses(g), rgb_to_curses(b));
+    pub fn write(self: RgbColor, writer: anytype, fg: bool) !void {
+        const fgbg: u8 = if (fg) 38 else 48;
+        try std.fmt.format(writer, "\x1b[{};2;{};{};{}m", .{ fgbg, self.r, self.g, self.b });
     }
 };
 
-pub const ColorPair = enum(u8) {
-    text = 1,
-    selection,
-    keyword,
-    string,
-    number,
+pub const color = enum {
+    pub const black = RgbColor.from_hex(0x000000);
+    pub const gray1 = RgbColor.from_hex(0x282828);
+    pub const gray2 = RgbColor.from_hex(0x505050);
+    pub const white = RgbColor.from_hex(0xffffff);
+    pub const red = RgbColor.from_hex(0xf57171);
+    pub const green = RgbColor.from_hex(0xa6d189);
+    pub const blue = RgbColor.from_hex(0x9aa3f5);
+    pub const yellow = RgbColor.from_hex(0xe6b99d);
+    pub const magenta = RgbColor.from_hex(0xe29eca);
+};
 
-    pub fn init(self: ColorPair, fg: Color, bg: Color) void {
-        _ = c.init_pair(@intFromEnum(self), @intFromEnum(fg), @intFromEnum(bg));
-    }
+pub const Attr = union(enum) {
+    fg: RgbColor,
+    bg: RgbColor,
 
-    pub fn to_pair(self: ColorPair) c_int {
-        return @as(c_int, @intFromEnum(self)) * 256;
+    pub fn write(self: Attr, writer: anytype) !void {
+        switch (self) {
+            .fg => |fg_c| try fg_c.write(writer, true),
+            .bg => |bg_c| try bg_c.write(writer, false),
+        }
     }
 };
 
-pub const Attr = enum(c_int) {
-    text = ColorPair.text.to_pair(),
-    selection = ColorPair.selection.to_pair(),
-    keyword = ColorPair.keyword.to_pair() | c.A_BOLD,
-    string = ColorPair.string.to_pair(),
-    number = ColorPair.number.to_pair(),
+pub const attributes = enum {
+    pub const text = &[_]Attr{.{ .fg = color.white }};
+    pub const selection = &[_]Attr{.{ .bg = color.gray2 }};
+    pub const keyword = &[_]Attr{.{ .fg = color.magenta }};
+    pub const string = &[_]Attr{.{ .fg = color.green }};
+    pub const number = &[_]Attr{.{ .fg = color.yellow }};
+
+    pub fn write(attrs: []Attr, writer: anytype) !void {
+        for (attrs) |attr| {
+            try attr.write(writer);
+        }
+    }
 };
 
-pub fn init_color() void {
-    Color.black.init(0, 0, 0);
-    Color.gray1.init(40, 40, 40);
-    Color.gray2.init(80, 80, 80);
-    Color.white.init(255, 255, 255);
-    Color.red.init(245, 113, 113);
-    Color.green.init(166, 209, 137);
-    Color.blue.init(154, 163, 245);
-    Color.yellow.init(230, 185, 157);
-    Color.magenta.init(211, 168, 239);
-
-    ColorPair.text.init(Color.white, Color.none);
-    ColorPair.selection.init(Color.none, Color.gray2);
-    ColorPair.keyword.init(Color.magenta, Color.none);
-    ColorPair.string.init(Color.green, Color.none);
-    ColorPair.number.init(Color.yellow, Color.none);
-}
+pub const term_fg: ?RgbColor = color.white;
+pub const term_bg: ?RgbColor = null;

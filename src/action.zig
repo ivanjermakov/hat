@@ -1,10 +1,11 @@
 const std = @import("std");
 const main = @import("main.zig");
-const nc = @cImport({
-    @cInclude("ncurses.h");
+const c = @cImport({
+    @cInclude("sys/ioctl.h");
 });
 const log = @import("log.zig");
 const buf = @import("buffer.zig");
+const ter = @import("term.zig");
 
 pub fn move_cursor(new_cursor: main.Cursor) void {
     const old_position = main.buffer.position();
@@ -107,7 +108,9 @@ fn utf8_byte_pos(str: []u8, cp_index: usize) !usize {
 }
 
 fn validate_cursor() void {
-    const win_size = .{ .row = nc.getmaxy(nc.stdscr), .col = nc.getmaxx(nc.stdscr) };
-    main.cursor.row = std.math.clamp(main.cursor.row, 0, win_size.row - 1);
-    main.cursor.col = std.math.clamp(main.cursor.col, 0, win_size.col - 1);
+    const dims = main.term.terminal_size() catch unreachable;
+    const width: i32 = @intCast(dims.width);
+    const height: i32 = @intCast(dims.height);
+    main.cursor.row = std.math.clamp(main.cursor.row, 0, width - 1);
+    main.cursor.col = std.math.clamp(main.cursor.col, 0, height - 1);
 }

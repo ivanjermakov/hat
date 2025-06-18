@@ -3,7 +3,6 @@ const std = @import("std");
 fn linkLibs(b: *std.Build, compile: *std.Build.Step.Compile) void {
     compile.linkLibC();
     compile.linkSystemLibrary("tree-sitter");
-    compile.linkSystemLibrary("ncurses");
 
     const lsp_codegen = b.dependency("lsp_codegen", .{});
     compile.root_module.addImport("lsp", lsp_codegen.module("lsp"));

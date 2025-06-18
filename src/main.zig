@@ -1,16 +1,12 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const dl = std.DynLib;
-const c = @cImport({
-    @cInclude("ncurses.h");
-});
 const act = @import("action.zig");
 const inp = @import("input.zig");
-const uni = @import("unicode.zig");
 const ft = @import("file_type.zig");
 const buf = @import("buffer.zig");
 const co = @import("color.zig");
-const te = @import("term.zig");
+const ter = @import("term.zig");
 const lsp = @import("lsp.zig");
 const log = @import("log.zig");
 
@@ -37,8 +33,10 @@ const Args = struct {
 pub const sleep_ns = 16 * 1e6;
 pub var allocator: std.mem.Allocator = undefined;
 pub const std_out = std.io.getStdOut();
+pub const std_in = std.io.getStdIn();
 
 pub var buffer: buf.Buffer = undefined;
+pub var term: ter.Term = undefined;
 pub var cursor: Cursor = .{ .row = 0, .col = 0 };
 pub var mode: Mode = .normal;
 pub var needs_redraw = false;
@@ -51,7 +49,7 @@ pub var args: Args = .{
 pub var key_queue: std.ArrayList(inp.Key) = undefined;
 
 fn redraw() !void {
-    _ = c.erase();
+    try term.clear();
 
     var byte: usize = 0;
     for (0..buffer.content.items.len) |row| {
@@ -61,7 +59,7 @@ fn redraw() !void {
 
         var col: usize = 0;
         while (line_iter.nextCodepoint()) |ch| {
-            var ch_attr = co.Attr.text;
+            var ch_attr = co.attributes.text;
             for (buffer.spans.items) |span| {
                 if (span.span.start_byte <= byte and span.span.end_byte > byte) {
                     if (std.mem.eql(u8, span.node_type, "return") or
@@ -70,48 +68,46 @@ fn redraw() !void {
                         std.mem.eql(u8, span.node_type, "export") or
                         std.mem.eql(u8, span.node_type, "function"))
                     {
-                        ch_attr = co.Attr.keyword;
+                        ch_attr = co.attributes.keyword;
                         break;
                     }
                     if (std.mem.eql(u8, span.node_type, "system_lib_string") or
                         std.mem.eql(u8, span.node_type, "string_literal") or
                         std.mem.eql(u8, span.node_type, "string"))
                     {
-                        ch_attr = co.Attr.string;
+                        ch_attr = co.attributes.string;
                         break;
                     }
                     if (std.mem.eql(u8, span.node_type, "number_literal")) {
-                        ch_attr = co.Attr.number;
+                        ch_attr = co.attributes.number;
                         break;
                     }
                 }
             }
-            _ = c.attrset(@intFromEnum(ch_attr));
+            try term.write_attrs(ch_attr);
             if (mode == .select) {
                 if (buffer.selection.?.in_range(.{ .line = row, .character = col })) {
-                    _ = c.attrset(@intFromEnum(co.Attr.selection));
+                    try term.write_attrs(co.attributes.selection);
                 }
             }
-            const cchar = uni.codepoint_to_cchar(ch);
-            _ = c.mvadd_wch(@intCast(row), @intCast(col), @ptrCast(&cchar));
+            try term.move_cursor(.{ .row = @intCast(row), .col = @intCast(col) });
+            try term.format("{u}", .{ch});
             byte += try std.unicode.utf8CodepointSequenceLength(ch);
             col += 1;
         }
         byte += 1;
     }
 
-    _ = c.standend();
-    _ = c.move(@intCast(cursor.row), @intCast(cursor.col));
+    try term.reset_attributes();
+    try term.move_cursor(cursor);
 
     switch (mode) {
-        .normal, .select => _ = try std_out.write(inp.cursor_type.steady_block),
-        .insert => _ = try std_out.write(inp.cursor_type.steady_bar),
+        .normal, .select => _ = try term.write(ter.cursor_type.steady_block),
+        .insert => _ = try term.write(ter.cursor_type.steady_bar),
     }
 }
 
 pub fn main() !void {
-    defer deinit();
-
     var debug_allocator: std.heap.DebugAllocator(.{ .stack_trace_frames = 10 }) = .init;
     defer _ = debug_allocator.deinit();
     allocator = if (builtin.mode == .Debug) debug_allocator.allocator() else std.heap.c_allocator;
@@ -152,9 +148,8 @@ pub fn main() !void {
     defer buffer.deinit();
     try buffer.ts_parse();
 
-    try te.setup_terminal();
-    const win = try te.init_curses();
-    _ = win;
+    term = try ter.Term.init(std_out);
+    defer term.deinit();
 
     try redraw();
 
@@ -163,9 +158,6 @@ pub fn main() !void {
     defer lsp_conn.deinit();
 
     main_loop: while (true) {
-        _ = c.refresh();
-        std.time.sleep(sleep_ns);
-
         try lsp_conn.update();
 
         var needs_handle_mappings = false;
@@ -275,6 +267,7 @@ pub fn main() !void {
             needs_redraw = false;
             try redraw();
         }
+        std.time.sleep(sleep_ns);
     }
 
     log.log(@This(), "disconnecting lsp client\n", .{});
@@ -283,11 +276,6 @@ pub fn main() !void {
         if (lsp_conn.status == .Closed) break :disconnect_loop;
         try lsp_conn.update();
     }
-}
-
-fn deinit() void {
-    _ = c.endwin();
-    _ = std_out.write(inp.cursor_type.steady_block) catch {};
 }
 
 comptime {
