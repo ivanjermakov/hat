@@ -26,7 +26,7 @@ pub const cursor_type = union {
 };
 
 pub const Term = struct {
-    writer: std.fs.File.Writer,
+    writer: std.io.BufferedWriter(4096, std.fs.File.Writer),
 
     pub fn init(std_out: std.fs.File) !Term {
         _ = c.setlocale(c.LC_ALL, "");
@@ -39,7 +39,7 @@ pub const Term = struct {
         fs.make_nonblock(std.posix.STDIN_FILENO);
 
         var term = Term{
-            .writer = std_out.writer(),
+            .writer = std.io.bufferedWriter(std_out.writer()),
         };
 
         try term.switch_buf(true);
@@ -85,7 +85,7 @@ pub const Term = struct {
     }
 
     pub fn write_attr(self: *Term, attr: co.Attr) !void {
-        try attr.write(self.writer);
+        try attr.write(self.writer.writer());
     }
 
     pub fn write_attrs(self: *Term, attrs: []const co.Attr) !void {
@@ -97,11 +97,10 @@ pub const Term = struct {
     }
 
     pub fn flush(self: *Term) !void {
-        _ = self;
-        // TODO
+        try self.writer.flush();
     }
 
-    pub fn format(self: *const Term, comptime str: []const u8, args: anytype) !void {
-        try std.fmt.format(self.writer, str, args);
+    pub fn format(self: *Term, comptime str: []const u8, args: anytype) !void {
+        try std.fmt.format(self.writer.writer(), str, args);
     }
 };
