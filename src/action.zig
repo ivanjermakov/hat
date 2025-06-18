@@ -9,9 +9,9 @@ const ter = @import("term.zig");
 
 pub fn move_cursor(new_cursor: main.Cursor) void {
     const old_position = main.buffer.position();
-    (&main.cursor).* = new_cursor;
-    validate_cursor();
+    const valid_cursor = validate_cursor(new_cursor) orelse return;
 
+    (&main.cursor).* = valid_cursor;
     if (main.mode == .select) {
         const selection = &main.buffer.selection.?;
         const cursor_was_at_start = std.meta.eql(selection.start, old_position);
@@ -33,7 +33,7 @@ pub fn insert_text(text: []u8) !void {
     const view = try std.unicode.Utf8View.init(text);
     var iter = view.iterator();
     while (iter.nextCodepointSlice()) |ch| {
-        const cbp = cursor_byte_pos();
+        const cbp = try cursor_byte_pos(main.cursor);
         var line = &main.buffer.content.items[@intCast(cbp.row)];
 
         if (std.mem.eql(u8, ch, "\n")) {
@@ -47,7 +47,7 @@ pub fn insert_text(text: []u8) !void {
 }
 
 pub fn insert_newline() !void {
-    const cbp = cursor_byte_pos();
+    const cbp = try cursor_byte_pos(main.cursor);
     const row: usize = @intCast(main.cursor.row);
     var line = try main.buffer.content.items[row].toOwnedSlice();
     try main.buffer.content.items[row].appendSlice(line[0..@intCast(cbp.col)]);
@@ -60,7 +60,7 @@ pub fn insert_newline() !void {
 }
 
 pub fn remove_char() !void {
-    const cbp = cursor_byte_pos();
+    const cbp = try cursor_byte_pos(main.cursor);
     var line = &main.buffer.content.items[@intCast(main.cursor.row)];
     if (main.cursor.col == line.items.len) {
         if (main.cursor.row < main.buffer.content.items.len - 1) {
@@ -75,7 +75,7 @@ pub fn remove_char() !void {
 }
 
 pub fn remove_prev_char() !void {
-    const cbp = cursor_byte_pos();
+    const cbp = try cursor_byte_pos(main.cursor);
     var line = &main.buffer.content.items[@intCast(main.cursor.row)];
     if (cbp.col == 0) {
         if (main.cursor.row > 0) {
@@ -107,14 +107,11 @@ pub fn select_char() !void {
     main.buffer.selection = .{ .start = pos, .end = pos };
 }
 
-fn cursor_byte_pos() main.Cursor {
-    const row = main.cursor.row;
-    var col: i32 = 0;
-    b: {
-        if (row >= main.buffer.content.items.len) break :b;
-        const line = &main.buffer.content.items[@intCast(main.cursor.row)];
-        col = @intCast(utf8_byte_pos(line.items, @intCast(main.cursor.col)) catch break :b);
-    }
+fn cursor_byte_pos(cursor: main.Cursor) !main.Cursor {
+    const row = cursor.row;
+    if (row >= main.buffer.content.items.len) return error.OutOfBounds;
+    const line = &main.buffer.content.items[@intCast(cursor.row)];
+    const col: i32 = @intCast(try utf8_byte_pos(line.items, @intCast(cursor.col)));
     return .{ .row = row, .col = col };
 }
 
@@ -133,10 +130,25 @@ fn utf8_byte_pos(str: []u8, cp_index: usize) !usize {
     return error.OutOfBounds;
 }
 
-fn validate_cursor() void {
-    const dims = main.term.terminal_size() catch unreachable;
-    const width: i32 = @intCast(dims.width);
-    const height: i32 = @intCast(dims.height);
-    main.cursor.row = std.math.clamp(main.cursor.row, 0, width - 1);
-    main.cursor.col = std.math.clamp(main.cursor.col, 0, height - 1);
+fn validate_cursor(cursor: main.Cursor) ?main.Cursor {
+    const col: i32 = b: {
+        const dims = main.term.terminal_size() catch unreachable;
+        const width: i32 = @intCast(dims.width);
+        const height: i32 = @intCast(dims.height);
+        const in_term = cursor.row >= 0 and cursor.row < width and
+            cursor.col >= 0 and cursor.col < height;
+        if (!in_term) return null;
+
+        if (cursor.row >= main.buffer.content.items.len - 1) return null;
+        const line = &main.buffer.content.items[@intCast(cursor.row)];
+        const max_col = line.items.len;
+        const cbp = cursor_byte_pos(cursor) catch break :b @intCast(max_col);
+        if (cbp.col > max_col) break :b @intCast(max_col);
+        break :b cbp.col;
+    };
+
+    return .{
+        .row = cursor.row,
+        .col = col,
+    };
 }

@@ -3,6 +3,7 @@ const posix = std.posix;
 const main = @import("main.zig");
 const fs = @import("fs.zig");
 const log = @import("log.zig");
+const act = @import("action.zig");
 const lsp = @import("lsp");
 
 pub const LspConfig = struct {
@@ -126,8 +127,7 @@ pub const LspConnection = struct {
                                     .line = loc.range.start.line,
                                     .character = loc.range.start.character,
                                 });
-                                (&main.cursor).* = new_cursor;
-                                main.needs_redraw = true;
+                                act.move_cursor(new_cursor);
                             } else {
                                 log.log(@This(), "TODO: jump to another file {s}\n", .{loc.uri});
                             }
