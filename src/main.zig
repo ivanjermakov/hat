@@ -50,15 +50,18 @@ pub var key_queue: std.ArrayList(inp.Key) = undefined;
 
 fn redraw() !void {
     try term.clear();
+    const dims = try term.terminal_size();
 
     var byte: usize = 0;
-    for (0..buffer.content.items.len) |row| {
+    for (0..@min(buffer.content.items.len, dims.height)) |row| {
         const line: []u8 = buffer.content.items[row].items;
         const line_view = try std.unicode.Utf8View.init(line);
         var line_iter = line_view.iterator();
 
         var col: usize = 0;
         while (line_iter.nextCodepoint()) |ch| {
+            if (col >= dims.width) break;
+
             var ch_attr = co.attributes.text;
             for (buffer.spans.items) |span| {
                 if (span.span.start_byte <= byte and span.span.end_byte > byte) {

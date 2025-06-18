@@ -61,8 +61,8 @@ pub const Term = struct {
             return error.TermSize;
         }
         return .{
-            .width = w.row,
-            .height = w.col,
+            .width = w.col,
+            .height = w.row,
         };
     }
 
