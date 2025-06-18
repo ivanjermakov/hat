@@ -38,7 +38,7 @@ pub const Term = struct {
 
         fs.make_nonblock(std.posix.STDIN_FILENO);
 
-        const term = Term{
+        var term = Term{
             .writer = std_out.writer(),
         };
 
@@ -47,7 +47,7 @@ pub const Term = struct {
         return term;
     }
 
-    pub fn deinit(self: *const Term) void {
+    pub fn deinit(self: *Term) void {
         self.switch_buf(false) catch {};
         self.write(cursor_type.steady_block) catch {};
     }
@@ -64,40 +64,45 @@ pub const Term = struct {
         };
     }
 
-    pub fn clear(self: *const Term) !void {
-        try std.fmt.format(self.writer, "\x1b[2J", .{});
+    pub fn clear(self: *Term) !void {
+        try self.format("\x1b[2J", .{});
     }
 
-    pub fn clear_until_line_end(self: *const Term) !void {
-        try std.fmt.format(self.writer, "\x1b[0K", .{});
+    pub fn clear_until_line_end(self: *Term) !void {
+        try self.format("\x1b[0K", .{});
     }
 
-    pub fn switch_buf(self: *const Term, alternative: bool) !void {
+    pub fn switch_buf(self: *Term, alternative: bool) !void {
         if (alternative) {
-            try std.fmt.format(self.writer, "\x1b[rj1049h", .{});
+            try self.format("\x1b[rj1049h", .{});
         } else {
-            try std.fmt.format(self.writer, "\x1b[rj1049l", .{});
+            try self.format("\x1b[rj1049l", .{});
         }
     }
 
-    pub fn reset_attributes(self: *const Term) !void {
-        try std.fmt.format(self.writer, "\x1b[0m", .{});
+    pub fn reset_attributes(self: *Term) !void {
+        try self.format("\x1b[0m", .{});
     }
 
-    pub fn move_cursor(self: *const Term, cursor: main.Cursor) !void {
-        try std.fmt.format(self.writer, "\x1b[{};{}H", .{ cursor.row + 1, cursor.col + 1 });
+    pub fn move_cursor(self: *Term, cursor: main.Cursor) !void {
+        try self.format("\x1b[{};{}H", .{ cursor.row + 1, cursor.col + 1 });
     }
 
-    pub fn write_attr(self: *const Term, attr: co.Attr) !void {
+    pub fn write_attr(self: *Term, attr: co.Attr) !void {
         try attr.write(self.writer);
     }
 
-    pub fn write_attrs(self: *const Term, attrs: []const co.Attr) !void {
+    pub fn write_attrs(self: *Term, attrs: []const co.Attr) !void {
         for (attrs) |attr| try self.write_attr(attr);
     }
 
-    pub fn write(self: *const Term, str: []const u8) !void {
+    pub fn write(self: *Term, str: []const u8) !void {
         _ = try self.writer.write(str);
+    }
+
+    pub fn flush(self: *Term) !void {
+        _ = self;
+        // TODO
     }
 
     pub fn format(self: *const Term, comptime str: []const u8, args: anytype) !void {

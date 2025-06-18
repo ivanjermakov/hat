@@ -105,6 +105,8 @@ fn redraw() !void {
         .normal, .select => _ = try term.write(ter.cursor_type.steady_block),
         .insert => _ = try term.write(ter.cursor_type.steady_bar),
     }
+
+    try term.flush();
 }
 
 pub fn main() !void {
