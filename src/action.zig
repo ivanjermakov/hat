@@ -68,12 +68,29 @@ pub fn remove_char() !void {
 
 pub fn remove_prev_char() !void {
     const cbp = cursor_byte_pos();
-    if (cbp.col == 0) return;
-    main.cursor.col -= 1;
     var line = &main.buffer.content.items[@intCast(main.cursor.row)];
-    const col_byte = try utf8_byte_pos(line.items, @intCast(main.cursor.col));
-    _ = line.orderedRemove(col_byte);
+    if (cbp.col == 0) {
+        if (main.cursor.row > 0) {
+            try join_with_line_below(@intCast(main.cursor.row - 1));
+            main.cursor.row -= 1;
+            const joined_line = main.buffer.content.items[@intCast(main.cursor.row)];
+            main.cursor.col = @intCast(joined_line.items.len);
+        } else {
+            return;
+        }
+    } else {
+        main.cursor.col -= 1;
+        const col_byte = try utf8_byte_pos(line.items, @intCast(main.cursor.col));
+        _ = line.orderedRemove(col_byte);
+    }
     main.needs_reparse = true;
+}
+
+pub fn join_with_line_below(row: usize) !void {
+    var line = &main.buffer.content.items[row];
+    var next_line = main.buffer.content.orderedRemove(row + 1);
+    defer next_line.deinit();
+    try line.appendSlice(next_line.items);
 }
 
 pub fn select_char() !void {
