@@ -130,10 +130,8 @@ fn utf8_byte_pos(str: []u8, cp_index: usize) !usize {
 fn validate_cursor(cursor: main.Cursor) ?main.Cursor {
     const col: i32 = b: {
         const dims = main.term.terminal_size() catch unreachable;
-        const width: i32 = @intCast(dims.width);
-        const height: i32 = @intCast(dims.height);
-        const in_term = cursor.row >= 0 and cursor.row < height and
-            cursor.col >= 0 and cursor.col < width;
+        const in_term = cursor.row >= 0 and cursor.row < dims.height and
+            cursor.col >= 0 and cursor.col < dims.width;
         if (!in_term) return null;
 
         if (cursor.row >= main.buffer.content.items.len - 1) return null;
