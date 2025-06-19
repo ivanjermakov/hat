@@ -101,6 +101,18 @@ fn redraw() !void {
                         try term.write_attrs(co.attributes.selection);
                     }
                 }
+
+                if (buffer.diagnostics.items.len > 0) {
+                    for (buffer.diagnostics.items) |diagnostic| {
+                        const range = diagnostic.range;
+                        // TODO: multiline diagnostics
+                        if (row == range.start.line and col >= range.start.character and col <= range.end.character) {
+                            try term.write_attrs(co.attributes.diagnostic_error);
+                            break;
+                        }
+                    }
+                }
+
                 try term.format("{u}", .{ch});
             }
             byte += try std.unicode.utf8CodepointSequenceLength(ch);

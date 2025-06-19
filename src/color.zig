@@ -39,11 +39,13 @@ pub const color = enum {
 pub const Attr = union(enum) {
     fg: RgbColor,
     bg: RgbColor,
+    curly_underline,
 
     pub fn write(self: Attr, writer: anytype) !void {
         switch (self) {
             .fg => |fg_c| try fg_c.write(writer, true),
             .bg => |bg_c| try bg_c.write(writer, false),
+            .curly_underline => _ = try writer.write("\x1b[4:3m"),
         }
     }
 };
@@ -55,6 +57,7 @@ pub const attributes = enum {
     pub const string = &[_]Attr{.{ .fg = color.green }};
     pub const number = &[_]Attr{.{ .fg = color.yellow }};
     pub const comment = &[_]Attr{.{ .fg = color.gray7 }};
+    pub const diagnostic_error = &[_]Attr{.curly_underline};
 
     pub fn write(attrs: []Attr, writer: anytype) !void {
         for (attrs) |attr| {

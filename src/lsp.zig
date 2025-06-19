@@ -5,6 +5,8 @@ const fs = @import("fs.zig");
 const log = @import("log.zig");
 const lsp = @import("lsp");
 
+pub const types = lsp.types;
+
 pub const LspConfig = struct {
     cmd: []const []const u8,
 };
@@ -48,6 +50,8 @@ pub const LspConnection = struct {
             .capabilities = .{
                 .textDocument = .{
                     .definition = .{},
+                    .diagnostic = .{},
+                    .publishDiagnostics = .{},
                 },
             },
         });
@@ -135,6 +139,18 @@ pub const LspConnection = struct {
                 },
                 .notification => |notif| {
                     log.log(@This(), "notification: {s}\n", .{notif.method});
+                    if (std.mem.eql(u8, notif.method, "textDocument/publishDiagnostics")) {
+                        const params_typed = try std.json.parseFromValue(
+                            lsp.types.PublishDiagnosticsParams,
+                            arena.allocator(),
+                            notif.params.?,
+                            .{},
+                        );
+                        log.log(@This(), "got {} diagnostics\n", .{params_typed.value.diagnostics.len});
+                        main.buffer.diagnostics.clearRetainingCapacity();
+                        try main.buffer.diagnostics.appendSlice(params_typed.value.diagnostics);
+                        main.needs_redraw = true;
+                    }
                 },
                 else => {},
             }
@@ -175,6 +191,7 @@ pub const LspConnection = struct {
         const changes = [_]lsp.types.TextDocumentContentChangeEvent{
             .{ .literal_1 = .{ .text = main.buffer.content_raw.items } },
         };
+        main.buffer.diagnostics.clearRetainingCapacity();
         try self.send_notification("textDocument/didChange", .{
             .textDocument = .{ .uri = main.buffer.uri, .version = 0 },
             .contentChanges = &changes,

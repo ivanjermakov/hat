@@ -4,6 +4,7 @@ const main = @import("main.zig");
 const ft = @import("file_type.zig");
 const ts = @import("ts.zig");
 const log = @import("log.zig");
+const lsp = @import("lsp.zig");
 
 pub const Position = struct {
     line: usize,
@@ -38,6 +39,7 @@ pub const Buffer = struct {
     parser: ?*ts.ts.TSParser,
     tree: ?*ts.ts.TSTree,
     selection: ?SelectionSpan,
+    diagnostics: std.ArrayList(lsp.types.Diagnostic),
     allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator, path: []const u8, content_raw: []u8) !Buffer {
@@ -54,6 +56,7 @@ pub const Buffer = struct {
             .parser = null,
             .tree = null,
             .selection = null,
+            .diagnostics = std.ArrayList(lsp.types.Diagnostic).init(allocator),
             .allocator = allocator,
         };
         try buffer.init_parser();
@@ -106,6 +109,7 @@ pub const Buffer = struct {
         self.content.deinit();
         self.content_raw.deinit();
         self.spans.deinit();
+        self.diagnostics.deinit();
         self.allocator.free(self.uri);
     }
 
