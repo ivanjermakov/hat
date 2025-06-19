@@ -57,12 +57,14 @@ fn redraw() !void {
         const line: []u8 = buffer.content.items[row].items;
         const line_view = try std.unicode.Utf8View.init(line);
         var line_iter = line_view.iterator();
+        try term.move_cursor(.{ .row = @intCast(row), .col = 0 });
 
+        var last_attrs: ?[*]const co.Attr = null;
         var col: usize = 0;
         while (line_iter.nextCodepoint()) |ch| {
             if (col >= dims.width) break;
 
-            var ch_attr = co.attributes.text;
+            var ch_attrs = co.attributes.text;
             for (buffer.spans.items) |span| {
                 if (span.span.start_byte <= byte and span.span.end_byte > byte) {
                     if (std.mem.eql(u8, span.node_type, "return") or
@@ -71,42 +73,45 @@ fn redraw() !void {
                         std.mem.eql(u8, span.node_type, "export") or
                         std.mem.eql(u8, span.node_type, "function"))
                     {
-                        ch_attr = co.attributes.keyword;
+                        ch_attrs = co.attributes.keyword;
                         break;
                     }
                     if (std.mem.eql(u8, span.node_type, "system_lib_string") or
                         std.mem.eql(u8, span.node_type, "string_literal") or
                         std.mem.eql(u8, span.node_type, "string"))
                     {
-                        ch_attr = co.attributes.string;
+                        ch_attrs = co.attributes.string;
                         break;
                     }
                     if (std.mem.eql(u8, span.node_type, "number_literal")) {
-                        ch_attr = co.attributes.number;
+                        ch_attrs = co.attributes.number;
                         break;
                     }
                     if (std.mem.eql(u8, span.node_type, "comment")) {
-                        ch_attr = co.attributes.comment;
+                        ch_attrs = co.attributes.comment;
                         break;
                     }
                 }
             }
-            try term.write_attrs(ch_attr);
-            defer term.reset_attributes() catch {};
+
+            if (last_attrs == null or ch_attrs.ptr != last_attrs) {
+                term.reset_attributes() catch {};
+                try term.write_attrs(@ptrCast(ch_attrs));
+            }
+
+            last_attrs = ch_attrs.ptr;
 
             if (mode == .select) {
                 if (buffer.selection.?.in_range(.{ .line = row, .character = col })) {
                     try term.write_attrs(co.attributes.selection);
                 }
             }
-            try term.move_cursor(.{ .row = @intCast(row), .col = @intCast(col) });
             try term.format("{u}", .{ch});
             byte += try std.unicode.utf8CodepointSequenceLength(ch);
             col += 1;
         }
         byte += 1;
     }
-
     try term.move_cursor(cursor);
 
     switch (mode) {
