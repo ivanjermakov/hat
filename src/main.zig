@@ -85,6 +85,10 @@ fn redraw() !void {
                         ch_attr = co.attributes.number;
                         break;
                     }
+                    if (std.mem.eql(u8, span.node_type, "comment")) {
+                        ch_attr = co.attributes.comment;
+                        break;
+                    }
                 }
             }
             try term.write_attrs(ch_attr);

@@ -21,8 +21,13 @@ pub const RgbColor = struct {
 
 pub const color = enum {
     pub const black = RgbColor.from_hex(0x000000);
-    pub const gray1 = RgbColor.from_hex(0x282828);
-    pub const gray2 = RgbColor.from_hex(0x505050);
+    pub const gray1 = RgbColor.from_hex(0x1b1b1d);
+    pub const gray2 = RgbColor.from_hex(0x2a2a2d);
+    pub const gray3 = RgbColor.from_hex(0x3e3e43);
+    pub const gray4 = RgbColor.from_hex(0x57575f);
+    pub const gray5 = RgbColor.from_hex(0x757581);
+    pub const gray6 = RgbColor.from_hex(0x9998a8);
+    pub const gray7 = RgbColor.from_hex(0xc1c0d4);
     pub const white = RgbColor.from_hex(0xffffff);
     pub const red = RgbColor.from_hex(0xf57171);
     pub const green = RgbColor.from_hex(0xa6d189);
@@ -45,10 +50,11 @@ pub const Attr = union(enum) {
 
 pub const attributes = enum {
     pub const text = &[_]Attr{.{ .fg = color.white }};
-    pub const selection = &[_]Attr{.{ .bg = color.gray2 }};
+    pub const selection = &[_]Attr{.{ .bg = color.gray3 }};
     pub const keyword = &[_]Attr{.{ .fg = color.magenta }};
     pub const string = &[_]Attr{.{ .fg = color.green }};
     pub const number = &[_]Attr{.{ .fg = color.yellow }};
+    pub const comment = &[_]Attr{.{ .fg = color.gray7 }};
 
     pub fn write(attrs: []Attr, writer: anytype) !void {
         for (attrs) |attr| {

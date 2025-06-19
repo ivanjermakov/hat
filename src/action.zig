@@ -1,8 +1,5 @@
 const std = @import("std");
 const main = @import("main.zig");
-const c = @cImport({
-    @cInclude("sys/ioctl.h");
-});
 const log = @import("log.zig");
 const buf = @import("buffer.zig");
 const ter = @import("term.zig");
