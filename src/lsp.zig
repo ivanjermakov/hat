@@ -184,7 +184,7 @@ pub const LspConnection = struct {
 
     fn poll(self: *LspConnection) !?[][]u8 {
         if (self.status == .Disconnecting) {
-            const term = std.posix.waitpid(self.child.id, std.c.W.NOHANG);
+            const term = std.posix.waitpid(self.child.id, std.posix.W.NOHANG);
             if (self.child.id == term.pid) {
                 log.log(@This(), "lsp server terminated with code: {}\n", .{std.posix.W.EXITSTATUS(term.status)});
                 self.status = .Closed;

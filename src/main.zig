@@ -185,7 +185,6 @@ pub fn main() !void {
         }
 
         if (needs_handle_mappings) {
-            log.log(@This(), "key_queue: {any}\n", .{key_queue.items});
             handle_mappings: while (key_queue.items.len > 0) {
                 // log.log(@This(), "keys: {any}\n", .{keys.items});
                 const key = key_queue.orderedRemove(0);

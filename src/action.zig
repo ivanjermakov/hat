@@ -132,8 +132,8 @@ fn validate_cursor(cursor: main.Cursor) ?main.Cursor {
         const dims = main.term.terminal_size() catch unreachable;
         const width: i32 = @intCast(dims.width);
         const height: i32 = @intCast(dims.height);
-        const in_term = cursor.row >= 0 and cursor.row < width and
-            cursor.col >= 0 and cursor.col < height;
+        const in_term = cursor.row >= 0 and cursor.row < height and
+            cursor.col >= 0 and cursor.col < width;
         if (!in_term) return null;
 
         if (cursor.row >= main.buffer.content.items.len - 1) return null;
