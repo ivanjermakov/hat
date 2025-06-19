@@ -1,7 +1,6 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const dl = std.DynLib;
-const act = @import("action.zig");
 const inp = @import("input.zig");
 const ft = @import("file_type.zig");
 const buf = @import("buffer.zig");
@@ -198,13 +197,13 @@ pub fn main() !void {
 
                 // single-key global
                 if (code == .up) {
-                    act.move_cursor(.{ .row = cursor.row - 1, .col = cursor.col });
+                    buffer.move_cursor(.{ .row = cursor.row - 1, .col = cursor.col });
                 } else if (code == .down) {
-                    act.move_cursor(.{ .row = cursor.row + 1, .col = cursor.col });
+                    buffer.move_cursor(.{ .row = cursor.row + 1, .col = cursor.col });
                 } else if (code == .left) {
-                    act.move_cursor(.{ .row = cursor.row, .col = cursor.col - 1 });
+                    buffer.move_cursor(.{ .row = cursor.row, .col = cursor.col - 1 });
                 } else if (code == .right) {
-                    act.move_cursor(.{ .row = cursor.row, .col = cursor.col + 1 });
+                    buffer.move_cursor(.{ .row = cursor.row, .col = cursor.col + 1 });
                 } else if (code == .escape) {
                     mode = .normal;
                     needs_redraw = true;
@@ -214,18 +213,18 @@ pub fn main() !void {
                 } else if (normal_or_select and ch == 'q') {
                     break :main_loop;
                 } else if (normal_or_select and ch == 'i') {
-                    act.move_cursor(.{ .row = cursor.row - 1, .col = cursor.col });
+                    buffer.move_cursor(.{ .row = cursor.row - 1, .col = cursor.col });
                 } else if (normal_or_select and ch == 'k') {
-                    act.move_cursor(.{ .row = cursor.row + 1, .col = cursor.col });
+                    buffer.move_cursor(.{ .row = cursor.row + 1, .col = cursor.col });
                 } else if (normal_or_select and ch == 'j') {
-                    act.move_cursor(.{ .row = cursor.row, .col = cursor.col - 1 });
+                    buffer.move_cursor(.{ .row = cursor.row, .col = cursor.col - 1 });
                 } else if (normal_or_select and ch == 'l') {
-                    act.move_cursor(.{ .row = cursor.row, .col = cursor.col + 1 });
+                    buffer.move_cursor(.{ .row = cursor.row, .col = cursor.col + 1 });
 
                     // single-key normal mode
                 } else if (mode == .normal and ch == 's') {
                     mode = .select;
-                    try act.select_char();
+                    try buffer.select_char();
                     needs_redraw = true;
                     log.log(@This(), "mode: {}\n", .{mode});
                 } else if (mode == .normal and ch == 'h') {
@@ -235,13 +234,13 @@ pub fn main() !void {
 
                     // single-key insert mode
                 } else if (mode == .insert and code == .delete) {
-                    try act.remove_char();
+                    try buffer.remove_char();
                 } else if (mode == .insert and code == .backspace) {
-                    try act.remove_prev_char();
+                    try buffer.remove_prev_char();
                 } else if (mode == .insert and code == .enter) {
-                    try act.insert_newline();
+                    try buffer.insert_newline();
                 } else if (mode == .insert and key.printable != null) {
-                    try act.insert_text(key.printable.?);
+                    try buffer.insert_text(key.printable.?);
                 } else if (multiple_key and mode == .normal and ch == ' ') {
                     // multiple-key normal mode
                     const key2 = key_queue.orderedRemove(0);
