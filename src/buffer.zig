@@ -187,7 +187,7 @@ pub const Buffer = struct {
     pub fn remove_char(self: *Buffer) !void {
         const cbp = try self.cursor_byte_pos(main.cursor);
         var line = &self.content.items[cbp.line];
-        if (main.cursor.col == line.items.len) {
+        if (main.cursor.col == try utf8_character_len(line.items)) {
             if (main.cursor.row < self.content.items.len - 1) {
                 try self.join_with_line_below(cbp.line);
             } else {
@@ -205,7 +205,7 @@ pub const Buffer = struct {
         if (cbp.character == 0) {
             if (main.cursor.row > 0) {
                 const prev_line = &self.content.items[cbp.line - 1];
-                const col = prev_line.items.len;
+                const col = try utf8_character_len(prev_line.items);
                 try self.join_with_line_below(cbp.line - 1);
                 main.cursor.row -= 1;
                 main.cursor.col = @intCast(col);
