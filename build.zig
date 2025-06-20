@@ -45,6 +45,13 @@ pub fn build(b: *std.Build) void {
         .target = target,
     });
     linkLibs(b, check_exe);
+    const check_tests = b.addTest(.{
+        .root_source_file = b.path("src/main.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    linkLibs(b, check_tests);
     const check_step = b.step("check", "");
     check_step.dependOn(&check_exe.step);
+    check_step.dependOn(&check_tests.step);
 }

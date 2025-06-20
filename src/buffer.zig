@@ -1,5 +1,7 @@
 const std = @import("std");
 const dl = std.DynLib;
+const testing = std.testing;
+const assert = std.debug.assert;
 const main = @import("main.zig");
 const ft = @import("file_type.zig");
 const ts = @import("ts.zig");
@@ -42,7 +44,7 @@ pub const Buffer = struct {
     diagnostics: std.ArrayList(lsp.types.Diagnostic),
     allocator: std.mem.Allocator,
 
-    pub fn init(allocator: std.mem.Allocator, path: []const u8, content_raw: []u8) !Buffer {
+    pub fn init(allocator: std.mem.Allocator, path: []const u8, content_raw: []const u8) !Buffer {
         var raw = std.ArrayList(u8).init(allocator);
         try raw.appendSlice(content_raw);
 
@@ -65,7 +67,7 @@ pub const Buffer = struct {
     }
 
     fn init_parser(self: *Buffer) !void {
-        const file_ext = std.fs.path.extension(main.args.path.?);
+        const file_ext = std.fs.path.extension(self.path);
         const file_type = ft.file_type.get(file_ext) orelse return;
         var language_lib = try dl.open(file_type.lib_path);
         var language: *const fn () *ts.ts.struct_TSLanguage = undefined;
@@ -308,6 +310,20 @@ pub const Buffer = struct {
                 }
             }
         }
+    }
+
+    fn test_setup(content: []const u8) !Buffer {
+        main.testing_setup();
+        const allocator = std.testing.allocator;
+        const buffer = try init(allocator, "test.txt", content);
+        return buffer;
+    }
+
+    test "test buffer" {
+        var buffer = try test_setup("");
+        defer buffer.deinit();
+
+        try testing.expectEqualSlices(u8, buffer.content_raw.items, "");
     }
 };
 

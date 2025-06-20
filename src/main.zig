@@ -314,3 +314,10 @@ pub fn main() !void {
 comptime {
     std.testing.refAllDecls(@This());
 }
+
+pub fn testing_setup() void {
+    const alloc = std.testing.allocator;
+    cursor = .{ .row = 0, .col = 0 };
+    term = .{ .writer = std.io.BufferedWriter(8192, std.io.AnyWriter){ .unbuffered_writer = std.io.null_writer.any() } };
+    ft.file_type = std.StringHashMap(ft.FileType).init(alloc);
+}
