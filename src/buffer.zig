@@ -113,6 +113,7 @@ pub const Buffer = struct {
         self.allocator.free(self.uri);
     }
 
+    /// Character position in buffer space
     pub fn position(self: *Buffer) Position {
         _ = self;
         return .{
@@ -132,6 +133,7 @@ pub const Buffer = struct {
     pub fn move_cursor(self: *Buffer, new_cursor: main.Cursor) void {
         const old_position = self.position();
         const valid_cursor = self.validate_cursor(new_cursor) orelse return;
+        log.log(@This(), "valid cursor: {}\n", .{valid_cursor});
 
         (&main.cursor).* = valid_cursor;
         if (main.mode == .select) {
@@ -252,10 +254,8 @@ pub const Buffer = struct {
 
             if (cursor.row >= self.content.items.len - 1) return null;
             const line = &self.content.items[@intCast(cursor.row)];
-            const max_col = line.items.len;
-            const cbp = self.cursor_byte_pos(cursor) catch break :b @intCast(max_col);
-            if (cbp.character > max_col) break :b @intCast(max_col);
-            break :b @intCast(cbp.character);
+            const max_col = utf8_character_len(line.items) catch return null;
+            break :b @intCast(@min(cursor.col, max_col));
         };
 
         return .{
@@ -309,23 +309,32 @@ pub const Buffer = struct {
             }
         }
     }
-
-    /// Find a byte position of a codepoint at cp_index in a UTF-8 byte string
-    fn utf8_byte_pos(str: []u8, cp_index: usize) !usize {
-        const view = try std.unicode.Utf8View.init(str);
-        var iter = view.iterator();
-        var pos: usize = 0;
-        var i: usize = 0;
-        if (i == cp_index) return pos;
-        while (iter.nextCodepointSlice()) |ch| {
-            i += 1;
-            pos += ch.len;
-            if (i == cp_index) return pos;
-        }
-        return error.OutOfBounds;
-    }
 };
 
 pub const BufferContent = std.ArrayList(Line);
 
 pub const Line = std.ArrayList(u8);
+
+/// Find a byte position of a codepoint at cp_index in a UTF-8 byte string
+fn utf8_byte_pos(str: []u8, cp_index: usize) !usize {
+    const view = try std.unicode.Utf8View.init(str);
+    var iter = view.iterator();
+    var pos: usize = 0;
+    var i: usize = 0;
+    if (i == cp_index) return pos;
+    while (iter.nextCodepointSlice()) |ch| {
+        i += 1;
+        pos += ch.len;
+        if (i == cp_index) return pos;
+    }
+    return error.OutOfBounds;
+}
+
+/// Find UTF-8 byte string length in characters
+fn utf8_character_len(str: []u8) !usize {
+    const view = try std.unicode.Utf8View.init(str);
+    var iter = view.iterator();
+    var len: usize = 0;
+    while (iter.nextCodepointSlice()) |_| len += 1;
+    return len;
+}
