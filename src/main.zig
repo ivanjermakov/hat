@@ -52,22 +52,36 @@ fn redraw() !void {
     const dims = try term.terminal_size();
 
     for (0..dims.height) |term_row| {
-        const buffer_line = @as(i32, @intCast(term_row)) + buffer.offset.row;
-        if (buffer_line < 0) continue;
-        if (buffer_line >= buffer.content.items.len) break;
+        const buffer_row = @as(i32, @intCast(term_row)) + buffer.offset.row;
+        if (buffer_row < 0) continue;
+        if (buffer_row >= buffer.content.items.len) break;
 
-        var byte: usize = buffer.line_positions.items[@intCast(buffer_line)];
+        var byte: usize = buffer.line_positions.items[@intCast(buffer_row)];
+        var term_col: i32 = 0;
 
-        const line: []u8 = buffer.content.items[@intCast(buffer_line)].items;
+        const line: []u8 = buffer.content.items[@intCast(buffer_row)].items;
         const line_view = try std.unicode.Utf8View.init(line);
         var line_iter = line_view.iterator();
         try term.move_cursor(.{ .row = @intCast(term_row), .col = 0 });
 
-        var col: i32 = 0;
+        if (buffer.offset.col > 0) {
+            for (0..@intCast(buffer.offset.col)) |_| {
+                if (line_iter.nextCodepoint()) |ch| {
+                    byte += try std.unicode.utf8CodepointSequenceLength(ch);
+                    term_col += 1;
+                }
+            }
+        } else {
+            for (0..@intCast(-buffer.offset.col)) |_| {
+                try term.write(" ");
+            }
+        }
+
         while (line_iter.nextCodepoint()) |ch| {
             attrs_stream.reset();
+            const buffer_col = @as(i32, @intCast(term_col)) + buffer.offset.col;
 
-            if (col >= dims.width) break;
+            if (term_col >= dims.width) break;
             const ch_attrs: []co.Attr = b: for (buffer.spans.items) |span| {
                 if (span.span.start_byte <= byte and span.span.end_byte > byte) {
                     if (std.mem.eql(u8, span.node_type, "return") or
@@ -97,7 +111,7 @@ fn redraw() !void {
             try co.attributes.write(ch_attrs, attrs_stream.writer());
 
             if (mode == .select) {
-                if (buffer.selection.?.in_range(.{ .row = @intCast(buffer_line), .col = col })) {
+                if (buffer.selection.?.in_range(.{ .row = @intCast(buffer_row), .col = @intCast(buffer_col) })) {
                     try co.attributes.write(co.attributes.selection, attrs_stream.writer());
                 }
             }
@@ -105,8 +119,8 @@ fn redraw() !void {
             if (buffer.diagnostics.items.len > 0) {
                 for (buffer.diagnostics.items) |diagnostic| {
                     const range = diagnostic.range;
-                    const in_range = (buffer_line > range.start.line and buffer_line < range.end.line) or
-                        (buffer_line == range.start.line and col >= range.start.character and col < range.end.character);
+                    const in_range = (buffer_row > range.start.line and buffer_row < range.end.line) or
+                        (buffer_row == range.start.line and buffer_col >= range.start.character and buffer_col < range.end.character);
                     if (in_range) {
                         try co.attributes.write(co.attributes.diagnostic_error, attrs_stream.writer());
                         break;
@@ -125,7 +139,7 @@ fn redraw() !void {
             try term.format("{u}", .{ch});
 
             byte += try std.unicode.utf8CodepointSequenceLength(ch);
-            col += 1;
+            term_col += 1;
         }
         byte += 1;
     }
