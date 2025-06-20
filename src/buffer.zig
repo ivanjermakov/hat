@@ -156,12 +156,12 @@ pub const Buffer = struct {
         var iter = view.iterator();
         while (iter.nextCodepointSlice()) |ch| {
             const cbp = try self.cursor_byte_pos(main.cursor);
-            var line = &self.content.items[@intCast(cbp.row)];
+            var line = &self.content.items[cbp.line];
 
             if (std.mem.eql(u8, ch, "\n")) {
                 try self.insert_newline();
             } else {
-                try line.insertSlice(@intCast(cbp.col), ch);
+                try line.insertSlice(cbp.character, ch);
                 main.cursor.col += 1;
             }
         }
@@ -173,10 +173,10 @@ pub const Buffer = struct {
         const row: usize = @intCast(main.cursor.row);
         var line = try self.content.items[row].toOwnedSlice();
         defer self.allocator.free(line);
-        try self.content.items[row].appendSlice(line[0..@intCast(cbp.col)]);
+        try self.content.items[row].appendSlice(line[0..cbp.character]);
         var new_line = std.ArrayList(u8).init(main.allocator);
-        try new_line.appendSlice(line[@intCast(cbp.col)..]);
-        try self.content.insert(@intCast(cbp.row + 1), new_line);
+        try new_line.appendSlice(line[cbp.character..]);
+        try self.content.insert(cbp.line + 1, new_line);
         main.cursor.row += 1;
         main.cursor.col = 0;
         main.needs_reparse = true;
@@ -192,7 +192,7 @@ pub const Buffer = struct {
                 return;
             }
         } else {
-            _ = line.orderedRemove(@intCast(cbp.col));
+            _ = line.orderedRemove(cbp.character);
             main.needs_reparse = true;
         }
     }
@@ -200,7 +200,7 @@ pub const Buffer = struct {
     pub fn remove_prev_char(self: *Buffer) !void {
         const cbp = try self.cursor_byte_pos(main.cursor);
         var line = &self.content.items[@intCast(main.cursor.row)];
-        if (cbp.col == 0) {
+        if (cbp.character == 0) {
             if (main.cursor.row > 0) {
                 try self.join_with_line_below(@intCast(main.cursor.row - 1));
                 main.cursor.row -= 1;
@@ -230,14 +230,15 @@ pub const Buffer = struct {
         self.selection = .{ .start = pos, .end = pos };
     }
 
-    fn cursor_byte_pos(self: *Buffer, cursor: main.Cursor) !main.Cursor {
-        const row = cursor.row;
+    fn cursor_byte_pos(self: *Buffer, cursor: main.Cursor) !Position {
+        if (cursor.row < 0 or cursor.col < 0) return error.OutOfBounds;
+        const row: usize = @intCast(cursor.row);
         if (row >= self.content.items.len) return error.OutOfBounds;
         const line = &self.content.items[@intCast(cursor.row)];
-        const col: i32 = @intCast(try utf8_byte_pos(line.items, @intCast(cursor.col)));
+        const col = try utf8_byte_pos(line.items, @intCast(cursor.col));
         return .{
-            .row = row,
-            .col = col,
+            .line = row,
+            .character = col,
         };
     }
 
@@ -252,8 +253,8 @@ pub const Buffer = struct {
             const line = &self.content.items[@intCast(cursor.row)];
             const max_col = line.items.len;
             const cbp = self.cursor_byte_pos(cursor) catch break :b @intCast(max_col);
-            if (cbp.col > max_col) break :b @intCast(max_col);
-            break :b cbp.col;
+            if (cbp.character > max_col) break :b @intCast(max_col);
+            break :b @intCast(cbp.character);
         };
 
         return .{
