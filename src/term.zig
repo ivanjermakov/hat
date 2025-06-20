@@ -90,10 +90,6 @@ pub const Term = struct {
         try attr.write(self.writer.writer());
     }
 
-    pub fn write_attrs(self: *Term, attrs: []const co.Attr) !void {
-        for (attrs) |attr| try self.write_attr(attr);
-    }
-
     pub fn write(self: *Term, str: []const u8) !void {
         _ = try self.writer.write(str);
     }

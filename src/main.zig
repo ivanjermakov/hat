@@ -48,6 +48,12 @@ pub var args: Args = .{
 pub var key_queue: std.ArrayList(inp.Key) = undefined;
 
 fn redraw() !void {
+    var attrs_buf = std.mem.zeroes([128]u8);
+    var attrs_stream = std.io.fixedBufferStream(&attrs_buf);
+    var attrs: []const u8 = undefined;
+    var last_attrs_buf = std.mem.zeroes([128]u8);
+    var last_attrs: ?[]const u8 = null;
+
     try term.clear();
     const dims = try term.terminal_size();
 
@@ -58,9 +64,10 @@ fn redraw() !void {
         var line_iter = line_view.iterator();
         try term.move_cursor(.{ .row = @intCast(row), .col = 0 });
 
-        var last_attrs: ?[*]const co.Attr = null;
         var col: usize = 0;
         while (line_iter.nextCodepoint()) |ch| {
+            attrs_stream.reset();
+
             if (col < dims.width) {
                 const ch_attrs: []co.Attr = b: for (buffer.spans.items) |span| {
                     if (span.span.start_byte <= byte and span.span.end_byte > byte) {
@@ -89,16 +96,15 @@ fn redraw() !void {
                     break :b @constCast(co.attributes.text);
                 };
 
-                if (last_attrs == null or ch_attrs.ptr != last_attrs) {
-                    term.reset_attributes() catch {};
-                    try term.write_attrs(@ptrCast(ch_attrs));
+                for (ch_attrs) |attr| {
+                    try attr.write(attrs_stream.writer());
                 }
-
-                last_attrs = ch_attrs.ptr;
 
                 if (mode == .select) {
                     if (buffer.selection.?.in_range(.{ .line = row, .character = col })) {
-                        try term.write_attrs(co.attributes.selection);
+                        for (co.attributes.selection) |attr| {
+                            try attr.write(attrs_stream.writer());
+                        }
                     }
                 }
 
@@ -107,11 +113,22 @@ fn redraw() !void {
                         const range = diagnostic.range;
                         // TODO: multiline diagnostics
                         if (row == range.start.line and col >= range.start.character and col <= range.end.character) {
-                            try term.write_attrs(co.attributes.diagnostic_error);
+                            for (co.attributes.diagnostic_error) |attr| {
+                                try attr.write(attrs_stream.writer());
+                            }
                             break;
                         }
                     }
                 }
+
+                attrs = attrs_stream.getWritten();
+                if (last_attrs == null or !std.mem.eql(u8, attrs, last_attrs.?)) {
+                    term.reset_attributes() catch {};
+                    try term.write(attrs);
+                }
+
+                @memcpy(&last_attrs_buf, &attrs_buf);
+                last_attrs = last_attrs_buf[0..try attrs_stream.getPos()];
 
                 try term.format("{u}", .{ch});
             }
