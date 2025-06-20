@@ -12,11 +12,6 @@ pub const RgbColor = struct {
             .b = (hex >> 0) & 0xff,
         };
     }
-
-    pub fn write(self: RgbColor, writer: anytype, fg: bool) !void {
-        const fgbg: u8 = if (fg) 38 else 48;
-        try std.fmt.format(writer, "\x1b[{};2;{};{};{}m", .{ fgbg, self.r, self.g, self.b });
-    }
 };
 
 pub const color = enum {
@@ -43,8 +38,8 @@ pub const Attr = union(enum) {
 
     pub fn write(self: Attr, writer: anytype) !void {
         switch (self) {
-            .fg => |fg_c| try fg_c.write(writer, true),
-            .bg => |bg_c| try bg_c.write(writer, false),
+            .fg => |c| try std.fmt.format(writer, "\x1b[38;2;{};{};{}m", .{ c.r, c.g, c.b }),
+            .bg => |c| try std.fmt.format(writer, "\x1b[48;2;{};{};{}m", .{ c.r, c.g, c.b }),
             .curly_underline => _ = try writer.write("\x1b[4:3m"),
         }
     }
@@ -59,7 +54,7 @@ pub const attributes = enum {
     pub const comment = &[_]Attr{.{ .fg = color.gray7 }};
     pub const diagnostic_error = &[_]Attr{.curly_underline};
 
-    pub fn write(attrs: []Attr, writer: anytype) !void {
+    pub fn write(attrs: []const Attr, writer: anytype) !void {
         for (attrs) |attr| {
             try attr.write(writer);
         }

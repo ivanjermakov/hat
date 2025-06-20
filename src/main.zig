@@ -95,16 +95,11 @@ fn redraw() !void {
                 } else {
                     break :b @constCast(co.attributes.text);
                 };
-
-                for (ch_attrs) |attr| {
-                    try attr.write(attrs_stream.writer());
-                }
+                try co.attributes.write(ch_attrs, attrs_stream.writer());
 
                 if (mode == .select) {
                     if (buffer.selection.?.in_range(.{ .line = row, .character = col })) {
-                        for (co.attributes.selection) |attr| {
-                            try attr.write(attrs_stream.writer());
-                        }
+                        try co.attributes.write(co.attributes.selection, attrs_stream.writer());
                     }
                 }
 
@@ -113,9 +108,7 @@ fn redraw() !void {
                         const range = diagnostic.range;
                         // TODO: multiline diagnostics
                         if (row == range.start.line and col >= range.start.character and col <= range.end.character) {
-                            for (co.attributes.diagnostic_error) |attr| {
-                                try attr.write(attrs_stream.writer());
-                            }
+                            try co.attributes.write(co.attributes.diagnostic_error, attrs_stream.writer());
                             break;
                         }
                     }
