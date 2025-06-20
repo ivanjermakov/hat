@@ -159,10 +159,30 @@ pub const Buffer = struct {
         };
     }
 
-    pub fn move_cursor(self: *Buffer, new_cursor: Cursor) void {
+    pub fn move_cursor(self: *Buffer, new_buf_cursor: Cursor) void {
         const old_position = self.position();
-        const valid_cursor = self.validate_cursor(new_cursor) orelse return;
-        log.log(@This(), "valid cursor: {}\n", .{valid_cursor});
+
+        if (new_buf_cursor.row < 0) return;
+        const dims = main.term.terminal_size() catch unreachable;
+        self.scroll_for_cursor(new_buf_cursor);
+
+        const term_cursor = new_buf_cursor.apply_offset(self.offset.negate());
+        const in_term = term_cursor.row >= 0 and term_cursor.row < dims.height and
+            term_cursor.col >= 0 and term_cursor.col < dims.width;
+        if (!in_term) return;
+
+        if (new_buf_cursor.row >= self.content.items.len - 1) return;
+        const line = &self.content.items[@intCast(new_buf_cursor.row)];
+        const max_col = utf8_character_len(line.items) catch return;
+        const col: i32 = @intCast(@min(new_buf_cursor.col, max_col));
+
+        const valid_cursor = Cursor{
+            .row = new_buf_cursor.row,
+            .col = col,
+        };
+
+        log.log(@This(), "valid cursor, in buf: {}, in term: {}\n", .{ valid_cursor, term_cursor });
+        self.scroll_for_cursor(valid_cursor);
 
         (&self.cursor).* = valid_cursor;
         if (main.mode == .select) {
@@ -287,27 +307,6 @@ pub const Buffer = struct {
         };
     }
 
-    fn validate_cursor(self: *Buffer, cursor: Cursor) ?Cursor {
-        const col: i32 = b: {
-            if (cursor.row < 0) return null;
-            const dims = main.term.terminal_size() catch unreachable;
-            const term_cursor = cursor.apply_offset(self.offset.negate());
-            const in_term = term_cursor.row >= 0 and term_cursor.row < dims.height and
-                term_cursor.col >= 0 and term_cursor.col < dims.width;
-            if (!in_term) return null;
-
-            if (cursor.row >= self.content.items.len - 1) return null;
-            const line = &self.content.items[@intCast(cursor.row)];
-            const max_col = utf8_character_len(line.items) catch return null;
-            break :b @intCast(@min(cursor.col, max_col));
-        };
-
-        return .{
-            .row = cursor.row,
-            .col = col,
-        };
-    }
-
     fn update_raw(self: *Buffer) !void {
         self.content_raw.clearRetainingCapacity();
         for (self.content.items) |line| {
@@ -350,6 +349,31 @@ pub const Buffer = struct {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    fn scroll_for_cursor(self: *Buffer, new_buf_cursor: Cursor) void {
+        const term_cursor = new_buf_cursor.apply_offset(self.offset.negate());
+        const dims = main.term.terminal_size() catch unreachable;
+        if (term_cursor.row < 0 and new_buf_cursor.row >= 0) {
+            self.offset.row += term_cursor.row;
+            main.needs_redraw = true;
+        }
+        if (term_cursor.row >= dims.height and new_buf_cursor.row < self.content.items.len - 1) {
+            self.offset.row += 1 + term_cursor.row - @as(i32, @intCast(dims.height));
+            main.needs_redraw = true;
+        }
+        if (term_cursor.col < 0 and new_buf_cursor.col >= 0) {
+            self.offset.col += term_cursor.col;
+            main.needs_redraw = true;
+        }
+        if (term_cursor.col >= dims.width and new_buf_cursor.row >= 0 and new_buf_cursor.row < self.content.items.len - 1) {
+            const line = &self.content.items[@intCast(new_buf_cursor.row)];
+            const line_len = utf8_character_len(line.items) catch return;
+            if (new_buf_cursor.col <= line_len) {
+                self.offset.col += 1 + term_cursor.col - @as(i32, @intCast(dims.width));
+                main.needs_redraw = true;
             }
         }
     }

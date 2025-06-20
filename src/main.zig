@@ -68,7 +68,6 @@ fn redraw() !void {
             for (0..@intCast(buffer.offset.col)) |_| {
                 if (line_iter.nextCodepoint()) |ch| {
                     byte += try std.unicode.utf8CodepointSequenceLength(ch);
-                    term_col += 1;
                 }
             }
         } else {
