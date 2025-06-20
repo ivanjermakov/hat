@@ -5,6 +5,7 @@ const c = @cImport({
     @cInclude("locale.h");
 });
 const main = @import("main.zig");
+const buf = @import("buffer.zig");
 const co = @import("color.zig");
 const fs = @import("fs.zig");
 
@@ -82,7 +83,7 @@ pub const Term = struct {
         try self.write("\x1b[0m");
     }
 
-    pub fn move_cursor(self: *Term, cursor: main.Cursor) !void {
+    pub fn move_cursor(self: *Term, cursor: buf.Cursor) !void {
         try self.format("\x1b[{};{}H", .{ cursor.row + 1, cursor.col + 1 });
     }
 

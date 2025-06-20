@@ -8,24 +8,42 @@ const ts = @import("ts.zig");
 const log = @import("log.zig");
 const lsp = @import("lsp.zig");
 
-pub const Position = struct {
-    line: usize,
-    character: usize,
+pub const Cursor = struct {
+    row: i32,
+    col: i32,
 
-    pub fn order(self: Position, other: Position) std.math.Order {
+    pub fn apply_offset(self: Cursor, offset: Cursor) Cursor {
+        return .{ .row = self.row + offset.row, .col = self.col + offset.col };
+    }
+
+    pub fn negate(self: Cursor) Cursor {
+        return .{
+            .row = -self.row,
+            .col = -self.col,
+        };
+    }
+
+    pub fn order(self: Cursor, other: Cursor) std.math.Order {
         if (std.meta.eql(self, other)) return .eq;
-        if (self.line == other.line) {
-            return std.math.order(self.character, other.character);
+        if (self.row == other.row) {
+            return std.math.order(self.col, other.col);
         }
-        return std.math.order(self.line, other.line);
+        return std.math.order(self.row, other.row);
+    }
+
+    pub fn from_lsp(position: lsp.types.Position) Cursor {
+        return .{
+            .row = @intCast(position.line),
+            .col = @intCast(position.character),
+        };
     }
 };
 
 pub const SelectionSpan = struct {
-    start: Position,
-    end: Position,
+    start: Cursor,
+    end: Cursor,
 
-    pub fn in_range(self: SelectionSpan, pos: Position) bool {
+    pub fn in_range(self: SelectionSpan, pos: Cursor) bool {
         const start = self.start.order(pos);
         const end = self.end.order(pos);
         return start != .gt and end != .lt;
@@ -42,6 +60,12 @@ pub const Buffer = struct {
     tree: ?*ts.ts.TSTree,
     selection: ?SelectionSpan,
     diagnostics: std.ArrayList(lsp.types.Diagnostic),
+    /// Cursor position in local buffer character space
+    cursor: Cursor,
+    /// How buffer is positioned relative to the window
+    /// (0, 0) means Buffer.cursor is the same as window cursor
+    offset: Cursor,
+    line_positions: std.ArrayList(usize),
     allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator, path: []const u8, content_raw: []const u8) !Buffer {
@@ -59,6 +83,9 @@ pub const Buffer = struct {
             .tree = null,
             .selection = null,
             .diagnostics = std.ArrayList(lsp.types.Diagnostic).init(allocator),
+            .cursor = .{ .row = 0, .col = 0 },
+            .offset = .{ .row = 0, .col = 0 },
+            .line_positions = std.ArrayList(usize).init(allocator),
             .allocator = allocator,
         };
         try buffer.init_parser();
@@ -112,32 +139,32 @@ pub const Buffer = struct {
         self.content_raw.deinit();
         self.spans.deinit();
         self.diagnostics.deinit();
+        self.line_positions.deinit();
         self.allocator.free(self.uri);
     }
 
     /// Character position in buffer space
-    pub fn position(self: *Buffer) Position {
-        _ = self;
+    pub fn position(self: *Buffer) Cursor {
         return .{
-            .line = @intCast(main.cursor.row),
-            .character = @intCast(main.cursor.col),
+            .row = @intCast(self.cursor.row),
+            .col = @intCast(self.cursor.col),
         };
     }
 
-    pub fn inv_position(self: *Buffer, pos: Position) main.Cursor {
+    pub fn inv_position(self: *Buffer, pos: Cursor) Cursor {
         _ = self;
         return .{
-            .row = @intCast(pos.line),
-            .col = @intCast(pos.character),
+            .row = @intCast(pos.row),
+            .col = @intCast(pos.col),
         };
     }
 
-    pub fn move_cursor(self: *Buffer, new_cursor: main.Cursor) void {
+    pub fn move_cursor(self: *Buffer, new_cursor: Cursor) void {
         const old_position = self.position();
         const valid_cursor = self.validate_cursor(new_cursor) orelse return;
         log.log(@This(), "valid cursor: {}\n", .{valid_cursor});
 
-        (&main.cursor).* = valid_cursor;
+        (&self.cursor).* = valid_cursor;
         if (main.mode == .select) {
             const selection = &self.selection.?;
             const cursor_was_at_start = std.meta.eql(selection.start, old_position);
@@ -159,64 +186,64 @@ pub const Buffer = struct {
         const view = try std.unicode.Utf8View.init(text);
         var iter = view.iterator();
         while (iter.nextCodepointSlice()) |ch| {
-            const cbp = try self.cursor_byte_pos(main.cursor);
-            var line = &self.content.items[cbp.line];
+            const cbp = try self.cursor_byte_pos(self.cursor);
+            var line = &self.content.items[@intCast(cbp.row)];
 
             if (std.mem.eql(u8, ch, "\n")) {
                 try self.insert_newline();
             } else {
-                try line.insertSlice(cbp.character, ch);
-                main.cursor.col += 1;
+                try line.insertSlice(@intCast(cbp.col), ch);
+                self.cursor.col += 1;
             }
         }
         main.needs_reparse = true;
     }
 
     pub fn insert_newline(self: *Buffer) !void {
-        const cbp = try self.cursor_byte_pos(main.cursor);
-        const row: usize = cbp.line;
+        const cbp = try self.cursor_byte_pos(self.cursor);
+        const row: usize = @intCast(cbp.row);
         var line = try self.content.items[row].toOwnedSlice();
         defer self.allocator.free(line);
-        try self.content.items[row].appendSlice(line[0..cbp.character]);
+        try self.content.items[row].appendSlice(line[0..@intCast(cbp.col)]);
         var new_line = std.ArrayList(u8).init(main.allocator);
-        try new_line.appendSlice(line[cbp.character..]);
-        try self.content.insert(cbp.line + 1, new_line);
-        main.cursor.row += 1;
-        main.cursor.col = 0;
+        try new_line.appendSlice(line[@intCast(cbp.col)..]);
+        try self.content.insert(@intCast(cbp.row + 1), new_line);
+        self.cursor.row += 1;
+        self.cursor.col = 0;
         main.needs_reparse = true;
     }
 
     pub fn remove_char(self: *Buffer) !void {
-        const cbp = try self.cursor_byte_pos(main.cursor);
-        var line = &self.content.items[cbp.line];
-        if (main.cursor.col == try utf8_character_len(line.items)) {
-            if (main.cursor.row < self.content.items.len - 1) {
-                try self.join_with_line_below(cbp.line);
+        const cbp = try self.cursor_byte_pos(self.cursor);
+        var line = &self.content.items[@intCast(cbp.row)];
+        if (self.cursor.col == try utf8_character_len(line.items)) {
+            if (self.cursor.row < self.content.items.len - 1) {
+                try self.join_with_line_below(@intCast(cbp.row));
             } else {
                 return;
             }
         } else {
-            _ = line.orderedRemove(cbp.character);
+            _ = line.orderedRemove(@intCast(cbp.col));
             main.needs_reparse = true;
         }
     }
 
     pub fn remove_prev_char(self: *Buffer) !void {
-        const cbp = try self.cursor_byte_pos(main.cursor);
-        var line = &self.content.items[cbp.line];
-        if (cbp.character == 0) {
-            if (main.cursor.row > 0) {
-                const prev_line = &self.content.items[cbp.line - 1];
+        const cbp = try self.cursor_byte_pos(self.cursor);
+        var line = &self.content.items[@intCast(cbp.row)];
+        if (cbp.col == 0) {
+            if (self.cursor.row > 0) {
+                const prev_line = &self.content.items[@intCast(cbp.row - 1)];
                 const col = try utf8_character_len(prev_line.items);
-                try self.join_with_line_below(cbp.line - 1);
-                main.cursor.row -= 1;
-                main.cursor.col = @intCast(col);
+                try self.join_with_line_below(@intCast(cbp.row - 1));
+                self.cursor.row -= 1;
+                self.cursor.col = @intCast(col);
             } else {
                 return;
             }
         } else {
-            main.cursor.col -= 1;
-            const col_byte = try utf8_byte_pos(line.items, @intCast(main.cursor.col));
+            self.cursor.col -= 1;
+            const col_byte = try utf8_byte_pos(line.items, @intCast(self.cursor.col));
             _ = line.orderedRemove(col_byte);
             main.needs_reparse = true;
         }
@@ -235,23 +262,37 @@ pub const Buffer = struct {
         self.selection = .{ .start = pos, .end = pos };
     }
 
-    fn cursor_byte_pos(self: *Buffer, cursor: main.Cursor) !Position {
+    pub fn update_line_positions(self: *Buffer) !void {
+        self.line_positions.clearRetainingCapacity();
+        var byte: usize = 0;
+        for (0..self.content.items.len) |i| {
+            try self.line_positions.append(byte);
+            const line = &self.content.items[i];
+            const line_view = try std.unicode.Utf8View.init(line.items);
+            var line_iter = line_view.iterator();
+            while (line_iter.nextCodepoint()) |ch| {
+                byte += try std.unicode.utf8CodepointSequenceLength(ch);
+            }
+        }
+    }
+
+    fn cursor_byte_pos(self: *Buffer, cursor: Cursor) !Cursor {
         if (cursor.row < 0 or cursor.col < 0) return error.OutOfBounds;
-        const row: usize = @intCast(cursor.row);
-        if (row >= self.content.items.len) return error.OutOfBounds;
+        if (cursor.row >= self.content.items.len) return error.OutOfBounds;
         const line = &self.content.items[@intCast(cursor.row)];
         const col = try utf8_byte_pos(line.items, @intCast(cursor.col));
         return .{
-            .line = row,
-            .character = col,
+            .row = cursor.row,
+            .col = @intCast(col),
         };
     }
 
-    fn validate_cursor(self: *Buffer, cursor: main.Cursor) ?main.Cursor {
+    fn validate_cursor(self: *Buffer, cursor: Cursor) ?Cursor {
         const col: i32 = b: {
             const dims = main.term.terminal_size() catch unreachable;
-            const in_term = cursor.row >= 0 and cursor.row < dims.height and
-                cursor.col >= 0 and cursor.col < dims.width;
+            const term_cursor = cursor.apply_offset(self.offset.negate());
+            const in_term = term_cursor.row >= 0 and term_cursor.row < dims.height and
+                term_cursor.col >= 0 and term_cursor.col < dims.width;
             if (!in_term) return null;
 
             if (cursor.row >= self.content.items.len - 1) return null;

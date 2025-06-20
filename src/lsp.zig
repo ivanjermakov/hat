@@ -3,6 +3,7 @@ const posix = std.posix;
 const main = @import("main.zig");
 const fs = @import("fs.zig");
 const log = @import("log.zig");
+const buf = @import("buffer.zig");
 const lsp = @import("lsp");
 
 pub const types = lsp.types;
@@ -126,10 +127,7 @@ pub const LspConnection = struct {
                         if (location) |loc| {
                             if (std.mem.eql(u8, loc.uri, main.buffer.uri)) {
                                 log.log(@This(), "jump to {}\n", .{loc.range.start});
-                                const new_cursor = main.buffer.inv_position(.{
-                                    .line = loc.range.start.line,
-                                    .character = loc.range.start.character,
-                                });
+                                const new_cursor = buf.Cursor.from_lsp(loc.range.start);
                                 main.buffer.move_cursor(new_cursor);
                             } else {
                                 log.log(@This(), "TODO: jump to another file {s}\n", .{loc.uri});
@@ -170,8 +168,8 @@ pub const LspConnection = struct {
         try self.send_request("textDocument/definition", .{
             .textDocument = .{ .uri = main.buffer.uri },
             .position = .{
-                .line = @intCast(position.line),
-                .character = @intCast(position.character),
+                .line = @intCast(position.row),
+                .character = @intCast(position.col),
             },
         });
     }

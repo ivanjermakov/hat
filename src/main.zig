@@ -9,11 +9,6 @@ const ter = @import("term.zig");
 const lsp = @import("lsp.zig");
 const log = @import("log.zig");
 
-pub const Cursor = struct {
-    row: i32,
-    col: i32,
-};
-
 const Mode = enum {
     normal,
     select,
@@ -36,7 +31,6 @@ pub const std_in = std.io.getStdIn();
 
 pub var buffer: buf.Buffer = undefined;
 pub var term: ter.Term = undefined;
-pub var cursor: Cursor = .{ .row = 0, .col = 0 };
 pub var mode: Mode = .normal;
 pub var needs_redraw = false;
 pub var needs_reparse = false;
@@ -57,80 +51,84 @@ fn redraw() !void {
     try term.clear();
     const dims = try term.terminal_size();
 
-    var byte: usize = 0;
-    for (0..@min(buffer.content.items.len, dims.height)) |row| {
-        const line: []u8 = buffer.content.items[row].items;
+    for (0..dims.height) |term_row| {
+        const buffer_line = term_row + @as(usize, @intCast(buffer.offset.row));
+        if (buffer_line >= buffer.content.items.len) break;
+
+        var byte: usize = buffer.line_positions.items[buffer_line];
+
+        const line: []u8 = buffer.content.items[buffer_line].items;
         const line_view = try std.unicode.Utf8View.init(line);
         var line_iter = line_view.iterator();
-        try term.move_cursor(.{ .row = @intCast(row), .col = 0 });
+        try term.move_cursor(.{ .row = @intCast(term_row), .col = 0 });
 
-        var col: usize = 0;
+        var col: i32 = 0;
         while (line_iter.nextCodepoint()) |ch| {
             attrs_stream.reset();
 
-            if (col < dims.width) {
-                const ch_attrs: []co.Attr = b: for (buffer.spans.items) |span| {
-                    if (span.span.start_byte <= byte and span.span.end_byte > byte) {
-                        if (std.mem.eql(u8, span.node_type, "return") or
-                            std.mem.eql(u8, span.node_type, "primitive_type") or
-                            std.mem.eql(u8, span.node_type, "#include") or
-                            std.mem.eql(u8, span.node_type, "export") or
-                            std.mem.eql(u8, span.node_type, "function"))
-                        {
-                            break :b @constCast(co.attributes.keyword);
-                        }
-                        if (std.mem.eql(u8, span.node_type, "system_lib_string") or
-                            std.mem.eql(u8, span.node_type, "string_literal") or
-                            std.mem.eql(u8, span.node_type, "string"))
-                        {
-                            break :b @constCast(co.attributes.string);
-                        }
-                        if (std.mem.eql(u8, span.node_type, "number_literal")) {
-                            break :b @constCast(co.attributes.number);
-                        }
-                        if (std.mem.eql(u8, span.node_type, "comment")) {
-                            break :b @constCast(co.attributes.comment);
-                        }
+            if (col >= dims.width) break;
+            const ch_attrs: []co.Attr = b: for (buffer.spans.items) |span| {
+                if (span.span.start_byte <= byte and span.span.end_byte > byte) {
+                    if (std.mem.eql(u8, span.node_type, "return") or
+                        std.mem.eql(u8, span.node_type, "primitive_type") or
+                        std.mem.eql(u8, span.node_type, "#include") or
+                        std.mem.eql(u8, span.node_type, "export") or
+                        std.mem.eql(u8, span.node_type, "function"))
+                    {
+                        break :b @constCast(co.attributes.keyword);
                     }
-                } else {
-                    break :b @constCast(co.attributes.text);
-                };
-                try co.attributes.write(ch_attrs, attrs_stream.writer());
-
-                if (mode == .select) {
-                    if (buffer.selection.?.in_range(.{ .line = row, .character = col })) {
-                        try co.attributes.write(co.attributes.selection, attrs_stream.writer());
+                    if (std.mem.eql(u8, span.node_type, "system_lib_string") or
+                        std.mem.eql(u8, span.node_type, "string_literal") or
+                        std.mem.eql(u8, span.node_type, "string"))
+                    {
+                        break :b @constCast(co.attributes.string);
+                    }
+                    if (std.mem.eql(u8, span.node_type, "number_literal")) {
+                        break :b @constCast(co.attributes.number);
+                    }
+                    if (std.mem.eql(u8, span.node_type, "comment")) {
+                        break :b @constCast(co.attributes.comment);
                     }
                 }
+            } else {
+                break :b @constCast(co.attributes.text);
+            };
+            try co.attributes.write(ch_attrs, attrs_stream.writer());
 
-                if (buffer.diagnostics.items.len > 0) {
-                    for (buffer.diagnostics.items) |diagnostic| {
-                        const range = diagnostic.range;
-                        const in_range = (row > range.start.line and row < range.end.line) or
-                            (row == range.start.line and col >= range.start.character and col < range.end.character);
-                        if (in_range) {
-                            try co.attributes.write(co.attributes.diagnostic_error, attrs_stream.writer());
-                            break;
-                        }
-                    }
+            if (mode == .select) {
+                if (buffer.selection.?.in_range(.{ .row = @intCast(buffer_line), .col = col })) {
+                    try co.attributes.write(co.attributes.selection, attrs_stream.writer());
                 }
-
-                attrs = attrs_stream.getWritten();
-                if (last_attrs == null or !std.mem.eql(u8, attrs, last_attrs.?)) {
-                    term.reset_attributes() catch {};
-                    try term.write(attrs);
-                    @memcpy(&last_attrs_buf, &attrs_buf);
-                    last_attrs = last_attrs_buf[0..try attrs_stream.getPos()];
-                }
-
-                try term.format("{u}", .{ch});
             }
+
+            if (buffer.diagnostics.items.len > 0) {
+                for (buffer.diagnostics.items) |diagnostic| {
+                    const range = diagnostic.range;
+                    const in_range = (buffer_line > range.start.line and buffer_line < range.end.line) or
+                        (buffer_line == range.start.line and col >= range.start.character and col < range.end.character);
+                    if (in_range) {
+                        try co.attributes.write(co.attributes.diagnostic_error, attrs_stream.writer());
+                        break;
+                    }
+                }
+            }
+
+            attrs = attrs_stream.getWritten();
+            if (last_attrs == null or !std.mem.eql(u8, attrs, last_attrs.?)) {
+                term.reset_attributes() catch {};
+                try term.write(attrs);
+                @memcpy(&last_attrs_buf, &attrs_buf);
+                last_attrs = last_attrs_buf[0..try attrs_stream.getPos()];
+            }
+
+            try term.format("{u}", .{ch});
+
             byte += try std.unicode.utf8CodepointSequenceLength(ch);
             col += 1;
         }
         byte += 1;
     }
-    try term.move_cursor(cursor);
+    try term.move_cursor(buffer.cursor.apply_offset(buffer.offset.negate()));
 
     switch (mode) {
         .normal, .select => _ = try term.write(ter.cursor_type.steady_block),
@@ -180,6 +178,7 @@ pub fn main() !void {
     buffer = try buf.Buffer.init(allocator, path, file_content);
     defer buffer.deinit();
     try buffer.ts_parse();
+    try buffer.update_line_positions();
 
     term = try ter.Term.init(std_out.writer().any());
     defer term.deinit();
@@ -219,13 +218,13 @@ pub fn main() !void {
 
                 // single-key global
                 if (code == .up) {
-                    buffer.move_cursor(.{ .row = cursor.row - 1, .col = cursor.col });
+                    buffer.move_cursor(.{ .row = buffer.cursor.row - 1, .col = buffer.cursor.col });
                 } else if (code == .down) {
-                    buffer.move_cursor(.{ .row = cursor.row + 1, .col = cursor.col });
+                    buffer.move_cursor(.{ .row = buffer.cursor.row + 1, .col = buffer.cursor.col });
                 } else if (code == .left) {
-                    buffer.move_cursor(.{ .row = cursor.row, .col = cursor.col - 1 });
+                    buffer.move_cursor(.{ .row = buffer.cursor.row, .col = buffer.cursor.col - 1 });
                 } else if (code == .right) {
-                    buffer.move_cursor(.{ .row = cursor.row, .col = cursor.col + 1 });
+                    buffer.move_cursor(.{ .row = buffer.cursor.row, .col = buffer.cursor.col + 1 });
                 } else if (code == .escape) {
                     mode = .normal;
                     needs_redraw = true;
@@ -235,13 +234,13 @@ pub fn main() !void {
                 } else if (normal_or_select and ch == 'q') {
                     break :main_loop;
                 } else if (normal_or_select and ch == 'i') {
-                    buffer.move_cursor(.{ .row = cursor.row - 1, .col = cursor.col });
+                    buffer.move_cursor(.{ .row = buffer.cursor.row - 1, .col = buffer.cursor.col });
                 } else if (normal_or_select and ch == 'k') {
-                    buffer.move_cursor(.{ .row = cursor.row + 1, .col = cursor.col });
+                    buffer.move_cursor(.{ .row = buffer.cursor.row + 1, .col = buffer.cursor.col });
                 } else if (normal_or_select and ch == 'j') {
-                    buffer.move_cursor(.{ .row = cursor.row, .col = cursor.col - 1 });
+                    buffer.move_cursor(.{ .row = buffer.cursor.row, .col = buffer.cursor.col - 1 });
                 } else if (normal_or_select and ch == 'l') {
-                    buffer.move_cursor(.{ .row = cursor.row, .col = cursor.col + 1 });
+                    buffer.move_cursor(.{ .row = buffer.cursor.row, .col = buffer.cursor.col + 1 });
 
                     // single-key normal mode
                 } else if (mode == .normal and ch == 's') {
@@ -293,6 +292,7 @@ pub fn main() !void {
         if (needs_reparse) {
             needs_reparse = false;
             try buffer.ts_parse();
+            try buffer.update_line_positions();
             try lsp_conn.did_change();
         }
         if (needs_redraw) {
@@ -316,7 +316,6 @@ comptime {
 
 pub fn testing_setup() !void {
     const alloc = std.testing.allocator;
-    cursor = .{ .row = 0, .col = 0 };
     term = ter.Term{ .writer = .{ .unbuffered_writer = std.io.null_writer.any() } };
     ft.file_type = std.StringHashMap(ft.FileType).init(alloc);
 }
