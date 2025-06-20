@@ -106,8 +106,9 @@ fn redraw() !void {
                 if (buffer.diagnostics.items.len > 0) {
                     for (buffer.diagnostics.items) |diagnostic| {
                         const range = diagnostic.range;
-                        // TODO: multiline diagnostics
-                        if (row == range.start.line and col >= range.start.character and col <= range.end.character) {
+                        const in_range = (row > range.start.line and row < range.end.line) or
+                            (row == range.start.line and col >= range.start.character and col < range.end.character);
+                        if (in_range) {
                             try co.attributes.write(co.attributes.diagnostic_error, attrs_stream.writer());
                             break;
                         }
