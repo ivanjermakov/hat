@@ -52,12 +52,13 @@ fn redraw() !void {
     const dims = try term.terminal_size();
 
     for (0..dims.height) |term_row| {
-        const buffer_line = term_row + @as(usize, @intCast(buffer.offset.row));
+        const buffer_line = @as(i32, @intCast(term_row)) + buffer.offset.row;
+        if (buffer_line < 0) continue;
         if (buffer_line >= buffer.content.items.len) break;
 
-        var byte: usize = buffer.line_positions.items[buffer_line];
+        var byte: usize = buffer.line_positions.items[@intCast(buffer_line)];
 
-        const line: []u8 = buffer.content.items[buffer_line].items;
+        const line: []u8 = buffer.content.items[@intCast(buffer_line)].items;
         const line_view = try std.unicode.Utf8View.init(line);
         var line_iter = line_view.iterator();
         try term.move_cursor(.{ .row = @intCast(term_row), .col = 0 });

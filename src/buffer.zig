@@ -289,6 +289,7 @@ pub const Buffer = struct {
 
     fn validate_cursor(self: *Buffer, cursor: Cursor) ?Cursor {
         const col: i32 = b: {
+            if (cursor.row < 0) return null;
             const dims = main.term.terminal_size() catch unreachable;
             const term_cursor = cursor.apply_offset(self.offset.negate());
             const in_term = term_cursor.row >= 0 and term_cursor.row < dims.height and
