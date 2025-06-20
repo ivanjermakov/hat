@@ -172,6 +172,7 @@ pub const Buffer = struct {
         const cbp = try self.cursor_byte_pos(main.cursor);
         const row: usize = @intCast(main.cursor.row);
         var line = try self.content.items[row].toOwnedSlice();
+        defer self.allocator.free(line);
         try self.content.items[row].appendSlice(line[0..@intCast(cbp.col)]);
         var new_line = std.ArrayList(u8).init(main.allocator);
         try new_line.appendSlice(line[@intCast(cbp.col)..]);
