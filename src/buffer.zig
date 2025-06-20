@@ -313,7 +313,7 @@ pub const Buffer = struct {
     }
 
     fn test_setup(content: []const u8) !Buffer {
-        main.testing_setup();
+        try main.testing_setup();
         const allocator = std.testing.allocator;
         const buffer = try init(allocator, "test.txt", content);
         return buffer;

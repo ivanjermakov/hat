@@ -28,7 +28,7 @@ pub const cursor_type = union {
 pub const Term = struct {
     writer: std.io.BufferedWriter(8192, std.io.AnyWriter),
 
-    pub fn init(std_out: std.fs.File) !Term {
+    pub fn init(std_out_writer: std.io.AnyWriter) !Term {
         _ = c.setlocale(c.LC_ALL, "");
 
         var tty: c.struct_termios = undefined;
@@ -39,7 +39,7 @@ pub const Term = struct {
         fs.make_nonblock(std.posix.STDIN_FILENO);
 
         var term = Term{
-            .writer = .{ .unbuffered_writer = std_out.writer().any() },
+            .writer = .{ .unbuffered_writer = std_out_writer },
         };
 
         try term.switch_buf(true);

@@ -119,10 +119,9 @@ fn redraw() !void {
                 if (last_attrs == null or !std.mem.eql(u8, attrs, last_attrs.?)) {
                     term.reset_attributes() catch {};
                     try term.write(attrs);
+                    @memcpy(&last_attrs_buf, &attrs_buf);
+                    last_attrs = last_attrs_buf[0..try attrs_stream.getPos()];
                 }
-
-                @memcpy(&last_attrs_buf, &attrs_buf);
-                last_attrs = last_attrs_buf[0..try attrs_stream.getPos()];
 
                 try term.format("{u}", .{ch});
             }
@@ -182,7 +181,7 @@ pub fn main() !void {
     defer buffer.deinit();
     try buffer.ts_parse();
 
-    term = try ter.Term.init(std_out);
+    term = try ter.Term.init(std_out.writer().any());
     defer term.deinit();
 
     try redraw();
@@ -315,9 +314,9 @@ comptime {
     std.testing.refAllDecls(@This());
 }
 
-pub fn testing_setup() void {
+pub fn testing_setup() !void {
     const alloc = std.testing.allocator;
     cursor = .{ .row = 0, .col = 0 };
-    term = .{ .writer = std.io.BufferedWriter(8192, std.io.AnyWriter){ .unbuffered_writer = std.io.null_writer.any() } };
+    term = ter.Term{ .writer = .{ .unbuffered_writer = std.io.null_writer.any() } };
     ft.file_type = std.StringHashMap(ft.FileType).init(alloc);
 }
