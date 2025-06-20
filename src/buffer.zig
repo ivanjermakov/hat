@@ -170,7 +170,7 @@ pub const Buffer = struct {
 
     pub fn insert_newline(self: *Buffer) !void {
         const cbp = try self.cursor_byte_pos(main.cursor);
-        const row: usize = @intCast(main.cursor.row);
+        const row: usize = cbp.line;
         var line = try self.content.items[row].toOwnedSlice();
         defer self.allocator.free(line);
         try self.content.items[row].appendSlice(line[0..cbp.character]);
@@ -184,10 +184,10 @@ pub const Buffer = struct {
 
     pub fn remove_char(self: *Buffer) !void {
         const cbp = try self.cursor_byte_pos(main.cursor);
-        var line = &self.content.items[@intCast(main.cursor.row)];
+        var line = &self.content.items[cbp.line];
         if (main.cursor.col == line.items.len) {
             if (main.cursor.row < self.content.items.len - 1) {
-                try self.join_with_line_below(@intCast(main.cursor.row));
+                try self.join_with_line_below(cbp.line);
             } else {
                 return;
             }
@@ -199,13 +199,14 @@ pub const Buffer = struct {
 
     pub fn remove_prev_char(self: *Buffer) !void {
         const cbp = try self.cursor_byte_pos(main.cursor);
-        var line = &self.content.items[@intCast(main.cursor.row)];
+        var line = &self.content.items[cbp.line];
         if (cbp.character == 0) {
             if (main.cursor.row > 0) {
-                try self.join_with_line_below(@intCast(main.cursor.row - 1));
+                const prev_line = &self.content.items[cbp.line - 1];
+                const col = prev_line.items.len;
+                try self.join_with_line_below(cbp.line - 1);
                 main.cursor.row -= 1;
-                const joined_line = self.content.items[@intCast(main.cursor.row)];
-                main.cursor.col = @intCast(joined_line.items.len);
+                main.cursor.col = @intCast(col);
             } else {
                 return;
             }
