@@ -34,12 +34,14 @@ pub const color = enum {
 pub const Attr = union(enum) {
     fg: RgbColor,
     bg: RgbColor,
+    underline: RgbColor,
     curly_underline,
 
     pub fn write(self: Attr, writer: anytype) !void {
         switch (self) {
             .fg => |c| try std.fmt.format(writer, "\x1b[38;2;{};{};{}m", .{ c.r, c.g, c.b }),
             .bg => |c| try std.fmt.format(writer, "\x1b[48;2;{};{};{}m", .{ c.r, c.g, c.b }),
+            .underline => |c| try std.fmt.format(writer, "\x1b[58;2;{};{};{}m", .{ c.r, c.g, c.b }),
             .curly_underline => _ = try writer.write("\x1b[4:3m"),
         }
     }
@@ -52,7 +54,7 @@ pub const attributes = enum {
     pub const string = &[_]Attr{.{ .fg = color.green }};
     pub const number = &[_]Attr{.{ .fg = color.yellow }};
     pub const comment = &[_]Attr{.{ .fg = color.gray7 }};
-    pub const diagnostic_error = &[_]Attr{.curly_underline};
+    pub const diagnostic_error = &[_]Attr{ .curly_underline, .{ .underline = color.red } };
 
     pub fn write(attrs: []const Attr, writer: anytype) !void {
         for (attrs) |attr| {
