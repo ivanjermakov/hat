@@ -140,7 +140,6 @@ fn redraw() !void {
             byte += try std.unicode.utf8CodepointSequenceLength(ch);
             term_col += 1;
         }
-        byte += 1;
     }
     try term.move_cursor(buffer.cursor.apply_offset(buffer.offset.negate()));
 

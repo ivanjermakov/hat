@@ -293,6 +293,8 @@ pub const Buffer = struct {
             while (line_iter.nextCodepoint()) |ch| {
                 byte += try std.unicode.utf8CodepointSequenceLength(ch);
             }
+            // new line
+            byte += 1;
         }
     }
 
