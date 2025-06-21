@@ -231,13 +231,13 @@ pub fn main() !void {
 
                 // single-key global
                 if (code == .up) {
-                    buffer.move_cursor(.{ .row = buffer.cursor.row - 1, .col = buffer.cursor.col });
+                    try buffer.move_cursor(.{ .row = buffer.cursor.row - 1, .col = buffer.cursor.col });
                 } else if (code == .down) {
-                    buffer.move_cursor(.{ .row = buffer.cursor.row + 1, .col = buffer.cursor.col });
+                    try buffer.move_cursor(.{ .row = buffer.cursor.row + 1, .col = buffer.cursor.col });
                 } else if (code == .left) {
-                    buffer.move_cursor(.{ .row = buffer.cursor.row, .col = buffer.cursor.col - 1 });
+                    try buffer.move_cursor(.{ .row = buffer.cursor.row, .col = buffer.cursor.col - 1 });
                 } else if (code == .right) {
-                    buffer.move_cursor(.{ .row = buffer.cursor.row, .col = buffer.cursor.col + 1 });
+                    try buffer.move_cursor(.{ .row = buffer.cursor.row, .col = buffer.cursor.col + 1 });
                 } else if (code == .escape) {
                     mode = .normal;
                     needs_redraw = true;
@@ -247,13 +247,13 @@ pub fn main() !void {
                 } else if (normal_or_select and ch == 'q') {
                     break :main_loop;
                 } else if (normal_or_select and ch == 'i') {
-                    buffer.move_cursor(.{ .row = buffer.cursor.row - 1, .col = buffer.cursor.col });
+                    try buffer.move_cursor(.{ .row = buffer.cursor.row - 1, .col = buffer.cursor.col });
                 } else if (normal_or_select and ch == 'k') {
-                    buffer.move_cursor(.{ .row = buffer.cursor.row + 1, .col = buffer.cursor.col });
+                    try buffer.move_cursor(.{ .row = buffer.cursor.row + 1, .col = buffer.cursor.col });
                 } else if (normal_or_select and ch == 'j') {
-                    buffer.move_cursor(.{ .row = buffer.cursor.row, .col = buffer.cursor.col - 1 });
+                    try buffer.move_cursor(.{ .row = buffer.cursor.row, .col = buffer.cursor.col - 1 });
                 } else if (normal_or_select and ch == 'l') {
-                    buffer.move_cursor(.{ .row = buffer.cursor.row, .col = buffer.cursor.col + 1 });
+                    try buffer.move_cursor(.{ .row = buffer.cursor.row, .col = buffer.cursor.col + 1 });
 
                     // single-key normal mode
                 } else if (mode == .normal and ch == 's') {

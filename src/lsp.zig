@@ -128,7 +128,7 @@ pub const LspConnection = struct {
                             if (std.mem.eql(u8, loc.uri, main.buffer.uri)) {
                                 log.log(@This(), "jump to {}\n", .{loc.range.start});
                                 const new_cursor = buf.Cursor.from_lsp(loc.range.start);
-                                main.buffer.move_cursor(new_cursor);
+                                try main.buffer.move_cursor(new_cursor);
                             } else {
                                 log.log(@This(), "TODO: jump to another file {s}\n", .{loc.uri});
                             }

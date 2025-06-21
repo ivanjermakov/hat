@@ -159,11 +159,11 @@ pub const Buffer = struct {
         };
     }
 
-    pub fn move_cursor(self: *Buffer, new_buf_cursor: Cursor) void {
+    pub fn move_cursor(self: *Buffer, new_buf_cursor: Cursor) !void {
         const old_position = self.position();
 
         if (new_buf_cursor.row < 0) return;
-        const dims = main.term.terminal_size() catch unreachable;
+        const dims = try main.term.terminal_size();
         self.scroll_for_cursor(new_buf_cursor);
 
         const term_cursor = new_buf_cursor.apply_offset(self.offset.negate());
@@ -213,7 +213,7 @@ pub const Buffer = struct {
                 try self.insert_newline();
             } else {
                 try line.insertSlice(@intCast(cbp.col), ch);
-                self.cursor.col += 1;
+                try self.move_cursor(self.cursor.apply_offset(.{.row = 0, .col = 1}));
             }
         }
         main.needs_reparse = true;
@@ -228,8 +228,7 @@ pub const Buffer = struct {
         var new_line = std.ArrayList(u8).init(main.allocator);
         try new_line.appendSlice(line[@intCast(cbp.col)..]);
         try self.content.insert(@intCast(cbp.row + 1), new_line);
-        self.cursor.row += 1;
-        self.cursor.col = 0;
+        try self.move_cursor(.{.row = self.cursor.row + 1, .col = 0});
         main.needs_reparse = true;
     }
 
@@ -256,13 +255,12 @@ pub const Buffer = struct {
                 const prev_line = &self.content.items[@intCast(cbp.row - 1)];
                 const col = try utf8_character_len(prev_line.items);
                 try self.join_with_line_below(@intCast(cbp.row - 1));
-                self.cursor.row -= 1;
-                self.cursor.col = @intCast(col);
+                try self.move_cursor(.{.row = self.cursor.row - 1, .col = @intCast(col)});
             } else {
                 return;
             }
         } else {
-            self.cursor.col -= 1;
+            try self.move_cursor(self.cursor.apply_offset(.{.row = 0, .col = -1}));
             const col_byte = try utf8_byte_pos(line.items, @intCast(self.cursor.col));
             _ = line.orderedRemove(col_byte);
             main.needs_reparse = true;
