@@ -67,6 +67,7 @@ pub const LspConnection = struct {
     }
 
     pub fn update(self: *LspConnection) !void {
+        const buffer = main.editor.active_buffer.?;
         const raw_msgs = try self.poll() orelse return;
         defer {
             for (raw_msgs) |msg| self.allocator.free(msg);
@@ -125,10 +126,10 @@ pub const LspConnection = struct {
                             },
                         };
                         if (location) |loc| {
-                            if (std.mem.eql(u8, loc.uri, main.buffer.uri)) {
+                            if (std.mem.eql(u8, loc.uri, buffer.uri)) {
                                 log.log(@This(), "jump to {}\n", .{loc.range.start});
                                 const new_cursor = buf.Cursor.from_lsp(loc.range.start);
-                                try main.buffer.move_cursor(new_cursor);
+                                try buffer.move_cursor(new_cursor);
                             } else {
                                 log.log(@This(), "TODO: jump to another file {s}\n", .{loc.uri});
                             }
@@ -145,9 +146,9 @@ pub const LspConnection = struct {
                             .{},
                         );
                         log.log(@This(), "got {} diagnostics\n", .{params_typed.value.diagnostics.len});
-                        main.buffer.diagnostics.clearRetainingCapacity();
-                        try main.buffer.diagnostics.appendSlice(params_typed.value.diagnostics);
-                        main.needs_redraw = true;
+                        buffer.diagnostics.clearRetainingCapacity();
+                        try buffer.diagnostics.appendSlice(params_typed.value.diagnostics);
+                        main.editor.needs_redraw = true;
                     }
                 },
                 else => {},
@@ -164,9 +165,10 @@ pub const LspConnection = struct {
     }
 
     pub fn go_to_definition(self: *LspConnection) !void {
-        const position = main.buffer.position();
+        const buffer = main.editor.active_buffer.?;
+        const position = buffer.position();
         try self.send_request("textDocument/definition", .{
-            .textDocument = .{ .uri = main.buffer.uri },
+            .textDocument = .{ .uri = buffer.uri },
             .position = .{
                 .line = @intCast(position.row),
                 .character = @intCast(position.col),
@@ -175,23 +177,25 @@ pub const LspConnection = struct {
     }
 
     pub fn did_open(self: *LspConnection) !void {
+        const buffer = main.editor.active_buffer.?;
         try self.send_notification("textDocument/didOpen", .{
             .textDocument = .{
-                .uri = main.buffer.uri,
+                .uri = buffer.uri,
                 .languageId = "",
                 .version = 0,
-                .text = main.buffer.content_raw.items,
+                .text = buffer.content_raw.items,
             },
         });
     }
 
     pub fn did_change(self: *LspConnection) !void {
+        const buffer = main.editor.active_buffer.?;
         const changes = [_]lsp.types.TextDocumentContentChangeEvent{
-            .{ .literal_1 = .{ .text = main.buffer.content_raw.items } },
+            .{ .literal_1 = .{ .text = buffer.content_raw.items } },
         };
-        main.buffer.diagnostics.clearRetainingCapacity();
+        buffer.diagnostics.clearRetainingCapacity();
         try self.send_notification("textDocument/didChange", .{
-            .textDocument = .{ .uri = main.buffer.uri, .version = 0 },
+            .textDocument = .{ .uri = buffer.uri, .version = 0 },
             .contentChanges = &changes,
         });
     }

@@ -7,6 +7,7 @@ const c = @cImport({
 const main = @import("main.zig");
 const buf = @import("buffer.zig");
 const co = @import("color.zig");
+const log = @import("log.zig");
 const fs = @import("fs.zig");
 
 pub const TerminalDimensions = struct {
@@ -101,5 +102,117 @@ pub const Term = struct {
 
     pub fn format(self: *Term, comptime str: []const u8, args: anytype) !void {
         try std.fmt.format(self.writer.writer(), str, args);
+    }
+
+    pub fn redraw(self: *Term) !void {
+        const buffer = main.editor.active_buffer.?;
+
+        var attrs_buf = std.mem.zeroes([128]u8);
+        var attrs_stream = std.io.fixedBufferStream(&attrs_buf);
+        var attrs: []const u8 = undefined;
+        var last_attrs_buf = std.mem.zeroes([128]u8);
+        var last_attrs: ?[]const u8 = null;
+
+        try self.clear();
+        const dims = try self.terminal_size();
+
+        for (0..dims.height) |term_row| {
+            const buffer_row = @as(i32, @intCast(term_row)) + buffer.offset.row;
+            if (buffer_row < 0) continue;
+            if (buffer_row >= buffer.content.items.len) break;
+
+            var byte: usize = buffer.line_positions.items[@intCast(buffer_row)];
+            var term_col: i32 = 0;
+
+            const line: []u8 = buffer.content.items[@intCast(buffer_row)].items;
+            const line_view = try std.unicode.Utf8View.init(line);
+            var line_iter = line_view.iterator();
+            try self.move_cursor(.{ .row = @intCast(term_row), .col = 0 });
+
+            if (buffer.offset.col > 0) {
+                for (0..@intCast(buffer.offset.col)) |_| {
+                    if (line_iter.nextCodepoint()) |ch| {
+                        byte += try std.unicode.utf8CodepointSequenceLength(ch);
+                    }
+                }
+            } else {
+                for (0..@intCast(-buffer.offset.col)) |_| {
+                    try self.write(" ");
+                }
+            }
+
+            while (line_iter.nextCodepoint()) |ch| {
+                attrs_stream.reset();
+                const buffer_col = @as(i32, @intCast(term_col)) + buffer.offset.col;
+
+                if (term_col >= dims.width) break;
+                const ch_attrs: []co.Attr = b: for (buffer.spans.items) |span| {
+                    if (span.span.start_byte <= byte and span.span.end_byte > byte) {
+                        if (std.mem.eql(u8, span.node_type, "return") or
+                            std.mem.eql(u8, span.node_type, "primitive_type") or
+                            std.mem.eql(u8, span.node_type, "#include") or
+                            std.mem.eql(u8, span.node_type, "export") or
+                            std.mem.eql(u8, span.node_type, "function"))
+                        {
+                            break :b @constCast(co.attributes.keyword);
+                        }
+                        if (std.mem.eql(u8, span.node_type, "system_lib_string") or
+                            std.mem.eql(u8, span.node_type, "string_literal") or
+                            std.mem.eql(u8, span.node_type, "string"))
+                        {
+                            break :b @constCast(co.attributes.string);
+                        }
+                        if (std.mem.eql(u8, span.node_type, "number_literal")) {
+                            break :b @constCast(co.attributes.number);
+                        }
+                        if (std.mem.eql(u8, span.node_type, "comment")) {
+                            break :b @constCast(co.attributes.comment);
+                        }
+                    }
+                } else {
+                    break :b @constCast(co.attributes.text);
+                };
+                try co.attributes.write(ch_attrs, attrs_stream.writer());
+
+                if (main.editor.mode == .select) {
+                    if (buffer.selection.?.in_range(.{ .row = @intCast(buffer_row), .col = @intCast(buffer_col) })) {
+                        try co.attributes.write(co.attributes.selection, attrs_stream.writer());
+                    }
+                }
+
+                if (buffer.diagnostics.items.len > 0) {
+                    for (buffer.diagnostics.items) |diagnostic| {
+                        const range = diagnostic.range;
+                        const in_range = (buffer_row > range.start.line and buffer_row < range.end.line) or
+                            (buffer_row == range.start.line and buffer_col >= range.start.character and buffer_col < range.end.character);
+                        if (in_range) {
+                            try co.attributes.write(co.attributes.diagnostic_error, attrs_stream.writer());
+                            break;
+                        }
+                    }
+                }
+
+                attrs = attrs_stream.getWritten();
+                if (last_attrs == null or !std.mem.eql(u8, attrs, last_attrs.?)) {
+                    self.reset_attributes() catch {};
+                    try self.write(attrs);
+                    @memcpy(&last_attrs_buf, &attrs_buf);
+                    last_attrs = last_attrs_buf[0..try attrs_stream.getPos()];
+                }
+
+                try self.format("{u}", .{ch});
+
+                byte += try std.unicode.utf8CodepointSequenceLength(ch);
+                term_col += 1;
+            }
+        }
+        try self.move_cursor(buffer.cursor.apply_offset(buffer.offset.negate()));
+
+        switch (main.editor.mode) {
+            .normal, .select => _ = try self.write(cursor_type.steady_block),
+            .insert => _ = try self.write(cursor_type.steady_bar),
+        }
+
+        try self.flush();
     }
 };

@@ -185,7 +185,7 @@ pub const Buffer = struct {
         self.scroll_for_cursor(valid_cursor);
 
         (&self.cursor).* = valid_cursor;
-        if (main.mode == .select) {
+        if (main.editor.mode == .select) {
             const selection = &self.selection.?;
             const cursor_was_at_start = std.meta.eql(selection.start, old_position);
             if (cursor_was_at_start) {
@@ -199,7 +199,7 @@ pub const Buffer = struct {
                 selection.end = tmp;
             }
         }
-        main.needs_redraw = true;
+        main.editor.needs_redraw = true;
     }
 
     pub fn insert_text(self: *Buffer, text: []u8) !void {
@@ -216,7 +216,7 @@ pub const Buffer = struct {
                 try self.move_cursor(self.cursor.apply_offset(.{.row = 0, .col = 1}));
             }
         }
-        main.needs_reparse = true;
+        main.editor.needs_reparse = true;
     }
 
     pub fn insert_newline(self: *Buffer) !void {
@@ -229,7 +229,7 @@ pub const Buffer = struct {
         try new_line.appendSlice(line[@intCast(cbp.col)..]);
         try self.content.insert(@intCast(cbp.row + 1), new_line);
         try self.move_cursor(.{.row = self.cursor.row + 1, .col = 0});
-        main.needs_reparse = true;
+        main.editor.needs_reparse = true;
     }
 
     pub fn remove_char(self: *Buffer) !void {
@@ -243,7 +243,7 @@ pub const Buffer = struct {
             }
         } else {
             _ = line.orderedRemove(@intCast(cbp.col));
-            main.needs_reparse = true;
+            main.editor.needs_reparse = true;
         }
     }
 
@@ -263,7 +263,7 @@ pub const Buffer = struct {
             try self.move_cursor(self.cursor.apply_offset(.{.row = 0, .col = -1}));
             const col_byte = try utf8_byte_pos(line.items, @intCast(self.cursor.col));
             _ = line.orderedRemove(col_byte);
-            main.needs_reparse = true;
+            main.editor.needs_reparse = true;
         }
     }
 
@@ -272,7 +272,7 @@ pub const Buffer = struct {
         var next_line = self.content.orderedRemove(row + 1);
         defer next_line.deinit();
         try line.appendSlice(next_line.items);
-        main.needs_reparse = true;
+        main.editor.needs_reparse = true;
     }
 
     pub fn select_char(self: *Buffer) !void {
@@ -358,22 +358,22 @@ pub const Buffer = struct {
         const dims = main.term.terminal_size() catch unreachable;
         if (term_cursor.row < 0 and new_buf_cursor.row >= 0) {
             self.offset.row += term_cursor.row;
-            main.needs_redraw = true;
+            main.editor.needs_redraw = true;
         }
         if (term_cursor.row >= dims.height and new_buf_cursor.row < self.content.items.len - 1) {
             self.offset.row += 1 + term_cursor.row - @as(i32, @intCast(dims.height));
-            main.needs_redraw = true;
+            main.editor.needs_redraw = true;
         }
         if (term_cursor.col < 0 and new_buf_cursor.col >= 0) {
             self.offset.col += term_cursor.col;
-            main.needs_redraw = true;
+            main.editor.needs_redraw = true;
         }
         if (term_cursor.col >= dims.width and new_buf_cursor.row >= 0 and new_buf_cursor.row < self.content.items.len - 1) {
             const line = &self.content.items[@intCast(new_buf_cursor.row)];
             const line_len = utf8_character_len(line.items) catch return;
             if (new_buf_cursor.col <= line_len) {
                 self.offset.col += 1 + term_cursor.col - @as(i32, @intCast(dims.width));
-                main.needs_redraw = true;
+                main.editor.needs_redraw = true;
             }
         }
     }

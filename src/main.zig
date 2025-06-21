@@ -1,6 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const dl = std.DynLib;
+const edi = @import("editor.zig");
 const inp = @import("input.zig");
 const ft = @import("file_type.zig");
 const buf = @import("buffer.zig");
@@ -8,16 +9,6 @@ const co = @import("color.zig");
 const ter = @import("term.zig");
 const lsp = @import("lsp.zig");
 const log = @import("log.zig");
-
-const Mode = enum {
-    normal,
-    select,
-    insert,
-
-    pub fn normal_or_select(self: Mode) bool {
-        return self == .normal or self == .select;
-    }
-};
 
 const Args = struct {
     path: ?[]u8,
@@ -29,127 +20,15 @@ pub var allocator: std.mem.Allocator = undefined;
 pub const std_out = std.io.getStdOut();
 pub const std_in = std.io.getStdIn();
 
-pub var buffer: buf.Buffer = undefined;
+pub var editor: edi.Editor = undefined;
 pub var term: ter.Term = undefined;
-pub var mode: Mode = .normal;
-pub var needs_redraw = false;
-pub var needs_reparse = false;
+
 pub var log_enabled = true;
 pub var args: Args = .{
     .path = null,
     .log = false,
 };
 pub var key_queue: std.ArrayList(inp.Key) = undefined;
-
-fn redraw() !void {
-    var attrs_buf = std.mem.zeroes([128]u8);
-    var attrs_stream = std.io.fixedBufferStream(&attrs_buf);
-    var attrs: []const u8 = undefined;
-    var last_attrs_buf = std.mem.zeroes([128]u8);
-    var last_attrs: ?[]const u8 = null;
-
-    try term.clear();
-    const dims = try term.terminal_size();
-
-    for (0..dims.height) |term_row| {
-        const buffer_row = @as(i32, @intCast(term_row)) + buffer.offset.row;
-        if (buffer_row < 0) continue;
-        if (buffer_row >= buffer.content.items.len) break;
-
-        var byte: usize = buffer.line_positions.items[@intCast(buffer_row)];
-        var term_col: i32 = 0;
-
-        const line: []u8 = buffer.content.items[@intCast(buffer_row)].items;
-        const line_view = try std.unicode.Utf8View.init(line);
-        var line_iter = line_view.iterator();
-        try term.move_cursor(.{ .row = @intCast(term_row), .col = 0 });
-
-        if (buffer.offset.col > 0) {
-            for (0..@intCast(buffer.offset.col)) |_| {
-                if (line_iter.nextCodepoint()) |ch| {
-                    byte += try std.unicode.utf8CodepointSequenceLength(ch);
-                }
-            }
-        } else {
-            for (0..@intCast(-buffer.offset.col)) |_| {
-                try term.write(" ");
-            }
-        }
-
-        while (line_iter.nextCodepoint()) |ch| {
-            attrs_stream.reset();
-            const buffer_col = @as(i32, @intCast(term_col)) + buffer.offset.col;
-
-            if (term_col >= dims.width) break;
-            const ch_attrs: []co.Attr = b: for (buffer.spans.items) |span| {
-                if (span.span.start_byte <= byte and span.span.end_byte > byte) {
-                    if (std.mem.eql(u8, span.node_type, "return") or
-                        std.mem.eql(u8, span.node_type, "primitive_type") or
-                        std.mem.eql(u8, span.node_type, "#include") or
-                        std.mem.eql(u8, span.node_type, "export") or
-                        std.mem.eql(u8, span.node_type, "function"))
-                    {
-                        break :b @constCast(co.attributes.keyword);
-                    }
-                    if (std.mem.eql(u8, span.node_type, "system_lib_string") or
-                        std.mem.eql(u8, span.node_type, "string_literal") or
-                        std.mem.eql(u8, span.node_type, "string"))
-                    {
-                        break :b @constCast(co.attributes.string);
-                    }
-                    if (std.mem.eql(u8, span.node_type, "number_literal")) {
-                        break :b @constCast(co.attributes.number);
-                    }
-                    if (std.mem.eql(u8, span.node_type, "comment")) {
-                        break :b @constCast(co.attributes.comment);
-                    }
-                }
-            } else {
-                break :b @constCast(co.attributes.text);
-            };
-            try co.attributes.write(ch_attrs, attrs_stream.writer());
-
-            if (mode == .select) {
-                if (buffer.selection.?.in_range(.{ .row = @intCast(buffer_row), .col = @intCast(buffer_col) })) {
-                    try co.attributes.write(co.attributes.selection, attrs_stream.writer());
-                }
-            }
-
-            if (buffer.diagnostics.items.len > 0) {
-                for (buffer.diagnostics.items) |diagnostic| {
-                    const range = diagnostic.range;
-                    const in_range = (buffer_row > range.start.line and buffer_row < range.end.line) or
-                        (buffer_row == range.start.line and buffer_col >= range.start.character and buffer_col < range.end.character);
-                    if (in_range) {
-                        try co.attributes.write(co.attributes.diagnostic_error, attrs_stream.writer());
-                        break;
-                    }
-                }
-            }
-
-            attrs = attrs_stream.getWritten();
-            if (last_attrs == null or !std.mem.eql(u8, attrs, last_attrs.?)) {
-                term.reset_attributes() catch {};
-                try term.write(attrs);
-                @memcpy(&last_attrs_buf, &attrs_buf);
-                last_attrs = last_attrs_buf[0..try attrs_stream.getPos()];
-            }
-
-            try term.format("{u}", .{ch});
-
-            byte += try std.unicode.utf8CodepointSequenceLength(ch);
-            term_col += 1;
-        }
-    }
-    try term.move_cursor(buffer.cursor.apply_offset(buffer.offset.negate()));
-
-    switch (mode) {
-        .normal, .select => _ = try term.write(ter.cursor_type.steady_block),
-        .insert => _ = try term.write(ter.cursor_type.steady_bar),
-    }
-
-    try term.flush();
-}
 
 pub fn main() !void {
     var debug_allocator: std.heap.DebugAllocator(.{ .stack_trace_frames = 10 }) = .init;
@@ -188,15 +67,16 @@ pub fn main() !void {
     const file_content = try file.readToEndAlloc(allocator, std.math.maxInt(usize));
     defer allocator.free(file_content);
 
-    buffer = try buf.Buffer.init(allocator, path, file_content);
-    defer buffer.deinit();
-    try buffer.ts_parse();
-    try buffer.update_line_positions();
+    editor = try edi.Editor.init(allocator);
+    defer editor.deinit();
+
+    var buffer = try buf.Buffer.init(allocator, path, file_content);
+    editor.needs_reparse = true;
+    try editor.buffers.append(&buffer);
+    editor.active_buffer = &buffer;
 
     term = try ter.Term.init(std_out.writer().any());
     defer term.deinit();
-
-    try redraw();
 
     const lsp_conf = lsp.LspConfig{ .cmd = &[_][]const u8{ "typescript-language-server", "--stdio" } };
     var lsp_conn = try lsp.LspConnection.connect(allocator, &lsp_conf);
@@ -225,7 +105,7 @@ pub fn main() !void {
                 if (key.printable != null and key.printable.?.len == 1) ch = key.printable.?[0];
 
                 const multiple_key = key_queue.items.len > 0;
-                const normal_or_select = mode.normal_or_select();
+                const normal_or_select = editor.mode.normal_or_select();
 
                 // TODO: crazy comptime
 
@@ -239,9 +119,9 @@ pub fn main() !void {
                 } else if (code == .right) {
                     try buffer.move_cursor(.{ .row = buffer.cursor.row, .col = buffer.cursor.col + 1 });
                 } else if (code == .escape) {
-                    mode = .normal;
-                    needs_redraw = true;
-                    log.log(@This(), "mode: {}\n", .{mode});
+                    editor.mode = .normal;
+                    editor.needs_redraw = true;
+                    log.log(@This(), "mode: {}\n", .{editor.mode});
 
                     // single-key normal or select mode
                 } else if (normal_or_select and ch == 'q') {
@@ -256,26 +136,26 @@ pub fn main() !void {
                     try buffer.move_cursor(.{ .row = buffer.cursor.row, .col = buffer.cursor.col + 1 });
 
                     // single-key normal mode
-                } else if (mode == .normal and ch == 's') {
-                    mode = .select;
+                } else if (editor.mode == .normal and ch == 's') {
+                    editor.mode = .select;
                     try buffer.select_char();
-                    needs_redraw = true;
-                    log.log(@This(), "mode: {}\n", .{mode});
-                } else if (mode == .normal and ch == 'h') {
-                    mode = .insert;
-                    needs_redraw = true;
-                    log.log(@This(), "mode: {}\n", .{mode});
+                    editor.needs_redraw = true;
+                    log.log(@This(), "mode: {}\n", .{editor.mode});
+                } else if (editor.mode == .normal and ch == 'h') {
+                    editor.mode = .insert;
+                    editor.needs_redraw = true;
+                    log.log(@This(), "mode: {}\n", .{editor.mode});
 
                     // single-key insert mode
-                } else if (mode == .insert and code == .delete) {
+                } else if (editor.mode == .insert and code == .delete) {
                     try buffer.remove_char();
-                } else if (mode == .insert and code == .backspace) {
+                } else if (editor.mode == .insert and code == .backspace) {
                     try buffer.remove_prev_char();
-                } else if (mode == .insert and code == .enter) {
+                } else if (editor.mode == .insert and code == .enter) {
                     try buffer.insert_newline();
-                } else if (mode == .insert and key.printable != null) {
+                } else if (editor.mode == .insert and key.printable != null) {
                     try buffer.insert_text(key.printable.?);
-                } else if (multiple_key and mode == .normal and ch == ' ') {
+                } else if (multiple_key and editor.mode == .normal and ch == ' ') {
                     // multiple-key normal mode
                     const key2 = key_queue.orderedRemove(0);
                     defer if (key2.printable) |p| allocator.free(p);
@@ -301,16 +181,16 @@ pub fn main() !void {
             }
         }
 
-        needs_redraw = needs_redraw or needs_reparse;
-        if (needs_reparse) {
-            needs_reparse = false;
+        editor.needs_redraw = editor.needs_redraw or editor.needs_reparse;
+        if (editor.needs_reparse) {
+            editor.needs_reparse = false;
             try buffer.ts_parse();
             try buffer.update_line_positions();
             try lsp_conn.did_change();
         }
-        if (needs_redraw) {
-            needs_redraw = false;
-            try redraw();
+        if (editor.needs_redraw) {
+            editor.needs_redraw = false;
+            try term.redraw();
         }
         std.time.sleep(sleep_ns);
     }
