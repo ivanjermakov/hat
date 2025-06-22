@@ -296,6 +296,12 @@ pub const Buffer = struct {
         }
     }
 
+    pub fn text_at(self: *Buffer, range: lsp.types.Range) ![]const u8 {
+        std.debug.assert(range.start.line == range.end.line);
+        const line = &self.content.items[range.start.line];
+        return line.items[range.start.character..range.end.character];
+    }
+
     fn cursor_byte_pos(self: *Buffer, cursor: Cursor) !Cursor {
         if (cursor.row < 0 or cursor.col < 0) return error.OutOfBounds;
         if (cursor.row >= self.content.items.len) return error.OutOfBounds;
