@@ -23,6 +23,7 @@ pub const CompletionItem = struct {
 
     pub fn deinit(self: *CompletionItem) void {
         self.allocator.free(self.label);
+        self.allocator.free(self.filter_text);
         self.allocator.free(self.replace_text);
     }
 };

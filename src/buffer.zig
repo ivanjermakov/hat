@@ -151,14 +151,6 @@ pub const Buffer = struct {
         };
     }
 
-    pub fn inv_position(self: *Buffer, pos: Cursor) Cursor {
-        _ = self;
-        return .{
-            .row = @intCast(pos.row),
-            .col = @intCast(pos.col),
-        };
-    }
-
     pub fn move_cursor(self: *Buffer, new_buf_cursor: Cursor) !void {
         const old_position = self.position();
 

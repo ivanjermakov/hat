@@ -190,7 +190,7 @@ pub fn main() !void {
         }
         if (editor.needs_redraw) {
             editor.needs_redraw = false;
-            try term.redraw();
+            try term.draw();
         }
         std.time.sleep(sleep_ns);
     }

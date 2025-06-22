@@ -9,6 +9,7 @@ const buf = @import("buffer.zig");
 const co = @import("color.zig");
 const log = @import("log.zig");
 const fs = @import("fs.zig");
+const cmp = @import("ui/completion_menu.zig");
 
 pub const TerminalDimensions = struct {
     width: usize,
@@ -104,9 +105,19 @@ pub const Term = struct {
         try std.fmt.format(self.writer.writer(), str, args);
     }
 
-    pub fn redraw(self: *Term) !void {
+    pub fn draw(self: *Term) !void {
         const buffer = main.editor.active_buffer.?;
+        try self.draw_buffer(buffer);
 
+        const cmp_menu = &main.editor.completion_menu;
+        try self.draw_completion_menu(cmp_menu);
+
+        try self.move_cursor(buffer.cursor.apply_offset(buffer.offset.negate()));
+
+        try self.flush();
+    }
+
+    fn draw_buffer(self: *Term, buffer: *buf.Buffer) !void {
         var attrs_buf = std.mem.zeroes([128]u8);
         var attrs_stream = std.io.fixedBufferStream(&attrs_buf);
         var attrs: []const u8 = undefined;
@@ -206,13 +217,36 @@ pub const Term = struct {
                 term_col += 1;
             }
         }
-        try self.move_cursor(buffer.cursor.apply_offset(buffer.offset.negate()));
-
         switch (main.editor.mode) {
             .normal, .select => _ = try self.write(cursor_type.steady_block),
             .insert => _ = try self.write(cursor_type.steady_bar),
         }
+    }
 
-        try self.flush();
+    fn draw_completion_menu(self: *Term, cmp_menu: *cmp.CompletionMenu) !void {
+        if (cmp_menu.display_items.items.len == 0) return;
+
+        const buffer = main.editor.active_buffer.?;
+        const replace_range = cmp_menu.replace_range.?;
+        const menu_pos = (buf.Cursor{
+            .row = @intCast(replace_range.start.line),
+            .col = @intCast(replace_range.start.character),
+        })
+            .apply_offset(buffer.offset.negate())
+            .apply_offset(.{ .row = 1, .col = 0 });
+
+        try co.attributes.write(co.attributes.completion_menu, self.writer.writer());
+
+        for (0..cmp_menu.display_items.items.len) |menu_row| {
+            const idx = cmp_menu.display_items.items[menu_row];
+            const cmp_item = cmp_menu.completion_items.items[idx];
+            try self.move_cursor(.{
+                .row = menu_pos.row + @as(i32, @intCast(menu_row)),
+                .col = menu_pos.col,
+            });
+            try self.write(cmp_item.label);
+        }
+
+        try self.reset_attributes();
     }
 };
