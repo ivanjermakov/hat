@@ -224,6 +224,9 @@ pub const Term = struct {
     }
 
     fn draw_completion_menu(self: *Term, cmp_menu: *cmp.CompletionMenu) !void {
+        const max_width = 30;
+
+        if (main.editor.mode != .insert) return;
         if (cmp_menu.display_items.items.len == 0) return;
 
         const buffer = main.editor.active_buffer.?;
@@ -244,7 +247,14 @@ pub const Term = struct {
                 .row = menu_pos.row + @as(i32, @intCast(menu_row)),
                 .col = menu_pos.col,
             });
-            try self.write(cmp_item.label);
+            try self.write(cmp_item.label[0..@min(cmp_item.label.len, max_width)]);
+
+            const padding_len: i32 = max_width - @as(i32, @intCast(cmp_item.label.len));
+            if (padding_len > 0) {
+                for (0..@intCast(padding_len)) |_| {
+                    try self.write(" ");
+                }
+            }
         }
 
         try self.reset_attributes();
