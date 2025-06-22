@@ -53,6 +53,11 @@ pub const LspConnection = struct {
                     .definition = .{},
                     .diagnostic = .{},
                     .publishDiagnostics = .{},
+                    .completion = .{
+                        .completionItem = .{
+                            .insertReplaceSupport = true,
+                        },
+                    },
                 },
             },
         });
@@ -134,6 +139,29 @@ pub const LspConnection = struct {
                                 log.log(@This(), "TODO: jump to another file {s}\n", .{loc.uri});
                             }
                         }
+                    } else if (std.mem.eql(u8, matched_request.value.method, "textDocument/completion")) {
+                        const ResponseType = union(enum) {
+                            array_of_CompletionItem: []const lsp.types.CompletionItem,
+                            CompletionList: lsp.types.CompletionList,
+                        };
+                        switch (resp.result_or_error) {
+                            .@"error" => {
+                                log.log(@This(), "Lsp error: {}\n", .{resp.result_or_error.@"error"});
+                                return;
+                            },
+                            .result => {},
+                        }
+
+                        const resp_typed = try lsp.parser.UnionParser(ResponseType).jsonParseFromValue(
+                            arena.allocator(),
+                            resp.result_or_error.result.?,
+                            .{},
+                        );
+                        const items: []const lsp.types.CompletionItem = b: switch (resp_typed) {
+                            .array_of_CompletionItem => |a| break :b a,
+                            .CompletionList => |l| break :b l.items,
+                        };
+                        try main.editor.completion_menu.update_items(items);
                     }
                 },
                 .notification => |notif| {
@@ -190,6 +218,7 @@ pub const LspConnection = struct {
 
     pub fn did_change(self: *LspConnection) !void {
         const buffer = main.editor.active_buffer.?;
+        const position = buffer.position();
         const changes = [_]lsp.types.TextDocumentContentChangeEvent{
             .{ .literal_1 = .{ .text = buffer.content_raw.items } },
         };
@@ -197,6 +226,13 @@ pub const LspConnection = struct {
         try self.send_notification("textDocument/didChange", .{
             .textDocument = .{ .uri = buffer.uri, .version = 0 },
             .contentChanges = &changes,
+        });
+        try self.send_request("textDocument/completion", .{
+            .textDocument = .{ .uri = buffer.uri },
+            .position = .{
+                .line = @intCast(position.row),
+                .character = @intCast(position.col),
+            },
         });
     }
 
@@ -275,4 +311,17 @@ var message_id: i64 = 0;
 fn next_message_id() lsp.JsonRPCMessage.ID {
     message_id += 1;
     return .{ .number = message_id };
+}
+
+pub fn extract_text_edit(item: lsp.types.CompletionItem) ?lsp.types.TextEdit {
+    if (item.textEdit) |te| {
+        switch (te) {
+            .InsertReplaceEdit => |ire| return .{
+                .range = ire.replace,
+                .newText = ire.newText,
+            },
+            .TextEdit => |t| return t,
+        }
+    }
+    return null;
 }

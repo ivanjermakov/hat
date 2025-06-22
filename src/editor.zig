@@ -1,6 +1,7 @@
 const std = @import("std");
 const main = @import("main.zig");
 const buf = @import("buffer.zig");
+const cmp = @import("ui/completion_menu.zig");
 
 pub const Editor = struct {
     buffers: std.ArrayList(*buf.Buffer),
@@ -8,6 +9,7 @@ pub const Editor = struct {
     mode: Mode,
     needs_redraw: bool,
     needs_reparse: bool,
+    completion_menu: cmp.CompletionMenu,
     allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator) !Editor {
@@ -17,6 +19,7 @@ pub const Editor = struct {
             .mode = .normal,
             .needs_redraw = false,
             .needs_reparse = false,
+            .completion_menu = cmp.CompletionMenu.init(allocator),
             .allocator = allocator,
         };
         return editor;
@@ -25,6 +28,7 @@ pub const Editor = struct {
     pub fn deinit(self: *Editor) void {
         for (self.buffers.items) |buffer| buffer.deinit();
         self.buffers.deinit();
+        self.completion_menu.deinit();
     }
 };
 
