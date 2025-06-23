@@ -19,19 +19,9 @@ pub const TsConfig = struct {
 
     pub fn from_nvim(allocator: std.mem.Allocator, name: []const u8) !TsConfig {
         return .{
-            .lib_path = b: {
-                const str = try std.fmt.allocPrint(allocator, "{s}/parser/{s}.so", .{ nvim_treesitter_path, name });
-                defer allocator.free(str);
-                break :b try env.expand(allocator, str);
-            },
+            .lib_path = try lib_path_from_nvim(allocator, name),
             .lib_symbol = try std.fmt.allocPrint(allocator, "tree_sitter_{s}", .{name}),
-            .highlight_query = b: {
-                const str = try std.fmt.allocPrint(allocator, "{s}/queries/{s}/highlights.scm", .{ nvim_treesitter_path, name });
-                defer allocator.free(str);
-                const query_path = try env.expand(allocator, str);
-                defer allocator.free(query_path);
-                break :b try std.fs.cwd().readFileAlloc(allocator, query_path, std.math.maxInt(usize));
-            },
+            .highlight_query = try highlight_query_from_nvim(allocator, name),
         };
     }
 
@@ -47,6 +37,20 @@ pub const TsConfig = struct {
         allocator.free(self.lib_symbol);
         allocator.free(self.highlight_query);
     }
+
+    pub fn lib_path_from_nvim(allocator: std.mem.Allocator, name: []const u8) ![]const u8 {
+        const str = try std.fmt.allocPrint(allocator, "{s}/parser/{s}.so", .{ nvim_treesitter_path, name });
+        defer allocator.free(str);
+        return try env.expand(allocator, str);
+    }
+
+    pub fn highlight_query_from_nvim(allocator: std.mem.Allocator, name: []const u8) ![]const u8 {
+        const str = try std.fmt.allocPrint(allocator, "{s}/queries/{s}/highlights.scm", .{ nvim_treesitter_path, name });
+        defer allocator.free(str);
+        const query_path = try env.expand(allocator, str);
+        defer allocator.free(query_path);
+        return try std.fs.cwd().readFileAlloc(allocator, query_path, std.math.maxInt(usize));
+    }
 };
 
 pub var file_type: std.StringHashMap(FileTypeConfig) = undefined;
@@ -56,21 +60,15 @@ pub const plain: FileTypeConfig = .{ .ts = null, .lsp = null };
 pub fn initFileTypes(allocator: std.mem.Allocator) !void {
     file_type = std.StringHashMap(FileTypeConfig).init(allocator);
     try file_type.put(".c", .{
-        .ts = .{
-            .lib_path = try allocator.dupe(u8, "/usr/lib/tree_sitter/c.so"),
-            .lib_symbol = try allocator.dupe(u8, "tree_sitter_c"),
-            .highlight_query = b: {
-                const str = try std.fmt.allocPrint(allocator, "{s}/queries/c/highlights.scm", .{nvim_treesitter_path});
-                defer allocator.free(str);
-                const query_path = try env.expand(allocator, str);
-                defer allocator.free(query_path);
-                break :b try std.fs.cwd().readFileAlloc(allocator, query_path, std.math.maxInt(usize));
-            },
-        },
+        .ts = try TsConfig.from_nvim(allocator, "c"),
         .lsp = null,
     });
     try file_type.put(".ts", .{
-        .ts = try TsConfig.from_nvim(allocator, "typescript"),
+        .ts = .{
+            .lib_path = try TsConfig.lib_path_from_nvim(allocator, "typescript"),
+            .lib_symbol = try std.fmt.allocPrint(allocator, "tree_sitter_{s}", .{"typescript"}),
+            .highlight_query = try TsConfig.highlight_query_from_nvim(allocator, "ecma"),
+        },
         .lsp = .{
             .cmd = &[_][]const u8{ "typescript-language-server", "--stdio" },
         },
@@ -78,7 +76,7 @@ pub fn initFileTypes(allocator: std.mem.Allocator) !void {
     try file_type.put(".zig", .{
         .ts = try TsConfig.from_nvim(allocator, "zig"),
         .lsp = .{
-            .cmd = &[_][]const u8{ "zls" },
+            .cmd = &[_][]const u8{"zls"},
         },
     });
 }
