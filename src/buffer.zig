@@ -55,7 +55,7 @@ pub const Buffer = struct {
     file_type: ft.FileTypeConfig,
     content: BufferContent,
     content_raw: std.ArrayList(u8),
-    spans: std.ArrayList(ts.SpanNodeTypeTuple),
+    spans: std.ArrayList(ts.SpanCaptureTuple),
     parser: ?*ts.ts.TSParser,
     tree: ?*ts.ts.TSTree,
     selection: ?SelectionSpan,
@@ -82,7 +82,7 @@ pub const Buffer = struct {
             .uri = uri,
             .content = std.ArrayList(Line).init(allocator),
             .content_raw = raw,
-            .spans = std.ArrayList(ts.SpanNodeTypeTuple).init(allocator),
+            .spans = std.ArrayList(ts.SpanCaptureTuple).init(allocator),
             .parser = null,
             .tree = null,
             .selection = null,
@@ -318,7 +318,7 @@ pub const Buffer = struct {
     fn makeSpans(self: *Buffer) !void {
         if (self.tree == null) return;
         for (self.spans.items) |span| {
-            self.allocator.free(span.node_type);
+            self.allocator.free(span.capture_name);
         }
         self.spans.clearRetainingCapacity();
 
@@ -345,7 +345,7 @@ pub const Buffer = struct {
                         .start_byte = ts.ts.ts_node_start_byte(capture.node),
                         .end_byte = ts.ts.ts_node_end_byte(capture.node),
                     },
-                    .node_type = node_type,
+                    .capture_name = node_type,
                 });
             }
         }

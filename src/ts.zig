@@ -9,12 +9,12 @@ pub const Span = struct {
     end_byte: usize,
 };
 
-pub const SpanNodeTypeTuple = struct {
+pub const SpanCaptureTuple = struct {
     span: Span,
-    node_type: []const u8,
+    capture_name: []const u8,
 
-    pub fn attrs(self: *const SpanNodeTypeTuple) ?[]const col.Attr {
-        return syntax_highlight.get(self.node_type);
+    pub fn attrs(self: *const SpanCaptureTuple) ?[]const col.Attr {
+        return syntax_highlight.get(self.capture_name);
     }
 };
 
