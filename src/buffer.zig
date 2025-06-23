@@ -1,5 +1,4 @@
 const std = @import("std");
-const dl = std.DynLib;
 const testing = std.testing;
 const assert = std.debug.assert;
 const main = @import("main.zig");
@@ -96,10 +95,7 @@ pub const Buffer = struct {
     fn initParser(self: *Buffer) !void {
         const file_ext = std.fs.path.extension(self.path);
         const file_type = ft.file_type.get(file_ext) orelse return;
-        const ts_config = file_type.ts_config;
-        var language_lib = try dl.open(ts_config.lib_path);
-        var language: *const fn () *ts.ts.struct_TSLanguage = undefined;
-        language = language_lib.lookup(@TypeOf(language), @ptrCast(ts_config.lib_symbol)) orelse return error.NoSymbol;
+        const language = try file_type.ts_config.loadLanguage();
         self.parser = ts.ts.ts_parser_new();
         _ = ts.ts.ts_parser_set_language(self.parser, language());
     }

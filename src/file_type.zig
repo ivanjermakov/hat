@@ -1,6 +1,8 @@
 const std = @import("std");
+const dl = std.DynLib;
 const main = @import("main.zig");
 const env = @import("env.zig");
+const ts = @import("ts.zig");
 
 const nvim_parser_path = "$HOME/.local/share/nvim/lazy/nvim-treesitter/parser/";
 
@@ -23,6 +25,13 @@ pub const TsConfig = struct {
         };
     }
 
+    pub fn loadLanguage(self: *const TsConfig) !*const fn () *ts.ts.struct_TSLanguage {
+        var language_lib = try dl.open(self.lib_path);
+        var language: *const fn () *ts.ts.struct_TSLanguage = undefined;
+        language = language_lib.lookup(@TypeOf(language), @ptrCast(self.lib_symbol)) orelse return error.NoSymbol;
+        return language;
+    }
+
     pub fn deinit(self: *TsConfig, allocator: std.mem.Allocator) void {
         allocator.free(self.lib_path);
         allocator.free(self.lib_symbol);
@@ -42,4 +51,12 @@ pub fn initFileTypes(allocator: std.mem.Allocator) !void {
     try file_type.put(".ts", .{
         .ts_config = try TsConfig.from_nvim(allocator, "typescript"),
     });
+}
+
+pub fn deinitFileTypes(allocator: std.mem.Allocator) void {
+    var value_iter = file_type.valueIterator();
+    while (value_iter.next()) |v| {
+        v.ts_config.deinit(allocator);
+    }
+    file_type.deinit();
 }

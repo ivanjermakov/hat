@@ -36,13 +36,7 @@ pub fn main() !void {
     allocator = if (builtin.mode == .Debug) debug_allocator.allocator() else std.heap.c_allocator;
 
     try ft.initFileTypes(allocator);
-    defer {
-        var value_iter = ft.file_type.valueIterator();
-        while (value_iter.next()) |v| {
-            v.ts_config.deinit(allocator);
-        }
-        ft.file_type.deinit();
-    }
+    defer ft.deinitFileTypes(allocator);
 
     var cmd_args = std.process.args();
     _ = cmd_args.skip();
