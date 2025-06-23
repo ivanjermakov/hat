@@ -71,12 +71,11 @@ pub fn main() !void {
     term = try ter.Terminal.init(std_out.writer().any());
     defer term.deinit();
 
-    const lsp_conf = lsp.LspConfig{ .cmd = &[_][]const u8{ "typescript-language-server", "--stdio" } };
-    var lsp_conn = try lsp.LspConnection.connect(allocator, &lsp_conf);
-    defer lsp_conn.deinit();
+    var lsp_conn: ?lsp.LspConnection = if (buffer.file_type.lsp) |lsp_conf| try lsp.LspConnection.connect(allocator, &lsp_conf) else null;
+    defer if (lsp_conn) |*conn| conn.deinit();
 
     main_loop: while (true) {
-        try lsp_conn.update();
+        if (lsp_conn) |*conn| try conn.update();
 
         const needs_handle_mappings = try term.update_input(allocator);
         if (needs_handle_mappings) {
@@ -148,7 +147,7 @@ pub fn main() !void {
                     if (key2.printable != null and key2.printable.?.len == 1) ch2 = key2.printable.?[0];
 
                     if (ch2 == 'd') {
-                        try lsp_conn.goToDefinition();
+                        if (lsp_conn) |*conn| try conn.goToDefinition();
                     } else {
                         // no matches, reinsert key2 and try it as a single key mapping on next iteration
                         try key_queue.insert(0, try key2.clone(allocator));
@@ -171,7 +170,7 @@ pub fn main() !void {
             editor.needs_reparse = false;
             try buffer.tsParse();
             try buffer.updateLinePositions();
-            try lsp_conn.didChange();
+            if (lsp_conn) |*conn| try conn.didChange();
         }
         if (editor.needs_redraw) {
             editor.needs_redraw = false;
@@ -180,11 +179,13 @@ pub fn main() !void {
         std.time.sleep(sleep_ns);
     }
 
-    log.log(@This(), "disconnecting lsp client\n", .{});
-    try lsp_conn.disconnect();
-    disconnect_loop: while (true) {
-        if (lsp_conn.status == .Closed) break :disconnect_loop;
-        try lsp_conn.update();
+    if (lsp_conn) |*conn| {
+        log.log(@This(), "disconnecting lsp client\n", .{});
+        try conn.disconnect();
+        disconnect_loop: while (true) {
+            if (conn.status == .Closed) break :disconnect_loop;
+            try conn.update();
+        }
     }
 }
 

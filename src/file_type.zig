@@ -3,11 +3,13 @@ const dl = std.DynLib;
 const main = @import("main.zig");
 const env = @import("env.zig");
 const ts = @import("ts.zig");
+const lsp = @import("lsp.zig");
 
 const nvim_parser_path = "$HOME/.local/share/nvim/lazy/nvim-treesitter/parser/";
 
 pub const FileTypeConfig = struct {
-    ts_config: TsConfig,
+    ts: ?TsConfig,
+    lsp: ?lsp.LspConfig,
 };
 
 pub const TsConfig = struct {
@@ -40,23 +42,29 @@ pub const TsConfig = struct {
 
 pub var file_type: std.StringHashMap(FileTypeConfig) = undefined;
 
+pub const plain: FileTypeConfig = .{ .ts = null, .lsp = null };
+
 pub fn initFileTypes(allocator: std.mem.Allocator) !void {
     file_type = std.StringHashMap(FileTypeConfig).init(allocator);
     try file_type.put(".c", .{
-        .ts_config = .{
+        .ts = .{
             .lib_path = try allocator.dupe(u8, "/usr/lib/tree_sitter/c.so"),
             .lib_symbol = try allocator.dupe(u8, "tree_sitter_c"),
         },
+        .lsp = null,
     });
     try file_type.put(".ts", .{
-        .ts_config = try TsConfig.from_nvim(allocator, "typescript"),
+        .ts = try TsConfig.from_nvim(allocator, "typescript"),
+        .lsp = .{
+            .cmd = &[_][]const u8{ "typescript-language-server", "--stdio" },
+        },
     });
 }
 
 pub fn deinitFileTypes(allocator: std.mem.Allocator) void {
     var value_iter = file_type.valueIterator();
     while (value_iter.next()) |v| {
-        v.ts_config.deinit(allocator);
+        if (v.ts) |*ts_conf| ts_conf.deinit(allocator);
     }
     file_type.deinit();
 }

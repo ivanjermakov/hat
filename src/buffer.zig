@@ -52,6 +52,7 @@ pub const SelectionSpan = struct {
 pub const Buffer = struct {
     path: []const u8,
     uri: []const u8,
+    file_type: ft.FileTypeConfig,
     content: BufferContent,
     content_raw: std.ArrayList(u8),
     spans: std.ArrayList(ts.SpanNodeTypeTuple),
@@ -71,9 +72,13 @@ pub const Buffer = struct {
         var raw = std.ArrayList(u8).init(allocator);
         try raw.appendSlice(content_raw);
 
+        const file_ext = std.fs.path.extension(path);
+        const file_type = ft.file_type.get(file_ext) orelse ft.plain;
+
         const uri = try std.fmt.allocPrint(allocator, "file://{s}", .{path});
         var buffer = Buffer{
             .path = path,
+            .file_type = file_type,
             .uri = uri,
             .content = std.ArrayList(Line).init(allocator),
             .content_raw = raw,
@@ -93,11 +98,11 @@ pub const Buffer = struct {
     }
 
     fn initParser(self: *Buffer) !void {
-        const file_ext = std.fs.path.extension(self.path);
-        const file_type = ft.file_type.get(file_ext) orelse return;
-        const language = try file_type.ts_config.loadLanguage();
-        self.parser = ts.ts.ts_parser_new();
-        _ = ts.ts.ts_parser_set_language(self.parser, language());
+        if (self.file_type.ts) |ts_conf| {
+            const language = try ts_conf.loadLanguage();
+            self.parser = ts.ts.ts_parser_new();
+            _ = ts.ts.ts_parser_set_language(self.parser, language());
+        }
     }
 
     pub fn tsParse(self: *Buffer) !void {
