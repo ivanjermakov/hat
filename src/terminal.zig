@@ -141,6 +141,7 @@ pub const Terminal = struct {
         try self.clear();
         const dims = try self.terminalSize();
 
+        var span_index: usize = 0;
         for (0..dims.height) |term_row| {
             const buffer_row = @as(i32, @intCast(term_row)) + buffer.offset.row;
             if (buffer_row < 0) continue;
@@ -171,11 +172,13 @@ pub const Terminal = struct {
                 const buffer_col = @as(i32, @intCast(term_col)) + buffer.offset.col;
 
                 if (term_col >= dims.width) break;
-                const ch_attrs: []const co.Attr = b: for (buffer.spans.items) |span| {
+                const ch_attrs: []const co.Attr = b: while (span_index < buffer.spans.items.len) {
+                    const span = buffer.spans.items[span_index];
                     if (span.span.start_byte > byte) break :b co.attributes.text;
                     if (span.span.start_byte <= byte and span.span.end_byte > byte) {
                         break :b span.attrs;
                     }
+                    span_index += 1;
                 } else {
                     break :b co.attributes.text;
                 };
