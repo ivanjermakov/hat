@@ -9,23 +9,33 @@ pub const Span = struct {
     end_byte: usize,
 };
 
-pub const SpanCaptureTuple = struct {
+pub const SpanAttrsTuple = struct {
     span: Span,
-    /// Dot-separated list of ts node types, forming hierarchy, e.g. identifier.type
+    attrs: []const col.Attr,
+
+    /// Capture name is a dot-separated list of ts node types, forming hierarchy, e.g. `identifier.type`
     /// @see https://tree-sitter.github.io/tree-sitter/using-parsers/queries/2-operators.html#capturing-nodes
-    capture_name: []const u8,
+    pub fn init(span: Span, capture_name: []const u8) SpanAttrsTuple {
+        return .{
+            .span = span,
+            .attrs = if (findAttrs(capture_name)) |as| as else col.attributes.text,
+        };
+    }
 
-    /// Find attributes corresponding to the capture name
-    /// for `identifier.type`, first check for `identifier.type`, then for `identifier`, then return null
-    pub fn attrs(self: *const SpanCaptureTuple) ?[]const col.Attr {
-        const full = syntax_highlight.get(self.capture_name);
+    /// Will find attributes corresponding to the capture name:
+    /// for `identifier.type`:
+    ///   * check `identifier.type`
+    ///   * check `identifier`
+    ///   * null
+    pub fn findAttrs(capture_name: []const u8) ?[] const col.Attr {
+        const full = syntax_highlight.get(capture_name);
         if (full) |a| return a;
-        if (!std.mem.containsAtLeastScalar(u8, self.capture_name, 1, '.')) return null;
+        if (!std.mem.containsAtLeastScalar(u8, capture_name, 1, '.')) return null;
 
-        for (0..self.capture_name.len) |i| {
-            const from_end = self.capture_name.len - i - 1;
-            if (self.capture_name[from_end] == '.') {
-                const as = syntax_highlight.get(self.capture_name[0..from_end]);
+        for (0..capture_name.len) |i| {
+            const from_end = capture_name.len - i - 1;
+            if (capture_name[from_end] == '.') {
+                const as = syntax_highlight.get(capture_name[0..from_end]);
                 if (as) |a| return a;
             }
         }

@@ -55,7 +55,7 @@ pub const Buffer = struct {
     file_type: ft.FileTypeConfig,
     content: BufferContent,
     content_raw: std.ArrayList(u8),
-    spans: std.ArrayList(ts.SpanCaptureTuple),
+    spans: std.ArrayList(ts.SpanAttrsTuple),
     parser: ?*ts.ts.TSParser,
     tree: ?*ts.ts.TSTree,
     selection: ?SelectionSpan,
@@ -82,7 +82,7 @@ pub const Buffer = struct {
             .uri = uri,
             .content = std.ArrayList(Line).init(allocator),
             .content_raw = raw,
-            .spans = std.ArrayList(ts.SpanCaptureTuple).init(allocator),
+            .spans = std.ArrayList(ts.SpanAttrsTuple).init(allocator),
             .parser = null,
             .tree = null,
             .selection = null,
@@ -175,7 +175,6 @@ pub const Buffer = struct {
             .col = col,
         };
 
-        log.log(@This(), "valid cursor, in buf: {}, in term: {}\n", .{ valid_cursor, term_cursor });
         self.scrollForCursor(valid_cursor);
 
         (&self.cursor).* = valid_cursor;
@@ -337,13 +336,11 @@ pub const Buffer = struct {
                 var capture_name_len: u32 = undefined;
                 const capture_name = ts.ts.ts_query_capture_name_for_id(query, capture.index, &capture_name_len);
                 const node_type = capture_name[0..capture_name_len];
-                try self.spans.append(.{
-                    .span = .{
-                        .start_byte = ts.ts.ts_node_start_byte(capture.node),
-                        .end_byte = ts.ts.ts_node_end_byte(capture.node),
-                    },
-                    .capture_name = node_type,
-                });
+                const span: ts.Span = .{
+                    .start_byte = ts.ts.ts_node_start_byte(capture.node),
+                    .end_byte = ts.ts.ts_node_end_byte(capture.node),
+                };
+                try self.spans.append(ts.SpanAttrsTuple.init(span, node_type));
             }
         }
     }

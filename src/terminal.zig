@@ -172,12 +172,12 @@ pub const Terminal = struct {
 
                 if (term_col >= dims.width) break;
                 const ch_attrs: []const co.Attr = b: for (buffer.spans.items) |span| {
+                    if (span.span.start_byte > byte) break :b co.attributes.text;
                     if (span.span.start_byte <= byte and span.span.end_byte > byte) {
-                        const local_attrs = span.attrs();
-                        if (local_attrs) |la| break :b la;
+                        break :b span.attrs;
                     }
                 } else {
-                    break :b @constCast(co.attributes.text);
+                    break :b co.attributes.text;
                 };
                 try co.attributes.write(ch_attrs, attrs_stream.writer());
 
