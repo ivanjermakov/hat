@@ -40,8 +40,6 @@ pub const Terminal = struct {
         tty.c_lflag &= @bitCast(~(c.ICANON | c.ECHO));
         _ = c.tcsetattr(std.posix.STDIN_FILENO, c.TCSANOW, &tty);
 
-        fs.makeNonblock(std.posix.STDIN_FILENO);
-
         var term = Terminal{
             .writer = .{ .unbuffered_writer = std_out_writer },
         };
@@ -349,8 +347,9 @@ pub fn parseAnsi(allocator: std.mem.Allocator, input: *std.ArrayList(u8)) !inp.K
 pub fn getCodes(allocator: std.mem.Allocator) !?[]u8 {
     var in_buf = std.ArrayList(u8).init(allocator);
     while (true) {
+        if (!fs.poll(main.std_in)) break;
         var b: [1]u8 = undefined;
-        const bytes_read = std.posix.read(std.posix.STDIN_FILENO, b[0..1]) catch break;
+        const bytes_read = std.posix.read(main.std_in.handle, &b) catch break;
         if (bytes_read == 0) break;
         try in_buf.appendSlice(b[0..]);
         // 1ns seems to be enough wait time for stdin to fill up with the next code

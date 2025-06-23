@@ -69,15 +69,11 @@ pub fn initFileTypes(allocator: std.mem.Allocator) !void {
             .lib_symbol = try std.fmt.allocPrint(allocator, "tree_sitter_{s}", .{"typescript"}),
             .highlight_query = try TsConfig.highlight_query_from_nvim(allocator, "ecma"),
         },
-        .lsp = .{
-            .cmd = &[_][]const u8{ "typescript-language-server", "--stdio" },
-        },
+        .lsp = .{ .cmd = &[_][]const u8{ "typescript-language-server", "--stdio" } },
     });
     try file_type.put(".zig", .{
         .ts = try TsConfig.from_nvim(allocator, "zig"),
-        .lsp = .{
-            .cmd = &[_][]const u8{"zls"},
-        },
+        .lsp = .{ .cmd = &[_][]const u8{"zls"} },
     });
 }
 

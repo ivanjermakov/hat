@@ -38,9 +38,6 @@ pub const LspConnection = struct {
         try child.spawn();
         try child.waitForSpawn();
 
-        fs.makeNonblock(child.stdout.?.handle);
-        fs.makeNonblock(child.stderr.?.handle);
-
         var conn = LspConnection{
             .status = .Connected,
             .child = child,
