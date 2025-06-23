@@ -35,7 +35,7 @@ pub fn main() !void {
     defer _ = debug_allocator.deinit();
     allocator = if (builtin.mode == .Debug) debug_allocator.allocator() else std.heap.c_allocator;
 
-    try ft.init_file_types(allocator);
+    try ft.initFileTypes(allocator);
     defer {
         var value_iter = ft.file_type.valueIterator();
         while (value_iter.next()) |v| {
@@ -86,10 +86,10 @@ pub fn main() !void {
         try lsp_conn.update();
 
         var needs_handle_mappings = false;
-        if (try inp.get_codes(allocator)) |codes| {
+        if (try inp.getCodes(allocator)) |codes| {
             defer allocator.free(codes);
             needs_handle_mappings = true;
-            const new_keys = try inp.get_keys(allocator, codes);
+            const new_keys = try inp.getKeys(allocator, codes);
             defer allocator.free(new_keys);
             try key_queue.appendSlice(new_keys);
         }
@@ -105,19 +105,19 @@ pub fn main() !void {
                 if (key.printable != null and key.printable.?.len == 1) ch = key.printable.?[0];
 
                 const multiple_key = key_queue.items.len > 0;
-                const normal_or_select = editor.mode.normal_or_select();
+                const normal_or_select = editor.mode.normalOrSelect();
 
                 // TODO: crazy comptime
 
                 // single-key global
                 if (code == .up) {
-                    try buffer.move_cursor(.{ .row = buffer.cursor.row - 1, .col = buffer.cursor.col });
+                    try buffer.moveCursor(.{ .row = buffer.cursor.row - 1, .col = buffer.cursor.col });
                 } else if (code == .down) {
-                    try buffer.move_cursor(.{ .row = buffer.cursor.row + 1, .col = buffer.cursor.col });
+                    try buffer.moveCursor(.{ .row = buffer.cursor.row + 1, .col = buffer.cursor.col });
                 } else if (code == .left) {
-                    try buffer.move_cursor(.{ .row = buffer.cursor.row, .col = buffer.cursor.col - 1 });
+                    try buffer.moveCursor(.{ .row = buffer.cursor.row, .col = buffer.cursor.col - 1 });
                 } else if (code == .right) {
-                    try buffer.move_cursor(.{ .row = buffer.cursor.row, .col = buffer.cursor.col + 1 });
+                    try buffer.moveCursor(.{ .row = buffer.cursor.row, .col = buffer.cursor.col + 1 });
                 } else if (code == .escape) {
                     editor.mode = .normal;
                     editor.needs_redraw = true;
@@ -127,18 +127,18 @@ pub fn main() !void {
                 } else if (normal_or_select and ch == 'q') {
                     break :main_loop;
                 } else if (normal_or_select and ch == 'i') {
-                    try buffer.move_cursor(.{ .row = buffer.cursor.row - 1, .col = buffer.cursor.col });
+                    try buffer.moveCursor(.{ .row = buffer.cursor.row - 1, .col = buffer.cursor.col });
                 } else if (normal_or_select and ch == 'k') {
-                    try buffer.move_cursor(.{ .row = buffer.cursor.row + 1, .col = buffer.cursor.col });
+                    try buffer.moveCursor(.{ .row = buffer.cursor.row + 1, .col = buffer.cursor.col });
                 } else if (normal_or_select and ch == 'j') {
-                    try buffer.move_cursor(.{ .row = buffer.cursor.row, .col = buffer.cursor.col - 1 });
+                    try buffer.moveCursor(.{ .row = buffer.cursor.row, .col = buffer.cursor.col - 1 });
                 } else if (normal_or_select and ch == 'l') {
-                    try buffer.move_cursor(.{ .row = buffer.cursor.row, .col = buffer.cursor.col + 1 });
+                    try buffer.moveCursor(.{ .row = buffer.cursor.row, .col = buffer.cursor.col + 1 });
 
                     // single-key normal mode
                 } else if (editor.mode == .normal and ch == 's') {
                     editor.mode = .select;
-                    try buffer.select_char();
+                    try buffer.selectChar();
                     editor.needs_redraw = true;
                     log.log(@This(), "mode: {}\n", .{editor.mode});
                 } else if (editor.mode == .normal and ch == 'h') {
@@ -148,13 +148,13 @@ pub fn main() !void {
 
                     // single-key insert mode
                 } else if (editor.mode == .insert and code == .delete) {
-                    try buffer.remove_char();
+                    try buffer.removeChar();
                 } else if (editor.mode == .insert and code == .backspace) {
-                    try buffer.remove_prev_char();
+                    try buffer.removePrevChar();
                 } else if (editor.mode == .insert and code == .enter) {
-                    try buffer.insert_newline();
+                    try buffer.insertNewline();
                 } else if (editor.mode == .insert and key.printable != null) {
-                    try buffer.insert_text(key.printable.?);
+                    try buffer.insertText(key.printable.?);
                 } else if (multiple_key and editor.mode == .normal and ch == ' ') {
                     // multiple-key normal mode
                     const key2 = key_queue.orderedRemove(0);
@@ -163,7 +163,7 @@ pub fn main() !void {
                     if (key2.printable != null and key2.printable.?.len == 1) ch2 = key2.printable.?[0];
 
                     if (ch2 == 'd') {
-                        try lsp_conn.go_to_definition();
+                        try lsp_conn.goToDefinition();
                     } else {
                         // no matches, reinsert key2 and try it as a single key mapping on next iteration
                         try key_queue.insert(0, try key2.clone(allocator));
@@ -184,9 +184,9 @@ pub fn main() !void {
         editor.needs_redraw = editor.needs_redraw or editor.needs_reparse;
         if (editor.needs_reparse) {
             editor.needs_reparse = false;
-            try buffer.ts_parse();
-            try buffer.update_line_positions();
-            try lsp_conn.did_change();
+            try buffer.tsParse();
+            try buffer.updateLinePositions();
+            try lsp_conn.didChange();
         }
         if (editor.needs_redraw) {
             editor.needs_redraw = false;
@@ -207,7 +207,7 @@ comptime {
     std.testing.refAllDecls(@This());
 }
 
-pub fn testing_setup() !void {
+pub fn testingSetup() !void {
     const alloc = std.testing.allocator;
     term = ter.Term{ .writer = .{ .unbuffered_writer = std.io.null_writer.any() } };
     ft.file_type = std.StringHashMap(ft.FileType).init(alloc);

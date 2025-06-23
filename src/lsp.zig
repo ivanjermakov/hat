@@ -38,8 +38,8 @@ pub const LspConnection = struct {
         try child.spawn();
         try child.waitForSpawn();
 
-        fs.make_nonblock(child.stdout.?.handle);
-        fs.make_nonblock(child.stderr.?.handle);
+        fs.makeNonblock(child.stdout.?.handle);
+        fs.makeNonblock(child.stderr.?.handle);
 
         var conn = LspConnection{
             .status = .Connected,
@@ -47,7 +47,7 @@ pub const LspConnection = struct {
             .messages_unreplied = std.AutoHashMap(i64, LspRequest).init(allocator),
             .allocator = allocator,
         };
-        try conn.send_request("initialize", .{
+        try conn.sendRequest("initialize", .{
             .capabilities = .{
                 .textDocument = .{
                     .definition = .{},
@@ -67,8 +67,8 @@ pub const LspConnection = struct {
 
     pub fn disconnect(self: *LspConnection) !void {
         self.status = .Disconnecting;
-        try self.send_request("shutdown", null);
-        try self.send_notification("exit", null);
+        try self.sendRequest("shutdown", null);
+        try self.sendNotification("exit", null);
     }
 
     pub fn update(self: *LspConnection) !void {
@@ -104,9 +104,9 @@ pub const LspConnection = struct {
                             .{},
                         );
                         log.log(@This(), "got init response: {}\n", .{resp_typed});
-                        try self.send_notification("initialized", .{});
+                        try self.sendNotification("initialized", .{});
 
-                        try self.did_open();
+                        try self.didOpen();
                     } else if (std.mem.eql(u8, matched_request.value.method, "textDocument/definition")) {
                         const ResponseType = union(enum) {
                             Definition: lsp.types.Definition,
@@ -133,8 +133,8 @@ pub const LspConnection = struct {
                         if (location) |loc| {
                             if (std.mem.eql(u8, loc.uri, buffer.uri)) {
                                 log.log(@This(), "jump to {}\n", .{loc.range.start});
-                                const new_cursor = buf.Cursor.from_lsp(loc.range.start);
-                                try buffer.move_cursor(new_cursor);
+                                const new_cursor = buf.Cursor.fromLsp(loc.range.start);
+                                try buffer.moveCursor(new_cursor);
                             } else {
                                 log.log(@This(), "TODO: jump to another file {s}\n", .{loc.uri});
                             }
@@ -161,7 +161,7 @@ pub const LspConnection = struct {
                             .array_of_CompletionItem => |a| break :b a,
                             .CompletionList => |l| break :b l.items,
                         };
-                        try main.editor.completion_menu.update_items(items);
+                        try main.editor.completion_menu.updateItems(items);
                     }
                 },
                 .notification => |notif| {
@@ -192,10 +192,10 @@ pub const LspConnection = struct {
         self.messages_unreplied.deinit();
     }
 
-    pub fn go_to_definition(self: *LspConnection) !void {
+    pub fn goToDefinition(self: *LspConnection) !void {
         const buffer = main.editor.active_buffer.?;
         const position = buffer.position();
-        try self.send_request("textDocument/definition", .{
+        try self.sendRequest("textDocument/definition", .{
             .textDocument = .{ .uri = buffer.uri },
             .position = .{
                 .line = @intCast(position.row),
@@ -204,9 +204,9 @@ pub const LspConnection = struct {
         });
     }
 
-    pub fn did_open(self: *LspConnection) !void {
+    pub fn didOpen(self: *LspConnection) !void {
         const buffer = main.editor.active_buffer.?;
-        try self.send_notification("textDocument/didOpen", .{
+        try self.sendNotification("textDocument/didOpen", .{
             .textDocument = .{
                 .uri = buffer.uri,
                 .languageId = "",
@@ -216,18 +216,18 @@ pub const LspConnection = struct {
         });
     }
 
-    pub fn did_change(self: *LspConnection) !void {
+    pub fn didChange(self: *LspConnection) !void {
         const buffer = main.editor.active_buffer.?;
         const position = buffer.position();
         const changes = [_]lsp.types.TextDocumentContentChangeEvent{
             .{ .literal_1 = .{ .text = buffer.content_raw.items } },
         };
         buffer.diagnostics.clearRetainingCapacity();
-        try self.send_notification("textDocument/didChange", .{
+        try self.sendNotification("textDocument/didChange", .{
             .textDocument = .{ .uri = buffer.uri, .version = 0 },
             .contentChanges = &changes,
         });
-        try self.send_request("textDocument/completion", .{
+        try self.sendRequest("textDocument/completion", .{
             .textDocument = .{ .uri = buffer.uri },
             .position = .{
                 .line = @intCast(position.row),
@@ -246,14 +246,14 @@ pub const LspConnection = struct {
         }
 
         if (main.log_enabled) b: {
-            const err = fs.read_nonblock(self.allocator, self.child.stderr.?) catch break :b;
+            const err = fs.readNonblock(self.allocator, self.child.stderr.?) catch break :b;
             if (err) |e| {
                 defer self.allocator.free(e);
                 log.log(@This(), "err: {s}\n", .{e});
             }
         }
 
-        const read = try fs.read_nonblock(self.allocator, self.child.stdout.?) orelse return null;
+        const read = try fs.readNonblock(self.allocator, self.child.stdout.?) orelse return null;
         defer self.allocator.free(read);
         var read_stream = std.io.fixedBufferStream(read);
         const reader = read_stream.reader();
@@ -271,13 +271,13 @@ pub const LspConnection = struct {
         return try messages.toOwnedSlice();
     }
 
-    fn send_request(
+    fn sendRequest(
         self: *LspConnection,
         comptime method: []const u8,
         params: (lsp.types.getRequestMetadata(method).?.Params orelse ?void),
     ) !void {
         const request: lsp.TypedJsonRPCRequest(@TypeOf(params)) = .{
-            .id = next_message_id(),
+            .id = nextMessageId(),
             .method = method,
             .params = params,
         };
@@ -289,7 +289,7 @@ pub const LspConnection = struct {
         try self.messages_unreplied.put(request.id.number, .{ .method = method, .message = json_message });
     }
 
-    fn send_notification(
+    fn sendNotification(
         self: *LspConnection,
         comptime method: []const u8,
         params: (lsp.types.getNotificationMetadata(method).?.Params orelse ?void),
@@ -308,12 +308,12 @@ pub const LspConnection = struct {
 };
 
 var message_id: i64 = 0;
-fn next_message_id() lsp.JsonRPCMessage.ID {
+fn nextMessageId() lsp.JsonRPCMessage.ID {
     message_id += 1;
     return .{ .number = message_id };
 }
 
-pub fn extract_text_edit(item: lsp.types.CompletionItem) ?lsp.types.TextEdit {
+pub fn extractTextEdit(item: lsp.types.CompletionItem) ?lsp.types.TextEdit {
     if (item.textEdit) |te| {
         switch (te) {
             .InsertReplaceEdit => |ire| return .{

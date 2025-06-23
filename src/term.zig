@@ -39,25 +39,25 @@ pub const Term = struct {
         tty.c_lflag &= @bitCast(~(c.ICANON | c.ECHO));
         _ = c.tcsetattr(std.posix.STDIN_FILENO, c.TCSANOW, &tty);
 
-        fs.make_nonblock(std.posix.STDIN_FILENO);
+        fs.makeNonblock(std.posix.STDIN_FILENO);
 
         var term = Term{
             .writer = .{ .unbuffered_writer = std_out_writer },
         };
 
-        try term.switch_buf(true);
+        try term.switchBuf(true);
 
         return term;
     }
 
     pub fn deinit(self: *Term) void {
         self.clear() catch {};
-        self.switch_buf(false) catch {};
+        self.switchBuf(false) catch {};
         self.write(cursor_type.steady_block) catch {};
         self.flush() catch {};
     }
 
-    pub fn terminal_size(self: *const Term) !TerminalDimensions {
+    pub fn terminalSize(self: *const Term) !TerminalDimensions {
         _ = self;
         var w: std.c.winsize = undefined;
         if (std.c.ioctl(main.std_out.handle, std.c.T.IOCGWINSZ, &w) == -1) {
@@ -73,23 +73,23 @@ pub const Term = struct {
         try self.write("\x1b[2J");
     }
 
-    pub fn clear_until_line_end(self: *Term) !void {
+    pub fn clearUntilLineEnd(self: *Term) !void {
         try self.write("\x1b[0K");
     }
 
-    pub fn switch_buf(self: *Term, alternative: bool) !void {
+    pub fn switchBuf(self: *Term, alternative: bool) !void {
         try self.write(if (alternative) "\x1b[?1049h" else "\x1b[?1049l");
     }
 
-    pub fn reset_attributes(self: *Term) !void {
+    pub fn resetAttributes(self: *Term) !void {
         try self.write("\x1b[0m");
     }
 
-    pub fn move_cursor(self: *Term, cursor: buf.Cursor) !void {
+    pub fn moveCursor(self: *Term, cursor: buf.Cursor) !void {
         try self.format("\x1b[{};{}H", .{ cursor.row + 1, cursor.col + 1 });
     }
 
-    pub fn write_attr(self: *Term, attr: co.Attr) !void {
+    pub fn writeAttr(self: *Term, attr: co.Attr) !void {
         try attr.write(self.writer.writer());
     }
 
@@ -107,17 +107,17 @@ pub const Term = struct {
 
     pub fn draw(self: *Term) !void {
         const buffer = main.editor.active_buffer.?;
-        try self.draw_buffer(buffer);
+        try self.drawBuffer(buffer);
 
         const cmp_menu = &main.editor.completion_menu;
-        try self.draw_completion_menu(cmp_menu);
+        try self.drawCompletionMenu(cmp_menu);
 
-        try self.move_cursor(buffer.cursor.apply_offset(buffer.offset.negate()));
+        try self.moveCursor(buffer.cursor.applyOffset(buffer.offset.negate()));
 
         try self.flush();
     }
 
-    fn draw_buffer(self: *Term, buffer: *buf.Buffer) !void {
+    fn drawBuffer(self: *Term, buffer: *buf.Buffer) !void {
         var attrs_buf = std.mem.zeroes([128]u8);
         var attrs_stream = std.io.fixedBufferStream(&attrs_buf);
         var attrs: []const u8 = undefined;
@@ -125,7 +125,7 @@ pub const Term = struct {
         var last_attrs: ?[]const u8 = null;
 
         try self.clear();
-        const dims = try self.terminal_size();
+        const dims = try self.terminalSize();
 
         for (0..dims.height) |term_row| {
             const buffer_row = @as(i32, @intCast(term_row)) + buffer.offset.row;
@@ -138,7 +138,7 @@ pub const Term = struct {
             const line: []u8 = buffer.content.items[@intCast(buffer_row)].items;
             const line_view = try std.unicode.Utf8View.init(line);
             var line_iter = line_view.iterator();
-            try self.move_cursor(.{ .row = @intCast(term_row), .col = 0 });
+            try self.moveCursor(.{ .row = @intCast(term_row), .col = 0 });
 
             if (buffer.offset.col > 0) {
                 for (0..@intCast(buffer.offset.col)) |_| {
@@ -186,7 +186,7 @@ pub const Term = struct {
                 try co.attributes.write(ch_attrs, attrs_stream.writer());
 
                 if (main.editor.mode == .select) {
-                    if (buffer.selection.?.in_range(.{ .row = @intCast(buffer_row), .col = @intCast(buffer_col) })) {
+                    if (buffer.selection.?.inRange(.{ .row = @intCast(buffer_row), .col = @intCast(buffer_col) })) {
                         try co.attributes.write(co.attributes.selection, attrs_stream.writer());
                     }
                 }
@@ -205,7 +205,7 @@ pub const Term = struct {
 
                 attrs = attrs_stream.getWritten();
                 if (last_attrs == null or !std.mem.eql(u8, attrs, last_attrs.?)) {
-                    self.reset_attributes() catch {};
+                    self.resetAttributes() catch {};
                     try self.write(attrs);
                     @memcpy(&last_attrs_buf, &attrs_buf);
                     last_attrs = last_attrs_buf[0..try attrs_stream.getPos()];
@@ -223,7 +223,7 @@ pub const Term = struct {
         }
     }
 
-    fn draw_completion_menu(self: *Term, cmp_menu: *cmp.CompletionMenu) !void {
+    fn drawCompletionMenu(self: *Term, cmp_menu: *cmp.CompletionMenu) !void {
         const max_width = 30;
 
         if (main.editor.mode != .insert) return;
@@ -235,15 +235,15 @@ pub const Term = struct {
             .row = @intCast(replace_range.start.line),
             .col = @intCast(replace_range.start.character),
         })
-            .apply_offset(buffer.offset.negate())
-            .apply_offset(.{ .row = 1, .col = 0 });
+            .applyOffset(buffer.offset.negate())
+            .applyOffset(.{ .row = 1, .col = 0 });
 
         try co.attributes.write(co.attributes.completion_menu, self.writer.writer());
 
         for (0..cmp_menu.display_items.items.len) |menu_row| {
             const idx = cmp_menu.display_items.items[menu_row];
             const cmp_item = cmp_menu.completion_items.items[idx];
-            try self.move_cursor(.{
+            try self.moveCursor(.{
                 .row = menu_pos.row + @as(i32, @intCast(menu_row)),
                 .col = menu_pos.col,
             });
@@ -257,6 +257,6 @@ pub const Term = struct {
             }
         }
 
-        try self.reset_attributes();
+        try self.resetAttributes();
     }
 };

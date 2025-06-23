@@ -37,7 +37,7 @@ const Mode = enum {
     select,
     insert,
 
-    pub fn normal_or_select(self: Mode) bool {
+    pub fn normalOrSelect(self: Mode) bool {
         return self == .normal or self == .select;
     }
 };

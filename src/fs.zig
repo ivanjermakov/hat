@@ -1,7 +1,7 @@
 const std = @import("std");
 const posix = std.posix;
 
-pub fn read_nonblock(allocator: std.mem.Allocator, file: std.fs.File) !?[]u8 {
+pub fn readNonblock(allocator: std.mem.Allocator, file: std.fs.File) !?[]u8 {
     var res = std.ArrayList(u8).init(allocator);
     errdefer res.deinit();
 
@@ -26,7 +26,7 @@ pub fn read_nonblock(allocator: std.mem.Allocator, file: std.fs.File) !?[]u8 {
     return try res.toOwnedSlice();
 }
 
-pub fn make_nonblock(fd: posix.fd_t) void {
+pub fn makeNonblock(fd: posix.fd_t) void {
     _ = posix.fcntl(
         fd,
         posix.F.SETFL,

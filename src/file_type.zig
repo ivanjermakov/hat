@@ -24,7 +24,7 @@ pub const FileType = struct {
 
 pub var file_type: std.StringHashMap(FileType) = undefined;
 
-pub fn init_file_types(allocator: std.mem.Allocator) !void {
+pub fn initFileTypes(allocator: std.mem.Allocator) !void {
     file_type = std.StringHashMap(FileType).init(allocator);
     try file_type.put(".c", FileType{
         .name = "c",

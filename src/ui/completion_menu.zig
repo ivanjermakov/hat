@@ -11,8 +11,8 @@ pub const CompletionItem = struct {
     replace_text: []const u8,
     allocator: std.mem.Allocator,
 
-    pub fn from_lsp(allocator: std.mem.Allocator, item: lsp.types.CompletionItem) !CompletionItem {
-        const text_edit = lsp.extract_text_edit(item) orelse return error.NoTextEdit;
+    pub fn fromLsp(allocator: std.mem.Allocator, item: lsp.types.CompletionItem) !CompletionItem {
+        const text_edit = lsp.extractTextEdit(item) orelse return error.NoTextEdit;
         return .{
             .label = try allocator.dupe(u8, item.label),
             .filter_text = try allocator.dupe(u8, if (item.filterText) |ft| ft else item.label),
@@ -47,19 +47,19 @@ pub const CompletionMenu = struct {
         };
     }
 
-    pub fn update_items(self: *CompletionMenu, lsp_items: []const lsp.types.CompletionItem) !void {
+    pub fn updateItems(self: *CompletionMenu, lsp_items: []const lsp.types.CompletionItem) !void {
         log.log(@This(), "got {} completion items\n", .{lsp_items.len});
         if (lsp_items.len == 0) return;
 
         const prev_range_start = if (self.replace_range) |r| r.start else null;
-        const text_edit = lsp.extract_text_edit(lsp_items[0]) orelse return;
+        const text_edit = lsp.extractTextEdit(lsp_items[0]) orelse return;
         self.replace_range = text_edit.range;
 
         if (prev_range_start == null or !std.meta.eql(text_edit.range.start, prev_range_start.?)) {
-            try self.reset_items(lsp_items);
+            try self.resetItems(lsp_items);
         }
 
-        const prompt = try main.editor.active_buffer.?.text_at(self.replace_range.?);
+        const prompt = try main.editor.active_buffer.?.textAt(self.replace_range.?);
         log.log(@This(), "prompt {s}\n", .{prompt});
 
         self.display_items.clearRetainingCapacity();
@@ -81,7 +81,7 @@ pub const CompletionMenu = struct {
         }
     }
 
-    pub fn reset_items(self: *CompletionMenu, lsp_items: []const lsp.types.CompletionItem) !void {
+    pub fn resetItems(self: *CompletionMenu, lsp_items: []const lsp.types.CompletionItem) !void {
         log.log(@This(), "menu reset\n", .{});
         for (self.completion_items.items) |*item| {
             item.deinit();
@@ -89,7 +89,7 @@ pub const CompletionMenu = struct {
         self.completion_items.clearRetainingCapacity();
 
         for (lsp_items) |lsp_item| {
-            const item = try CompletionItem.from_lsp(self.allocator, lsp_item);
+            const item = try CompletionItem.fromLsp(self.allocator, lsp_item);
             try self.completion_items.append(item);
         }
     }
