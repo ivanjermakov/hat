@@ -6,7 +6,7 @@ const inp = @import("input.zig");
 const ft = @import("file_type.zig");
 const buf = @import("buffer.zig");
 const co = @import("color.zig");
-const ter = @import("term.zig");
+const ter = @import("terminal.zig");
 const lsp = @import("lsp.zig");
 const log = @import("log.zig");
 
@@ -21,7 +21,7 @@ pub const std_out = std.io.getStdOut();
 pub const std_in = std.io.getStdIn();
 
 pub var editor: edi.Editor = undefined;
-pub var term: ter.Term = undefined;
+pub var term: ter.Terminal = undefined;
 
 pub var log_enabled = true;
 pub var args: Args = .{
@@ -75,7 +75,7 @@ pub fn main() !void {
     try editor.buffers.append(&buffer);
     editor.active_buffer = &buffer;
 
-    term = try ter.Term.init(std_out.writer().any());
+    term = try ter.Terminal.init(std_out.writer().any());
     defer term.deinit();
 
     const lsp_conf = lsp.LspConfig{ .cmd = &[_][]const u8{ "typescript-language-server", "--stdio" } };
@@ -209,6 +209,6 @@ comptime {
 
 pub fn testingSetup() !void {
     const alloc = std.testing.allocator;
-    term = ter.Term{ .writer = .{ .unbuffered_writer = std.io.null_writer.any() } };
+    term = ter.Terminal{ .writer = .{ .unbuffered_writer = std.io.null_writer.any() } };
     ft.file_type = std.StringHashMap(ft.FileType).init(alloc);
 }

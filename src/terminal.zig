@@ -28,10 +28,10 @@ pub const cursor_type = union {
     pub const steady_bar = "\x1b[6 q";
 };
 
-pub const Term = struct {
+pub const Terminal = struct {
     writer: std.io.BufferedWriter(8192, std.io.AnyWriter),
 
-    pub fn init(std_out_writer: std.io.AnyWriter) !Term {
+    pub fn init(std_out_writer: std.io.AnyWriter) !Terminal {
         _ = c.setlocale(c.LC_ALL, "");
 
         var tty: c.struct_termios = undefined;
@@ -41,7 +41,7 @@ pub const Term = struct {
 
         fs.makeNonblock(std.posix.STDIN_FILENO);
 
-        var term = Term{
+        var term = Terminal{
             .writer = .{ .unbuffered_writer = std_out_writer },
         };
 
@@ -50,14 +50,14 @@ pub const Term = struct {
         return term;
     }
 
-    pub fn deinit(self: *Term) void {
+    pub fn deinit(self: *Terminal) void {
         self.clear() catch {};
         self.switchBuf(false) catch {};
         self.write(cursor_type.steady_block) catch {};
         self.flush() catch {};
     }
 
-    pub fn terminalSize(self: *const Term) !TerminalDimensions {
+    pub fn terminalSize(self: *const Terminal) !TerminalDimensions {
         _ = self;
         var w: std.c.winsize = undefined;
         if (std.c.ioctl(main.std_out.handle, std.c.T.IOCGWINSZ, &w) == -1) {
@@ -69,43 +69,43 @@ pub const Term = struct {
         };
     }
 
-    pub fn clear(self: *Term) !void {
+    pub fn clear(self: *Terminal) !void {
         try self.write("\x1b[2J");
     }
 
-    pub fn clearUntilLineEnd(self: *Term) !void {
+    pub fn clearUntilLineEnd(self: *Terminal) !void {
         try self.write("\x1b[0K");
     }
 
-    pub fn switchBuf(self: *Term, alternative: bool) !void {
+    pub fn switchBuf(self: *Terminal, alternative: bool) !void {
         try self.write(if (alternative) "\x1b[?1049h" else "\x1b[?1049l");
     }
 
-    pub fn resetAttributes(self: *Term) !void {
+    pub fn resetAttributes(self: *Terminal) !void {
         try self.write("\x1b[0m");
     }
 
-    pub fn moveCursor(self: *Term, cursor: buf.Cursor) !void {
+    pub fn moveCursor(self: *Terminal, cursor: buf.Cursor) !void {
         try self.format("\x1b[{};{}H", .{ cursor.row + 1, cursor.col + 1 });
     }
 
-    pub fn writeAttr(self: *Term, attr: co.Attr) !void {
+    pub fn writeAttr(self: *Terminal, attr: co.Attr) !void {
         try attr.write(self.writer.writer());
     }
 
-    pub fn write(self: *Term, str: []const u8) !void {
+    pub fn write(self: *Terminal, str: []const u8) !void {
         _ = try self.writer.write(str);
     }
 
-    pub fn flush(self: *Term) !void {
+    pub fn flush(self: *Terminal) !void {
         try self.writer.flush();
     }
 
-    pub fn format(self: *Term, comptime str: []const u8, args: anytype) !void {
+    pub fn format(self: *Terminal, comptime str: []const u8, args: anytype) !void {
         try std.fmt.format(self.writer.writer(), str, args);
     }
 
-    pub fn draw(self: *Term) !void {
+    pub fn draw(self: *Terminal) !void {
         const buffer = main.editor.active_buffer.?;
         try self.drawBuffer(buffer);
 
@@ -117,7 +117,7 @@ pub const Term = struct {
         try self.flush();
     }
 
-    fn drawBuffer(self: *Term, buffer: *buf.Buffer) !void {
+    fn drawBuffer(self: *Terminal, buffer: *buf.Buffer) !void {
         var attrs_buf = std.mem.zeroes([128]u8);
         var attrs_stream = std.io.fixedBufferStream(&attrs_buf);
         var attrs: []const u8 = undefined;
@@ -223,7 +223,7 @@ pub const Term = struct {
         }
     }
 
-    fn drawCompletionMenu(self: *Term, cmp_menu: *cmp.CompletionMenu) !void {
+    fn drawCompletionMenu(self: *Terminal, cmp_menu: *cmp.CompletionMenu) !void {
         const max_width = 30;
 
         if (main.editor.mode != .insert) return;
