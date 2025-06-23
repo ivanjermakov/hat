@@ -64,6 +64,3 @@ pub const attributes = enum {
         }
     }
 };
-
-pub const term_fg: ?RgbColor = color.white;
-pub const term_bg: ?RgbColor = null;

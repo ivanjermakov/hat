@@ -85,15 +85,7 @@ pub fn main() !void {
     main_loop: while (true) {
         try lsp_conn.update();
 
-        var needs_handle_mappings = false;
-        if (try inp.getCodes(allocator)) |codes| {
-            defer allocator.free(codes);
-            needs_handle_mappings = true;
-            const new_keys = try inp.getKeys(allocator, codes);
-            defer allocator.free(new_keys);
-            try key_queue.appendSlice(new_keys);
-        }
-
+        const needs_handle_mappings = try term.update_input(allocator);
         if (needs_handle_mappings) {
             handle_mappings: while (key_queue.items.len > 0) {
                 // log.log(@This(), "keys: {any}\n", .{keys.items});

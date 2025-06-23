@@ -9,6 +9,7 @@ const buf = @import("buffer.zig");
 const co = @import("color.zig");
 const log = @import("log.zig");
 const fs = @import("fs.zig");
+const inp = @import("input.zig");
 const cmp = @import("ui/completion_menu.zig");
 
 pub const TerminalDimensions = struct {
@@ -69,42 +70,6 @@ pub const Terminal = struct {
         };
     }
 
-    pub fn clear(self: *Terminal) !void {
-        try self.write("\x1b[2J");
-    }
-
-    pub fn clearUntilLineEnd(self: *Terminal) !void {
-        try self.write("\x1b[0K");
-    }
-
-    pub fn switchBuf(self: *Terminal, alternative: bool) !void {
-        try self.write(if (alternative) "\x1b[?1049h" else "\x1b[?1049l");
-    }
-
-    pub fn resetAttributes(self: *Terminal) !void {
-        try self.write("\x1b[0m");
-    }
-
-    pub fn moveCursor(self: *Terminal, cursor: buf.Cursor) !void {
-        try self.format("\x1b[{};{}H", .{ cursor.row + 1, cursor.col + 1 });
-    }
-
-    pub fn writeAttr(self: *Terminal, attr: co.Attr) !void {
-        try attr.write(self.writer.writer());
-    }
-
-    pub fn write(self: *Terminal, str: []const u8) !void {
-        _ = try self.writer.write(str);
-    }
-
-    pub fn flush(self: *Terminal) !void {
-        try self.writer.flush();
-    }
-
-    pub fn format(self: *Terminal, comptime str: []const u8, args: anytype) !void {
-        try std.fmt.format(self.writer.writer(), str, args);
-    }
-
     pub fn draw(self: *Terminal) !void {
         const buffer = main.editor.active_buffer.?;
         try self.drawBuffer(buffer);
@@ -115,6 +80,55 @@ pub const Terminal = struct {
         try self.moveCursor(buffer.cursor.applyOffset(buffer.offset.negate()));
 
         try self.flush();
+    }
+
+    pub fn update_input(self: *Terminal, allocator: std.mem.Allocator) !bool {
+        _ = self;
+        var dirty = false;
+        if (try getCodes(allocator)) |codes| {
+            defer allocator.free(codes);
+            dirty = true;
+            const new_keys = try getKeys(allocator, codes);
+            defer allocator.free(new_keys);
+            try main.key_queue.appendSlice(new_keys);
+        }
+        return dirty;
+    }
+
+    fn clear(self: *Terminal) !void {
+        try self.write("\x1b[2J");
+    }
+
+    fn clearUntilLineEnd(self: *Terminal) !void {
+        try self.write("\x1b[0K");
+    }
+
+    fn switchBuf(self: *Terminal, alternative: bool) !void {
+        try self.write(if (alternative) "\x1b[?1049h" else "\x1b[?1049l");
+    }
+
+    fn resetAttributes(self: *Terminal) !void {
+        try self.write("\x1b[0m");
+    }
+
+    fn moveCursor(self: *Terminal, cursor: buf.Cursor) !void {
+        try self.format("\x1b[{};{}H", .{ cursor.row + 1, cursor.col + 1 });
+    }
+
+    fn writeAttr(self: *Terminal, attr: co.Attr) !void {
+        try attr.write(self.writer.writer());
+    }
+
+    fn write(self: *Terminal, str: []const u8) !void {
+        _ = try self.writer.write(str);
+    }
+
+    fn flush(self: *Terminal) !void {
+        try self.writer.flush();
+    }
+
+    fn format(self: *Terminal, comptime str: []const u8, args: anytype) !void {
+        try std.fmt.format(self.writer.writer(), str, args);
     }
 
     fn drawBuffer(self: *Terminal, buffer: *buf.Buffer) !void {
@@ -260,3 +274,131 @@ pub const Terminal = struct {
         try self.resetAttributes();
     }
 };
+
+pub fn parseAnsi(allocator: std.mem.Allocator, input: *std.ArrayList(u8)) !inp.Key {
+    var key: inp.Key = .{
+        .printable = null,
+        .code = null,
+        .modifiers = 0,
+    };
+    const code = input.orderedRemove(0);
+    s: switch (code) {
+        0x00...0x08, 0x10...0x19 => {
+            // offset 96 converts \x1 to 'a', \x2 to 'b', and so on
+            var key_buf = [1]u8{code + 96};
+            // TODO: might not be printable
+            key.printable = key_buf[0..];
+            key.modifiers = @intFromEnum(inp.Modifier.control);
+        },
+        0x09 => key.code = .tab,
+        0x7f => key.code = .backspace,
+        0x0d => key.code = .enter,
+        0x1b => {
+            if (input.items.len > 0 and input.items[0] == '[') {
+                _ = input.orderedRemove(0);
+                if (input.items.len > 0) {
+                    switch (input.items[0]) {
+                        'A' => {
+                            _ = input.orderedRemove(0);
+                            key.code = .up;
+                            break :s;
+                        },
+                        'B' => {
+                            _ = input.orderedRemove(0);
+                            key.code = .down;
+                            break :s;
+                        },
+                        'C' => {
+                            _ = input.orderedRemove(0);
+                            key.code = .right;
+                            break :s;
+                        },
+                        'D' => {
+                            _ = input.orderedRemove(0);
+                            key.code = .left;
+                            break :s;
+                        },
+                        '3' => {
+                            _ = input.orderedRemove(0);
+                            if (input.items.len > 0 and input.items[0] == '~') _ = input.orderedRemove(0);
+                            key.code = .delete;
+                            break :s;
+                        },
+                        else => return error.TodoCsi,
+                    }
+                }
+            }
+            key.code = .escape;
+            break :s;
+        },
+        else => {
+            var printable = std.ArrayList(u8).init(allocator);
+            defer printable.deinit();
+
+            try printable.append(code);
+            while (input.items.len > 0) {
+                if (isPrintableAscii(input.items[0])) break;
+                const code2 = input.orderedRemove(0);
+                try printable.append(code2);
+            }
+            key.printable = try printable.toOwnedSlice();
+        },
+    }
+    log.log(@This(), "{any}\n", .{key});
+    return key;
+}
+
+pub fn getCodes(allocator: std.mem.Allocator) !?[]u8 {
+    var in_buf = std.ArrayList(u8).init(allocator);
+    while (true) {
+        var b: [1]u8 = undefined;
+        const bytes_read = std.posix.read(std.posix.STDIN_FILENO, b[0..1]) catch break;
+        if (bytes_read == 0) break;
+        try in_buf.appendSlice(b[0..]);
+        // 1ns seems to be enough wait time for stdin to fill up with the next code
+        std.Thread.sleep(1);
+    }
+    if (in_buf.items.len == 0) return null;
+
+    if (main.log_enabled) {
+        log.log(@This(), "input: ", .{});
+        for (in_buf.items) |code| {
+            const code_str = try ansiCodeToString(allocator, code);
+            defer allocator.free(code_str);
+            std.debug.print("{s}", .{code_str});
+        }
+        std.debug.print("\n", .{});
+    }
+
+    return try in_buf.toOwnedSlice();
+}
+
+pub fn getKeys(allocator: std.mem.Allocator, codes: []u8) ![]inp.Key {
+    var keys = std.ArrayList(inp.Key).init(allocator);
+
+    var cs = std.ArrayList(u8).init(allocator);
+    defer cs.deinit();
+    try cs.appendSlice(codes);
+
+    while (cs.items.len > 0) {
+        const key = parseAnsi(allocator, &cs) catch |e| {
+            log.log(@This(), "{}\n", .{e});
+            continue;
+        };
+        try keys.append(key);
+    }
+    return try keys.toOwnedSlice();
+}
+
+fn ansiCodeToString(allocator: std.mem.Allocator, code: u8) ![]u8 {
+    const is_printable = code >= 32 and code < 127;
+    if (is_printable) {
+        return std.fmt.allocPrint(allocator, "{c}", .{@as(u7, @intCast(code))});
+    } else {
+        return std.fmt.allocPrint(allocator, "\\x{x}", .{code});
+    }
+}
+
+fn isPrintableAscii(code: u8) bool {
+    return code >= 0x21 and code <= 0x7e;
+}
