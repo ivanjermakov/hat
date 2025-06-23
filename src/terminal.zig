@@ -171,28 +171,10 @@ pub const Terminal = struct {
                 const buffer_col = @as(i32, @intCast(term_col)) + buffer.offset.col;
 
                 if (term_col >= dims.width) break;
-                const ch_attrs: []co.Attr = b: for (buffer.spans.items) |span| {
+                const ch_attrs: []const co.Attr = b: for (buffer.spans.items) |span| {
                     if (span.span.start_byte <= byte and span.span.end_byte > byte) {
-                        if (std.mem.eql(u8, span.node_type, "return") or
-                            std.mem.eql(u8, span.node_type, "primitive_type") or
-                            std.mem.eql(u8, span.node_type, "#include") or
-                            std.mem.eql(u8, span.node_type, "export") or
-                            std.mem.eql(u8, span.node_type, "function"))
-                        {
-                            break :b @constCast(co.attributes.keyword);
-                        }
-                        if (std.mem.eql(u8, span.node_type, "system_lib_string") or
-                            std.mem.eql(u8, span.node_type, "string_literal") or
-                            std.mem.eql(u8, span.node_type, "string"))
-                        {
-                            break :b @constCast(co.attributes.string);
-                        }
-                        if (std.mem.eql(u8, span.node_type, "number_literal")) {
-                            break :b @constCast(co.attributes.number);
-                        }
-                        if (std.mem.eql(u8, span.node_type, "comment")) {
-                            break :b @constCast(co.attributes.comment);
-                        }
+                        const local_attrs = span.attrs();
+                        if (local_attrs) |la| break :b la;
                     }
                 } else {
                     break :b @constCast(co.attributes.text);

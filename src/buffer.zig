@@ -317,38 +317,36 @@ pub const Buffer = struct {
 
     fn makeSpans(self: *Buffer) !void {
         if (self.tree == null) return;
+        for (self.spans.items) |span| {
+            self.allocator.free(span.node_type);
+        }
         self.spans.clearRetainingCapacity();
 
+        var err: ts.ts.TSQueryError = undefined;
+        const language = ts.ts.ts_parser_language(self.parser).?;
+        const query_str = self.file_type.ts.?.highlight_query;
+        const query = ts.ts.ts_query_new(language, query_str.ptr, @intCast(query_str.len), null, &err);
+        defer ts.ts.ts_query_delete(query);
+        if (err > 0) return error.Query;
+
+        const cursor: *ts.ts.TSQueryCursor = ts.ts.ts_query_cursor_new().?;
+        defer ts.ts.ts_query_cursor_delete(cursor);
         const root_node = ts.ts.ts_tree_root_node(self.tree);
-        var tree_cursor = ts.ts.ts_tree_cursor_new(root_node);
-        var node = root_node;
+        ts.ts.ts_query_cursor_exec(cursor, query, root_node);
 
-        traverse: while (true) {
-            const node_type = std.mem.span(ts.ts.ts_node_type(node));
-            if (node_type.len == 0) continue;
-
-            const start_byte = ts.ts.ts_node_start_byte(node);
-            const end_byte = ts.ts.ts_node_end_byte(node);
-            try self.spans.append(.{
-                .span = .{ .start_byte = start_byte, .end_byte = end_byte },
-                .node_type = @constCast(node_type),
-            });
-
-            if (ts.ts.ts_tree_cursor_goto_first_child(&tree_cursor)) {
-                node = ts.ts.ts_tree_cursor_current_node(&tree_cursor);
-            } else {
-                while (true) {
-                    if (ts.ts.ts_tree_cursor_goto_next_sibling(&tree_cursor)) {
-                        node = ts.ts.ts_tree_cursor_current_node(&tree_cursor);
-                        break;
-                    } else {
-                        if (ts.ts.ts_tree_cursor_goto_parent(&tree_cursor)) {
-                            node = ts.ts.ts_tree_cursor_current_node(&tree_cursor);
-                        } else {
-                            break :traverse;
-                        }
-                    }
-                }
+        var match: ts.ts.TSQueryMatch = undefined;
+        while (ts.ts.ts_query_cursor_next_match(cursor, &match)) {
+            for (match.captures[0..match.capture_count]) |capture| {
+                var capture_name_len: u32 = undefined;
+                const capture_name = ts.ts.ts_query_capture_name_for_id(query, capture.index, &capture_name_len);
+                const node_type = capture_name[0..capture_name_len];
+                try self.spans.append(.{
+                    .span = .{
+                        .start_byte = ts.ts.ts_node_start_byte(capture.node),
+                        .end_byte = ts.ts.ts_node_end_byte(capture.node),
+                    },
+                    .node_type = node_type,
+                });
             }
         }
     }
