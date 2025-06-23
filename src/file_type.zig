@@ -59,6 +59,12 @@ pub fn initFileTypes(allocator: std.mem.Allocator) !void {
             .cmd = &[_][]const u8{ "typescript-language-server", "--stdio" },
         },
     });
+    try file_type.put(".zig", .{
+        .ts = try TsConfig.from_nvim(allocator, "zig"),
+        .lsp = .{
+            .cmd = &[_][]const u8{ "zls" },
+        },
+    });
 }
 
 pub fn deinitFileTypes(allocator: std.mem.Allocator) void {
