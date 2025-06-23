@@ -77,7 +77,9 @@ pub fn initFileTypes(allocator: std.mem.Allocator) !void {
     });
     try file_type.put(".zig", .{
         .ts = try TsConfig.from_nvim(allocator, "zig"),
-        .lsp = null,
+        .lsp = .{
+            .cmd = &[_][]const u8{ "zls" },
+        },
     });
 }
 

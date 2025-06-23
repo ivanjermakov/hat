@@ -49,7 +49,10 @@ pub const CompletionMenu = struct {
 
     pub fn updateItems(self: *CompletionMenu, lsp_items: []const lsp.types.CompletionItem) !void {
         log.log(@This(), "got {} completion items\n", .{lsp_items.len});
-        if (lsp_items.len == 0) return;
+        if (lsp_items.len == 0) {
+            try self.resetItems(lsp_items);
+            return;
+        }
 
         const prev_range_start = if (self.replace_range) |r| r.start else null;
         const text_edit = lsp.extractTextEdit(lsp_items[0]) orelse return;
@@ -79,6 +82,7 @@ pub const CompletionMenu = struct {
                 }
             }
         }
+        main.editor.needs_redraw = true;
     }
 
     pub fn resetItems(self: *CompletionMenu, lsp_items: []const lsp.types.CompletionItem) !void {
@@ -92,6 +96,7 @@ pub const CompletionMenu = struct {
             const item = try CompletionItem.fromLsp(self.allocator, lsp_item);
             try self.completion_items.append(item);
         }
+        main.editor.needs_redraw = true;
     }
 
     pub fn deinit(self: *CompletionMenu) void {

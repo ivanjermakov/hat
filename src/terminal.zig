@@ -245,6 +245,13 @@ pub const Terminal = struct {
 
         try co.attributes.write(co.attributes.completion_menu, self.writer.writer());
 
+        var longest_item: usize = 0;
+        for (cmp_menu.display_items.items) |idx| {
+            const cmp_item = cmp_menu.completion_items.items[idx];
+            if (cmp_item.label.len > longest_item) longest_item = cmp_item.label.len;
+        }
+        const menu_width = @min(max_width, longest_item);
+
         for (0..cmp_menu.display_items.items.len) |menu_row| {
             const idx = cmp_menu.display_items.items[menu_row];
             const cmp_item = cmp_menu.completion_items.items[idx];
@@ -252,9 +259,9 @@ pub const Terminal = struct {
                 .row = menu_pos.row + @as(i32, @intCast(menu_row)),
                 .col = menu_pos.col,
             });
-            try self.write(cmp_item.label[0..@min(cmp_item.label.len, max_width)]);
+            try self.write(cmp_item.label[0..@min(cmp_item.label.len, menu_width)]);
 
-            const padding_len: i32 = max_width - @as(i32, @intCast(cmp_item.label.len));
+            const padding_len: i32 = menu_width - @as(i32, @intCast(cmp_item.label.len));
             if (padding_len > 0) {
                 for (0..@intCast(padding_len)) |_| {
                     try self.write(" ");
