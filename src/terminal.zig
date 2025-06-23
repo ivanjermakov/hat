@@ -82,6 +82,12 @@ pub const Terminal = struct {
         try self.flush();
     }
 
+    pub fn updateCursor(self: *Terminal) !void {
+        const buffer = main.editor.active_buffer.?;
+        try self.moveCursor(buffer.cursor.applyOffset(buffer.offset.negate()));
+        try self.flush();
+    }
+
     pub fn update_input(self: *Terminal, allocator: std.mem.Allocator) !bool {
         _ = self;
         var dirty = false;
@@ -175,7 +181,7 @@ pub const Terminal = struct {
                 const ch_attrs: []const co.Attr = b: while (span_index < buffer.spans.items.len) {
                     const span = buffer.spans.items[span_index];
                     if (span.span.start_byte > byte) break :b co.attributes.text;
-                    if (span.span.start_byte <= byte and span.span.end_byte > byte) {
+                    if (byte >= span.span.start_byte and byte < span.span.end_byte) {
                         break :b span.attrs;
                     }
                     span_index += 1;

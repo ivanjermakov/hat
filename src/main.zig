@@ -175,6 +175,9 @@ pub fn main() !void {
         if (editor.needs_redraw) {
             editor.needs_redraw = false;
             try term.draw();
+        } else if (editor.needs_update_cursor) {
+            editor.needs_update_cursor = false;
+            try term.updateCursor();
         }
         std.time.sleep(sleep_ns);
     }

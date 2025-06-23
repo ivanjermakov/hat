@@ -192,7 +192,7 @@ pub const Buffer = struct {
                 selection.end = tmp;
             }
         }
-        main.editor.needs_redraw = true;
+        main.editor.needs_update_cursor = true;
     }
 
     pub fn insertText(self: *Buffer, text: []u8) !void {
