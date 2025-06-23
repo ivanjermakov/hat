@@ -317,9 +317,6 @@ pub const Buffer = struct {
 
     fn makeSpans(self: *Buffer) !void {
         if (self.tree == null) return;
-        for (self.spans.items) |span| {
-            self.allocator.free(span.capture_name);
-        }
         self.spans.clearRetainingCapacity();
 
         var err: ts.ts.TSQueryError = undefined;
