@@ -39,8 +39,7 @@ pub fn main() !void {
     defer {
         var value_iter = ft.file_type.valueIterator();
         while (value_iter.next()) |v| {
-            allocator.free(v.lib_path);
-            allocator.free(v.lib_symbol);
+            v.ts_config.deinit(allocator);
         }
         ft.file_type.deinit();
     }
@@ -202,5 +201,5 @@ comptime {
 pub fn testingSetup() !void {
     const alloc = std.testing.allocator;
     term = ter.Terminal{ .writer = .{ .unbuffered_writer = std.io.null_writer.any() } };
-    ft.file_type = std.StringHashMap(ft.FileType).init(alloc);
+    ft.file_type = std.StringHashMap(ft.FileTypeConfig).init(alloc);
 }
