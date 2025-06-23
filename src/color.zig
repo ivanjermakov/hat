@@ -28,7 +28,7 @@ pub const color = enum {
     pub const green = RgbColor.from_hex(0xa6d189);
     pub const blue = RgbColor.from_hex(0x9aa3f5);
     pub const yellow = RgbColor.from_hex(0xe6b99d);
-    pub const magenta = RgbColor.from_hex(0xe29eca);
+    pub const magenta = RgbColor.from_hex(0xd3a8ef);
 };
 
 pub const Attr = union(enum) {
