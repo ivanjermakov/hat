@@ -105,6 +105,7 @@ pub fn main() !void {
                 } else if (code == .escape) {
                     editor.mode = .normal;
                     editor.needs_redraw = true;
+                    try editor.completion_menu.reset();
                     log.log(@This(), "mode: {}\n", .{editor.mode});
 
                     // single-key normal or select mode
@@ -135,10 +136,12 @@ pub fn main() !void {
                     try buffer.removeChar();
                 } else if (editor.mode == .insert and code == .backspace) {
                     try buffer.removePrevChar();
+                    editor.needs_completion = true;
                 } else if (editor.mode == .insert and code == .enter) {
                     try buffer.insertNewline();
                 } else if (editor.mode == .insert and key.printable != null) {
                     try buffer.insertText(key.printable.?);
+                    editor.needs_completion = true;
                 } else if (multiple_key and editor.mode == .normal and ch == ' ') {
                     // multiple-key normal mode
                     const key2 = key_queue.orderedRemove(0);
@@ -178,6 +181,10 @@ pub fn main() !void {
         } else if (editor.needs_update_cursor) {
             editor.needs_update_cursor = false;
             try term.updateCursor();
+        }
+        if (editor.needs_completion) {
+            editor.needs_completion = false;
+            if (lsp_conn) |*conn| try conn.sendCompletionRequest();
         }
         std.time.sleep(sleep_ns);
     }

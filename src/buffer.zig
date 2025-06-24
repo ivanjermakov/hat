@@ -292,7 +292,9 @@ pub const Buffer = struct {
     pub fn textAt(self: *Buffer, range: lsp.types.Range) ![]const u8 {
         std.debug.assert(range.start.line == range.end.line);
         const line = &self.content.items[range.start.line];
-        return line.items[range.start.character..range.end.character];
+        const char_start = try utf8BytePos(line.items, range.start.character);
+        const char_end = try utf8BytePos(line.items, range.end.character);
+        return line.items[char_start..char_end];
     }
 
     fn cursorBytePos(self: *Buffer, cursor: Cursor) !Cursor {

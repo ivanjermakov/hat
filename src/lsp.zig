@@ -82,7 +82,7 @@ pub const LspConnection = struct {
         defer arena.deinit();
 
         for (raw_msgs) |raw_msg_json| {
-            log.log(@This(), "< raw message: {s}\n", .{raw_msg_json});
+            // log.log(@This(), "< raw message: {s}\n", .{raw_msg_json});
             const msg_json = try std.json.parseFromSlice(lsp.JsonRPCMessage, arena.allocator(), raw_msg_json, .{});
             defer msg_json.deinit();
             const rpc_message: lsp.JsonRPCMessage = msg_json.value;
@@ -149,16 +149,21 @@ pub const LspConnection = struct {
                             .result => {},
                         }
 
-                        const resp_typed = try lsp.parser.UnionParser(ResponseType).jsonParseFromValue(
-                            arena.allocator(),
-                            resp.result_or_error.result.?,
-                            .{},
-                        );
-                        const items: []const lsp.types.CompletionItem = b: switch (resp_typed) {
-                            .array_of_CompletionItem => |a| break :b a,
-                            .CompletionList => |l| break :b l.items,
+                        const items: []const lsp.types.CompletionItem = b: {
+                            const empty = [_]lsp.types.CompletionItem{};
+                            const resp_typed = lsp.parser.UnionParser(ResponseType).jsonParseFromValue(
+                                arena.allocator(),
+                                resp.result_or_error.result.?,
+                                .{},
+                            ) catch break :b &empty;
+                            switch (resp_typed) {
+                                .array_of_CompletionItem => |a| break :b a,
+                                .CompletionList => |l| break :b l.items,
+                            }
                         };
-                        try main.editor.completion_menu.updateItems(items);
+                        main.editor.completion_menu.updateItems(items) catch |e| {
+                            log.log(@This(), "cmp menu update failed: {}\n", .{e});
+                        };
                     }
                 },
                 .notification => |notif| {
@@ -215,7 +220,6 @@ pub const LspConnection = struct {
 
     pub fn didChange(self: *LspConnection) !void {
         const buffer = main.editor.active_buffer.?;
-        const position = buffer.position();
         const changes = [_]lsp.types.TextDocumentContentChangeEvent{
             .{ .literal_1 = .{ .text = buffer.content_raw.items } },
         };
@@ -224,6 +228,11 @@ pub const LspConnection = struct {
             .textDocument = .{ .uri = buffer.uri, .version = 0 },
             .contentChanges = &changes,
         });
+    }
+
+    pub fn sendCompletionRequest(self: *LspConnection) !void {
+        const buffer = main.editor.active_buffer.?;
+        const position = buffer.position();
         try self.sendRequest("textDocument/completion", .{
             .textDocument = .{ .uri = buffer.uri },
             .position = .{

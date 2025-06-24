@@ -50,16 +50,21 @@ pub const CompletionMenu = struct {
     pub fn updateItems(self: *CompletionMenu, lsp_items: []const lsp.types.CompletionItem) !void {
         log.log(@This(), "got {} completion items\n", .{lsp_items.len});
         if (lsp_items.len == 0) {
-            try self.resetItems(lsp_items);
+            try self.reset();
             return;
         }
+        errdefer self.reset() catch {};
 
         const prev_range_start = if (self.replace_range) |r| r.start else null;
         const text_edit = lsp.extractTextEdit(lsp_items[0]) orelse return;
         self.replace_range = text_edit.range;
 
         if (prev_range_start == null or !std.meta.eql(text_edit.range.start, prev_range_start.?)) {
-            try self.resetItems(lsp_items);
+            try self.reset();
+            for (lsp_items) |lsp_item| {
+                const item = try CompletionItem.fromLsp(self.allocator, lsp_item);
+                try self.completion_items.append(item);
+            }
         }
 
         const prompt = try main.editor.active_buffer.?.textAt(self.replace_range.?);
@@ -75,27 +80,25 @@ pub const CompletionMenu = struct {
         }
         if (main.log_enabled) {
             if (self.display_items.items.len > 0) {
-                log.log(@This(), "menu:\n", .{});
+                log.log(@This(), "menu:", .{});
                 for (self.display_items.items) |i| {
                     const item = self.completion_items.items[i];
-                    std.debug.print("  {s}\n", .{item.label});
+                    std.debug.print(" {s}", .{item.label});
                 }
+                std.debug.print("\n", .{});
             }
         }
         main.editor.needs_redraw = true;
     }
 
-    pub fn resetItems(self: *CompletionMenu, lsp_items: []const lsp.types.CompletionItem) !void {
+    pub fn reset(self: *CompletionMenu) !void {
         log.log(@This(), "menu reset\n", .{});
         for (self.completion_items.items) |*item| {
             item.deinit();
         }
         self.completion_items.clearRetainingCapacity();
+        self.display_items.clearRetainingCapacity();
 
-        for (lsp_items) |lsp_item| {
-            const item = try CompletionItem.fromLsp(self.allocator, lsp_item);
-            try self.completion_items.append(item);
-        }
         main.editor.needs_redraw = true;
     }
 
