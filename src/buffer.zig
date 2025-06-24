@@ -172,7 +172,7 @@ pub const Buffer = struct {
             term_cursor.col >= 0 and term_cursor.col < dims.width;
         if (!in_term) return;
 
-        if (new_buf_cursor.row >= self.content.items.len - 1) return;
+        if (new_buf_cursor.row > self.content.items.len - 1) return;
         const line = &self.content.items[@intCast(new_buf_cursor.row)];
         const max_col = utf8CharacterLen(line.items) catch return;
         const col: i32 = @intCast(@min(new_buf_cursor.col, max_col));
@@ -201,6 +201,21 @@ pub const Buffer = struct {
             main.editor.needs_redraw = true;
         }
         main.editor.needs_update_cursor = true;
+    }
+
+    test "moveCursor" {
+        var buffer = try testSetup(
+            \\abc
+            \\def
+            \\ghijk
+        );
+        defer buffer.deinit();
+
+        try buffer.moveCursor(.{ .row = 0, .col = 1 });
+        try testing.expectEqual(Cursor{ .row = 0, .col = 1 }, buffer.cursor);
+
+        try buffer.moveCursor(Cursor{ .row = 2, .col = 2 });
+        try testing.expectEqual(Cursor{ .row = 2, .col = 2 }, buffer.cursor);
     }
 
     pub fn insertText(self: *Buffer, text: []u8) !void {
@@ -287,7 +302,6 @@ pub const Buffer = struct {
             if (selection.end.row - selection.start.row > 0) {
                 try self.deleteToEnd(selection.start);
                 const new_end: Cursor = .{ .row = selection.start.row + 1, .col = selection.end.col + 1 };
-                log.log(@This(), "new end: {}\n", .{new_end});
                 try self.deleteToStart(new_end);
                 try self.joinWithLineBelow(@intCast(selection.start.row));
             } else {
@@ -304,6 +318,40 @@ pub const Buffer = struct {
             main.editor.mode = .normal;
             main.editor.needs_reparse = true;
         }
+    }
+
+    test "selectionDelete same line" {
+        var buffer = try testSetup(
+            \\abc
+        );
+        defer buffer.deinit();
+
+        buffer.cursor = .{ .row = 0, .col = 1 };
+        try buffer.selectChar();
+        try buffer.selectionDelete();
+
+        try buffer.updateRaw();
+        try testing.expectEqualStrings("ac", buffer.content_raw.items);
+    }
+
+    test "selectionDelete multiple lines" {
+        var buffer = try testSetup(
+            \\abc
+            \\def
+            \\ghijk
+        );
+        defer buffer.deinit();
+
+        try buffer.moveCursor(.{ .row = 0, .col = 1 });
+        try buffer.selectChar();
+        try buffer.moveCursor(Cursor{ .row = 2, .col = 2 });
+
+        try testing.expectEqual(Cursor{ .row = 0, .col = 1 }, buffer.selection.?.start);
+        try testing.expectEqual(Cursor{ .row = 2, .col = 2 }, buffer.selection.?.end);
+        try buffer.selectionDelete();
+
+        try buffer.updateRaw();
+        try testing.expectEqualStrings("ajk", buffer.content_raw.items);
     }
 
     /// Delete every character from cursor (including) to the end of line
@@ -443,30 +491,20 @@ pub const Buffer = struct {
     }
 
     fn testSetup(content: []const u8) !Buffer {
-        try main.testingSetup();
+        try main.testSetup();
         const allocator = std.testing.allocator;
         const buffer = try init(allocator, "test.txt", content);
+        log.log(@This(), "created test buffer with content: \n{s}\n", .{content});
         return buffer;
     }
 
     test "test buffer" {
-        var buffer = try testSetup("abc");
+        var buffer = try testSetup(
+            \\abc
+        );
         defer buffer.deinit();
 
         try testing.expectEqualStrings("abc", buffer.content_raw.items);
-    }
-
-    test "selectionDelete same line" {
-        var buffer = try testSetup("abc");
-        //                           ^ cursor
-        defer buffer.deinit();
-
-        buffer.cursor = .{ .row = 0, .col = 1 };
-        try buffer.selectChar();
-        try buffer.selectionDelete();
-
-        try buffer.updateRaw();
-        try testing.expectEqualStrings("ac", buffer.content_raw.items);
     }
 };
 

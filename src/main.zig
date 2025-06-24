@@ -208,11 +208,12 @@ comptime {
     std.testing.refAllDecls(@This());
 }
 
-pub fn testingSetup() !void {
-    const alloc = std.testing.allocator;
+pub fn testSetup() !void {
+    allocator = std.testing.allocator;
+    log_enabled = true;
     term = ter.Terminal{
         .writer = .{ .unbuffered_writer = std.io.null_writer.any() },
         .dimensions = .{ .width = 50, .height = 30 },
     };
-    ft.file_type = std.StringHashMap(ft.FileTypeConfig).init(alloc);
+    ft.file_type = std.StringHashMap(ft.FileTypeConfig).init(allocator);
 }
