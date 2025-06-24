@@ -200,6 +200,7 @@ pub const Buffer = struct {
                 selection.start = selection.end;
                 selection.end = tmp;
             }
+            main.editor.needs_redraw = true;
         }
         main.editor.needs_update_cursor = true;
     }
