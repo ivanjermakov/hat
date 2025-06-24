@@ -57,6 +57,7 @@ pub const Buffer = struct {
     content_raw: std.ArrayList(u8),
     spans: std.ArrayList(ts.SpanAttrsTuple),
     parser: ?*ts.ts.TSParser,
+    query: ?*ts.ts.TSQuery,
     tree: ?*ts.ts.TSTree,
     selection: ?SelectionSpan,
     diagnostics: std.ArrayList(lsp.types.Diagnostic),
@@ -84,6 +85,7 @@ pub const Buffer = struct {
             .content_raw = raw,
             .spans = std.ArrayList(ts.SpanAttrsTuple).init(allocator),
             .parser = null,
+            .query = null,
             .tree = null,
             .selection = null,
             .diagnostics = std.ArrayList(lsp.types.Diagnostic).init(allocator),
@@ -102,6 +104,10 @@ pub const Buffer = struct {
             const language = try ts_conf.loadLanguage();
             self.parser = ts.ts.ts_parser_new();
             _ = ts.ts.ts_parser_set_language(self.parser, language());
+            const query_str = self.file_type.ts.?.highlight_query;
+            var err: ts.ts.TSQueryError = undefined;
+            self.query = ts.ts.ts_query_new(language(), query_str.ptr, @intCast(query_str.len), null, &err);
+            if (err > 0) return error.Query;
         }
     }
 
@@ -120,7 +126,9 @@ pub const Buffer = struct {
             const node = ts.ts.ts_tree_root_node(self.tree);
             log.log(@This(), "tree: {s}\n", .{std.mem.span(ts.ts.ts_node_string(node))});
         }
+        var timer = try std.time.Timer.start();
         try self.makeSpans();
+        log.log(@This(), "makeSpans in {}us\n", .{timer.lap() / std.time.ns_per_us});
     }
 
     pub fn updateContent(self: *Buffer) !void {
@@ -136,6 +144,7 @@ pub const Buffer = struct {
     pub fn deinit(self: *Buffer) void {
         if (self.parser) |p| ts.ts.ts_parser_delete(p);
         if (self.tree) |t| ts.ts.ts_tree_delete(t);
+        defer if (self.query) |query| ts.ts.ts_query_delete(query);
         for (self.content.items) |line| line.deinit();
         self.content.deinit();
         self.content_raw.deinit();
@@ -320,23 +329,16 @@ pub const Buffer = struct {
         if (self.tree == null) return;
         self.spans.clearRetainingCapacity();
 
-        var err: ts.ts.TSQueryError = undefined;
-        const language = ts.ts.ts_parser_language(self.parser).?;
-        const query_str = self.file_type.ts.?.highlight_query;
-        const query = ts.ts.ts_query_new(language, query_str.ptr, @intCast(query_str.len), null, &err);
-        defer ts.ts.ts_query_delete(query);
-        if (err > 0) return error.Query;
-
         const cursor: *ts.ts.TSQueryCursor = ts.ts.ts_query_cursor_new().?;
         defer ts.ts.ts_query_cursor_delete(cursor);
         const root_node = ts.ts.ts_tree_root_node(self.tree);
-        ts.ts.ts_query_cursor_exec(cursor, query, root_node);
+        ts.ts.ts_query_cursor_exec(cursor, self.query.?, root_node);
 
         var match: ts.ts.TSQueryMatch = undefined;
         while (ts.ts.ts_query_cursor_next_match(cursor, &match)) {
             for (match.captures[0..match.capture_count]) |capture| {
                 var capture_name_len: u32 = undefined;
-                const capture_name = ts.ts.ts_query_capture_name_for_id(query, capture.index, &capture_name_len);
+                const capture_name = ts.ts.ts_query_capture_name_for_id(self.query.?, capture.index, &capture_name_len);
                 const node_type = capture_name[0..capture_name_len];
                 const span: ts.Span = .{
                     .start_byte = ts.ts.ts_node_start_byte(capture.node),
