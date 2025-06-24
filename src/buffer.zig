@@ -126,9 +126,7 @@ pub const Buffer = struct {
             const node = ts.ts.ts_tree_root_node(self.tree);
             log.log(@This(), "tree: {s}\n", .{std.mem.span(ts.ts.ts_node_string(node))});
         }
-        var timer = try std.time.Timer.start();
         try self.makeSpans();
-        log.log(@This(), "makeSpans in {}us\n", .{timer.lap() / std.time.ns_per_us});
     }
 
     pub fn updateContent(self: *Buffer) !void {
@@ -166,10 +164,10 @@ pub const Buffer = struct {
         const old_position = self.position();
 
         if (new_buf_cursor.row < 0) return;
-        const dims = try main.term.terminalSize();
         self.scrollForCursor(new_buf_cursor);
 
         const term_cursor = new_buf_cursor.applyOffset(self.offset.negate());
+        const dims = main.term.dimensions;
         const in_term = term_cursor.row >= 0 and term_cursor.row < dims.height and
             term_cursor.col >= 0 and term_cursor.col < dims.width;
         if (!in_term) return;
@@ -343,6 +341,7 @@ pub const Buffer = struct {
     }
 
     pub fn selectChar(self: *Buffer) !void {
+        main.editor.mode = .select;
         const pos = self.position();
         self.selection = .{ .start = pos, .end = pos };
     }
@@ -416,7 +415,7 @@ pub const Buffer = struct {
 
     fn scrollForCursor(self: *Buffer, new_buf_cursor: Cursor) void {
         const term_cursor = new_buf_cursor.applyOffset(self.offset.negate());
-        const dims = main.term.terminalSize() catch unreachable;
+        const dims = main.term.dimensions;
         if (term_cursor.row < 0 and new_buf_cursor.row >= 0) {
             self.offset.row += term_cursor.row;
             main.editor.needs_redraw = true;
@@ -447,10 +446,10 @@ pub const Buffer = struct {
     }
 
     test "test buffer" {
-        var buffer = try testSetup("");
+        var buffer = try testSetup("abc");
         defer buffer.deinit();
 
-        try testing.expectEqualSlices(u8, buffer.content_raw.items, "");
+        try testing.expectEqualStrings("abc", buffer.content_raw.items);
     }
 };
 

@@ -31,8 +31,9 @@ pub const cursor_type = union {
 
 pub const Terminal = struct {
     writer: std.io.BufferedWriter(8192, std.io.AnyWriter),
+    dimensions: TerminalDimensions,
 
-    pub fn init(std_out_writer: std.io.AnyWriter) !Terminal {
+    pub fn init(std_out_writer: std.io.AnyWriter, dimensions: TerminalDimensions) !Terminal {
         _ = c.setlocale(c.LC_ALL, "");
 
         var tty: c.struct_termios = undefined;
@@ -42,6 +43,7 @@ pub const Terminal = struct {
 
         var term = Terminal{
             .writer = .{ .unbuffered_writer = std_out_writer },
+            .dimensions = dimensions,
         };
 
         try term.switchBuf(true);
@@ -54,18 +56,6 @@ pub const Terminal = struct {
         self.switchBuf(false) catch {};
         self.write(cursor_type.steady_block) catch {};
         self.flush() catch {};
-    }
-
-    pub fn terminalSize(self: *const Terminal) !TerminalDimensions {
-        _ = self;
-        var w: std.c.winsize = undefined;
-        if (std.c.ioctl(main.std_out.handle, std.c.T.IOCGWINSZ, &w) == -1) {
-            return error.TermSize;
-        }
-        return .{
-            .width = w.col,
-            .height = w.row,
-        };
     }
 
     pub fn draw(self: *Terminal) !void {
@@ -143,10 +133,8 @@ pub const Terminal = struct {
         var last_attrs: ?[]const u8 = null;
 
         try self.clear();
-        const dims = try self.terminalSize();
-
         var span_index: usize = 0;
-        for (0..dims.height) |term_row| {
+        for (0..self.dimensions.height) |term_row| {
             const buffer_row = @as(i32, @intCast(term_row)) + buffer.offset.row;
             if (buffer_row < 0) continue;
             if (buffer_row >= buffer.content.items.len) break;
@@ -175,7 +163,7 @@ pub const Terminal = struct {
                 attrs_stream.reset();
                 const buffer_col = @as(i32, @intCast(term_col)) + buffer.offset.col;
 
-                if (term_col >= dims.width) break;
+                if (term_col >= self.dimensions.width) break;
                 const ch_attrs: []const co.Attr = b: while (span_index < buffer.spans.items.len) {
                     const span = buffer.spans.items[span_index];
                     if (span.span.start_byte > byte) break :b co.attributes.text;
@@ -270,6 +258,17 @@ pub const Terminal = struct {
         try self.resetAttributes();
     }
 };
+
+pub fn terminalSize() !TerminalDimensions {
+    var w: std.c.winsize = undefined;
+    if (std.c.ioctl(main.std_out.handle, std.c.T.IOCGWINSZ, &w) == -1) {
+        return error.TermSize;
+    }
+    return .{
+        .width = w.col,
+        .height = w.row,
+    };
+}
 
 pub fn parseAnsi(allocator: std.mem.Allocator, input: *std.ArrayList(u8)) !inp.Key {
     var key: inp.Key = .{

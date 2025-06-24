@@ -71,7 +71,7 @@ pub fn main() !void {
     try editor.buffers.append(&buffer);
     editor.active_buffer = &buffer;
 
-    term = try ter.Terminal.init(std_out.writer().any());
+    term = try ter.Terminal.init(std_out.writer().any(), try ter.terminalSize());
     defer term.deinit();
 
     var lsp_conn: ?lsp.LspConnection = if (buffer.file_type.lsp) |lsp_conf| try lsp.LspConnection.connect(allocator, &lsp_conf) else null;
@@ -128,7 +128,6 @@ pub fn main() !void {
 
                     // single-key normal mode
                 } else if (editor.mode == .normal and ch == 's') {
-                    editor.mode = .select;
                     try buffer.selectChar();
                     editor.needs_redraw = true;
                     log.log(@This(), "mode: {}\n", .{editor.mode});
@@ -211,6 +210,9 @@ comptime {
 
 pub fn testingSetup() !void {
     const alloc = std.testing.allocator;
-    term = ter.Terminal{ .writer = .{ .unbuffered_writer = std.io.null_writer.any() } };
+    term = ter.Terminal{
+        .writer = .{ .unbuffered_writer = std.io.null_writer.any() },
+        .dimensions = .{ .width = 50, .height = 30 },
+    };
     ft.file_type = std.StringHashMap(ft.FileTypeConfig).init(alloc);
 }
