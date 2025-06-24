@@ -41,13 +41,13 @@ pub const TsConfig = struct {
     pub fn lib_path_from_nvim(allocator: std.mem.Allocator, name: []const u8) ![]const u8 {
         const str = try std.fmt.allocPrint(allocator, "{s}/parser/{s}.so", .{ nvim_treesitter_path, name });
         defer allocator.free(str);
-        return try env.expand(allocator, str);
+        return try env.expand(allocator, str, std.posix.getenv);
     }
 
     pub fn highlight_query_from_nvim(allocator: std.mem.Allocator, name: []const u8) ![]const u8 {
         const str = try std.fmt.allocPrint(allocator, "{s}/queries/{s}/highlights.scm", .{ nvim_treesitter_path, name });
         defer allocator.free(str);
-        const query_path = try env.expand(allocator, str);
+        const query_path = try env.expand(allocator, str, std.posix.getenv);
         defer allocator.free(query_path);
         return try std.fs.cwd().readFileAlloc(allocator, query_path, std.math.maxInt(usize));
     }

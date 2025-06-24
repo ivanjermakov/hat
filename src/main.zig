@@ -35,6 +35,8 @@ pub fn main() !void {
     defer _ = debug_allocator.deinit();
     allocator = if (builtin.mode == .Debug) debug_allocator.allocator() else std.heap.c_allocator;
 
+    log.log(@This(), "logging enabled\n", .{});
+
     try ft.initFileTypes(allocator);
     defer ft.deinitFileTypes(allocator);
 
@@ -56,6 +58,7 @@ pub fn main() !void {
     }
 
     const path = args.path orelse return error.NoPath;
+    log.log(@This(), "opening file at path {s}\n", .{path});
     const file = try std.fs.cwd().openFile(path, .{ .mode = .read_write });
     const file_content = try file.readToEndAlloc(allocator, std.math.maxInt(usize));
     defer allocator.free(file_content);

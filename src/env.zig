@@ -1,15 +1,33 @@
 const std = @import("std");
-const w = @cImport({
-    @cInclude("wordexp.h");
-});
+const reg = @import("regex");
 
-pub fn expand(allocator: std.mem.Allocator, str: []u8) ![]u8 {
-    var we: w.wordexp_t = undefined;
-    defer w.wordfree(&we);
-    const res = w.wordexp(@ptrCast(str), &we, 0);
-    if (res != 0) return error.Wordexp;
+/// Given string str, expand env variables
+/// Variable is a sequence in format of /\$[A-Z0-Z]+/
+/// Not resolved vars substituted with ""
+pub fn expand(allocator: std.mem.Allocator, str: []u8, getenv: *const @TypeOf(std.posix.getenv)) ![]u8 {
+    var res = std.ArrayList(u8).init(allocator);
 
-    const word = std.mem.span(we.we_wordv[0]);
-    const expanded = try allocator.dupe(u8, word);
-    return expanded;
+    var re = try reg.Regex.compile(allocator, "\\$[A-Z0-Z]+");
+    defer re.deinit();
+
+    var cursor: usize = 0;
+    var captures_opt = try re.captures(str);
+    if (captures_opt) |*captures| {
+        defer captures.deinit();
+
+        for (0..captures.len()) |i| {
+            const variable = captures.sliceAt(i).?;
+            const span = captures.boundsAt(i).?;
+            if (cursor < span.lower) {
+                try res.appendSlice(str[cursor..span.lower]);
+            }
+            // without dollar sign
+            const val = getenv(variable[1..]) orelse "";
+            try res.appendSlice(val);
+            cursor = span.upper;
+        }
+    }
+    // append rest of the string
+    try res.appendSlice(str[cursor..]);
+    return res.toOwnedSlice();
 }
