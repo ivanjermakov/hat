@@ -278,6 +278,70 @@ pub const Buffer = struct {
         main.editor.needs_reparse = true;
     }
 
+    pub fn selectionDelete(self: *Buffer) !void {
+        if (main.editor.mode != .select) return;
+        if (self.selection) |selection| {
+            if (selection.end.row - selection.start.row > 1) {
+                // remove fully selected lines
+                try self.deleteLineRange(@intCast(selection.start.row + 1), @intCast(selection.end.row));
+            }
+            // start and end on separate lines
+            if (selection.end.row - selection.start.row > 0) {
+                try self.deleteToEnd(selection.start);
+                const new_end: Cursor = .{ .row = selection.start.row + 1, .col = selection.end.col + 1 };
+                log.log(@This(), "new end: {}\n", .{new_end});
+                try self.deleteToStart(new_end);
+                try self.joinWithLineBelow(@intCast(selection.start.row));
+            } else {
+                const cbp_start = try self.cursorBytePos(selection.start);
+                const cbp_end = try self.cursorBytePos(selection.end);
+                var line = &self.content.items[@intCast(cbp_start.row)];
+                try line.replaceRange(
+                    @intCast(cbp_start.col),
+                    @intCast(1 + cbp_end.col - cbp_start.col),
+                    &[_]u8{},
+                );
+            }
+            try self.moveCursor(selection.start);
+            main.editor.mode = .normal;
+            main.editor.needs_reparse = true;
+        }
+    }
+
+    /// Delete every character from cursor (including) to the end of line
+    pub fn deleteToEnd(self: *Buffer, cursor: Cursor) !void {
+        const cbp = try self.cursorBytePos(cursor);
+        var line = &self.content.items[@intCast(cbp.row)];
+        try line.replaceRange(
+            @intCast(cbp.col),
+            line.items.len - @as(usize, @intCast(cbp.col)),
+            &[_]u8{},
+        );
+        main.editor.needs_reparse = true;
+    }
+
+    /// Delete every character from start of line to cursor (excluding)
+    pub fn deleteToStart(self: *Buffer, cursor: Cursor) !void {
+        const cbp = try self.cursorBytePos(cursor);
+        var line = &self.content.items[@intCast(cbp.row)];
+        try line.replaceRange(
+            0,
+            @intCast(cbp.col),
+            &[_]u8{},
+        );
+        main.editor.needs_reparse = true;
+    }
+
+    /// End is exclusive
+    pub fn deleteLineRange(self: *Buffer, start: usize, end: usize) !void {
+        if (end - start <= 0) return;
+        for (start..end) |_| {
+            const line = self.content.orderedRemove(start);
+            line.deinit();
+        }
+        main.editor.needs_reparse = true;
+    }
+
     pub fn selectChar(self: *Buffer) !void {
         const pos = self.position();
         self.selection = .{ .start = pos, .end = pos };

@@ -111,6 +111,9 @@ pub fn main() !void {
                     try editor.completion_menu.reset();
                     log.log(@This(), "mode: {}\n", .{editor.mode});
 
+                    // single-key select mode
+                } else if (editor.mode == .select and ch == 'd') {
+                    try buffer.selectionDelete();
                     // single-key normal or select mode
                 } else if (normal_or_select and ch == 'q') {
                     break :main_loop;
