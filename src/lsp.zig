@@ -27,6 +27,8 @@ pub const LspConnection = struct {
     status: LspConnectionStatus,
     child: std.process.Child,
     messages_unreplied: std.AutoHashMap(i64, LspRequest),
+    poll_buf: std.ArrayList(u8),
+    poll_header: ?lsp.BaseProtocolHeader,
     allocator: std.mem.Allocator,
 
     pub fn connect(allocator: std.mem.Allocator, config: *const LspConfig) !LspConnection {
@@ -42,6 +44,8 @@ pub const LspConnection = struct {
             .status = .Connected,
             .child = child,
             .messages_unreplied = std.AutoHashMap(i64, LspRequest).init(allocator),
+            .poll_buf = std.ArrayList(u8).init(allocator),
+            .poll_header = null,
             .allocator = allocator,
         };
         try conn.sendRequest("initialize", .{
@@ -261,17 +265,39 @@ pub const LspConnection = struct {
 
         const read = try fs.readNonblock(self.allocator, self.child.stdout.?) orelse return null;
         defer self.allocator.free(read);
-        var read_stream = std.io.fixedBufferStream(read);
-        const reader = read_stream.reader();
+        try self.poll_buf.appendSlice(read);
 
         var messages = std.ArrayList([]u8).init(self.allocator);
         while (true) {
-            const header = lsp.BaseProtocolHeader.parse(reader) catch break;
+            if (self.poll_buf.items.len == 0) break;
+            var read_stream = std.io.fixedBufferStream(self.poll_buf.items);
+            const reader = read_stream.reader();
+
+            const header = if (self.poll_header) |header| header else lsp.BaseProtocolHeader.parse(reader) catch |e| {
+                log.log(@This(), "parse header error: {}\n", .{e});
+                break;
+            };
+            const available: i32 = @as(i32, @intCast(self.poll_buf.items.len)) - @as(i32, @intCast(reader.context.pos));
+            if (header.content_length <= available) {
+                self.poll_header = null;
+            } else {
+                // if message is incomplete, save header for next `poll` call
+                self.poll_header = header;
+                const old = try self.poll_buf.toOwnedSlice();
+                defer self.allocator.free(old);
+                try self.poll_buf.appendSlice(old[reader.context.pos..]);
+                break;
+            }
 
             const json_message = try self.allocator.alloc(u8, header.content_length);
             errdefer self.allocator.free(json_message);
             _ = try reader.readAll(json_message);
             try messages.append(json_message);
+
+            // in case there is more messages in poll_buf, keep them
+            const old = try self.poll_buf.toOwnedSlice();
+            defer self.allocator.free(old);
+            try self.poll_buf.appendSlice(old[reader.context.pos..]);
         }
 
         return try messages.toOwnedSlice();
