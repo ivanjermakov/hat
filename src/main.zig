@@ -94,17 +94,15 @@ pub fn main() !void {
                 const multiple_key = key_queue.items.len > 0;
                 const normal_or_select = editor.mode.normalOrSelect();
 
-                // TODO: crazy comptime
-
                 // single-key global
                 if (code == .up) {
-                    try buffer.moveCursor(.{ .row = buffer.cursor.row - 1, .col = buffer.cursor.col });
+                    try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = -1, .col = 0 }));
                 } else if (code == .down) {
-                    try buffer.moveCursor(.{ .row = buffer.cursor.row + 1, .col = buffer.cursor.col });
+                    try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = 1, .col = 0 }));
                 } else if (code == .left) {
-                    try buffer.moveCursor(.{ .row = buffer.cursor.row, .col = buffer.cursor.col - 1 });
+                    try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = 0, .col = -1 }));
                 } else if (code == .right) {
-                    try buffer.moveCursor(.{ .row = buffer.cursor.row, .col = buffer.cursor.col + 1 });
+                    try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = 0, .col = 1 }));
                 } else if (code == .escape) {
                     editor.mode = .normal;
                     editor.needs_redraw = true;
@@ -114,17 +112,18 @@ pub fn main() !void {
                     // single-key select mode
                 } else if (editor.mode == .select and ch == 'd') {
                     try buffer.selectionDelete();
+
                     // single-key normal or select mode
                 } else if (normal_or_select and ch == 'q') {
                     break :main_loop;
                 } else if (normal_or_select and ch == 'i') {
-                    try buffer.moveCursor(.{ .row = buffer.cursor.row - 1, .col = buffer.cursor.col });
+                    try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = -1, .col = 0 }));
                 } else if (normal_or_select and ch == 'k') {
-                    try buffer.moveCursor(.{ .row = buffer.cursor.row + 1, .col = buffer.cursor.col });
+                    try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = 1, .col = 0 }));
                 } else if (normal_or_select and ch == 'j') {
-                    try buffer.moveCursor(.{ .row = buffer.cursor.row, .col = buffer.cursor.col - 1 });
+                    try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = 0, .col = -1 }));
                 } else if (normal_or_select and ch == 'l') {
-                    try buffer.moveCursor(.{ .row = buffer.cursor.row, .col = buffer.cursor.col + 1 });
+                    try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = 0, .col = 1 }));
 
                     // single-key normal mode
                 } else if (editor.mode == .normal and ch == 's') {
@@ -147,8 +146,9 @@ pub fn main() !void {
                 } else if (editor.mode == .insert and key.printable != null) {
                     try buffer.insertText(key.printable.?);
                     editor.needs_completion = true;
-                } else if (multiple_key and editor.mode == .normal and ch == ' ') {
+
                     // multiple-key normal mode
+                } else if (multiple_key and editor.mode == .normal and ch == ' ') {
                     const key2 = key_queue.orderedRemove(0);
                     defer if (key2.printable) |p| allocator.free(p);
                     var ch2: ?u8 = null;
