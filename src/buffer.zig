@@ -383,10 +383,14 @@ pub const Buffer = struct {
 
     fn updateRaw(self: *Buffer) !void {
         self.content_raw.clearRetainingCapacity();
-        for (self.content.items) |line| {
+        if (self.content.items.len == 0) return;
+
+        for (0..self.content.items.len - 1) |i| {
+            const line = &self.content.items[i];
             try self.content_raw.appendSlice(line.items);
             try self.content_raw.append('\n');
         }
+        try self.content_raw.appendSlice(self.content.getLast().items);
     }
 
     fn makeSpans(self: *Buffer) !void {
@@ -450,6 +454,19 @@ pub const Buffer = struct {
         defer buffer.deinit();
 
         try testing.expectEqualStrings("abc", buffer.content_raw.items);
+    }
+
+    test "selectionDelete same line" {
+        var buffer = try testSetup("abc");
+        //                           ^ cursor
+        defer buffer.deinit();
+
+        buffer.cursor = .{ .row = 0, .col = 1 };
+        try buffer.selectChar();
+        try buffer.selectionDelete();
+
+        try buffer.updateRaw();
+        try testing.expectEqualStrings("ac", buffer.content_raw.items);
     }
 };
 
