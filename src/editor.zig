@@ -36,7 +36,7 @@ pub const Editor = struct {
     }
 };
 
-const Mode = enum {
+pub const Mode = enum {
     normal,
     select,
     insert,

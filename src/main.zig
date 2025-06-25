@@ -104,10 +104,7 @@ pub fn main() !void {
                 } else if (code == .right) {
                     try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = 0, .col = 1 }));
                 } else if (code == .escape) {
-                    editor.mode = .normal;
-                    editor.needs_redraw = true;
-                    try editor.completion_menu.reset();
-                    log.log(@This(), "mode: {}\n", .{editor.mode});
+                    try buffer.enterMode(.normal);
 
                     // single-key select mode
                 } else if (editor.mode == .select and ch == 'd') {
@@ -127,13 +124,9 @@ pub fn main() !void {
 
                     // single-key normal mode
                 } else if (editor.mode == .normal and ch == 's') {
-                    try buffer.selectChar();
-                    editor.needs_redraw = true;
-                    log.log(@This(), "mode: {}\n", .{editor.mode});
+                    try buffer.enterMode(.select);
                 } else if (editor.mode == .normal and ch == 'h') {
-                    editor.mode = .insert;
-                    editor.needs_redraw = true;
-                    log.log(@This(), "mode: {}\n", .{editor.mode});
+                    try buffer.enterMode(.insert);
 
                     // single-key insert mode
                 } else if (editor.mode == .insert and code == .delete) {

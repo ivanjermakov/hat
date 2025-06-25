@@ -2,6 +2,7 @@ const std = @import("std");
 const testing = std.testing;
 const assert = std.debug.assert;
 const main = @import("main.zig");
+const edi = @import("editor.zig");
 const ft = @import("file_type.zig");
 const ts = @import("ts.zig");
 const log = @import("log.zig");
@@ -226,6 +227,25 @@ pub const Buffer = struct {
         try testing.expectEqual(Cursor{ .row = 2, .col = 2 }, buffer.cursor);
     }
 
+    pub fn enterMode(self: *Buffer, mode: edi.Mode) !void {
+        if (main.editor.mode == mode) return;
+        switch (mode) {
+            .normal => {
+                try self.clearSelection();
+                try main.editor.completion_menu.reset();
+                log.log(@This(), "mode: {}\n", .{main.editor.mode});
+            },
+            .select => {
+                try self.selectChar();
+            },
+            .insert => {
+                try self.clearSelection();
+            },
+        }
+        main.editor.mode = mode;
+        main.editor.needs_update_cursor = true;
+    }
+
     pub fn insertText(self: *Buffer, text: []u8) !void {
         const view = try std.unicode.Utf8View.init(text);
         var iter = view.iterator();
@@ -300,7 +320,6 @@ pub const Buffer = struct {
     }
 
     pub fn selectionDelete(self: *Buffer) !void {
-        if (main.editor.mode != .select) return;
         if (self.selection) |selection| {
             if (selection.end.row - selection.start.row > 1) {
                 // remove fully selected lines
@@ -323,7 +342,6 @@ pub const Buffer = struct {
                 );
             }
             try self.moveCursor(selection.start);
-            main.editor.mode = .normal;
             main.editor.needs_reparse = true;
         }
     }
@@ -397,9 +415,14 @@ pub const Buffer = struct {
     }
 
     pub fn selectChar(self: *Buffer) !void {
-        main.editor.mode = .select;
         const pos = self.position();
         self.selection = .{ .start = pos, .end = pos };
+        main.editor.needs_redraw = true;
+    }
+
+    pub fn clearSelection(self: *Buffer) !void {
+        self.selection = null;
+        main.editor.needs_redraw = true;
     }
 
     pub fn updateLinePositions(self: *Buffer) !void {
