@@ -208,7 +208,10 @@ pub const Buffer = struct {
                 selection.end = tmp;
             }
             main.editor.needs_redraw = true;
+        } else {
+            try self.clearSelection();
         }
+
         main.editor.needs_update_cursor = true;
     }
 
@@ -342,6 +345,7 @@ pub const Buffer = struct {
                 );
             }
             try self.moveCursor(selection.start);
+            try self.enterMode(.normal);
             main.editor.needs_reparse = true;
         }
     }

@@ -73,6 +73,11 @@ pub const Terminal = struct {
     pub fn updateCursor(self: *Terminal) !void {
         const buffer = main.editor.active_buffer.?;
         try self.moveCursor(buffer.cursor.applyOffset(buffer.offset.negate()));
+        switch (main.editor.mode) {
+            .normal => _ = try self.write(cursor_type.steady_block),
+            .select => _ = try self.write(cursor_type.steady_underline),
+            .insert => _ = try self.write(cursor_type.steady_bar),
+        }
         try self.flush();
     }
 
@@ -176,8 +181,8 @@ pub const Terminal = struct {
                 };
                 try co.attributes.write(ch_attrs, attrs_stream.writer());
 
-                if (main.editor.mode == .select) {
-                    if (buffer.selection.?.inRange(.{ .row = @intCast(buffer_row), .col = @intCast(buffer_col) })) {
+                if (buffer.selection) |selection| {
+                    if (selection.inRange(.{ .row = buffer_row, .col = buffer_col })) {
                         try co.attributes.write(co.attributes.selection, attrs_stream.writer());
                     }
                 }
@@ -207,10 +212,6 @@ pub const Terminal = struct {
                 byte += try std.unicode.utf8CodepointSequenceLength(ch);
                 term_col += 1;
             }
-        }
-        switch (main.editor.mode) {
-            .normal, .select => _ = try self.write(cursor_type.steady_block),
-            .insert => _ = try self.write(cursor_type.steady_bar),
         }
     }
 
