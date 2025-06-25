@@ -130,12 +130,19 @@ pub const Buffer = struct {
     }
 
     pub fn updateContent(self: *Buffer) !void {
-        var lines_iter = std.mem.splitSequence(u8, self.content_raw.items, "\n");
+        var lines_iter = std.mem.splitScalar(u8, self.content_raw.items, '\n');
         while (true) {
             const next: []u8 = @constCast(lines_iter.next() orelse break);
+            log.log(@This(), "line: {s}\n", .{next});
             var line = std.ArrayList(u8).init(self.allocator);
             try line.appendSlice(next);
             try self.content.append(line);
+        }
+        if (self.content.getLastOrNull()) |last| {
+            if (last.items.len == 0) {
+                _ = self.content.orderedRemove(self.content.items.len - 1);
+                last.deinit();
+            }
         }
     }
 
@@ -185,6 +192,7 @@ pub const Buffer = struct {
         self.scrollForCursor(valid_cursor);
 
         (&self.cursor).* = valid_cursor;
+
         if (main.editor.mode == .select) {
             const selection = &self.selection.?;
             const cursor_was_at_start = std.meta.eql(selection.start, old_position);
