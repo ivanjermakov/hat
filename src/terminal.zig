@@ -212,6 +212,9 @@ pub const Terminal = struct {
                 byte += try std.unicode.utf8CodepointSequenceLength(ch);
                 term_col += 1;
             }
+            // reached line end
+            try self.resetAttributes();
+            last_attrs = null;
         }
     }
 
@@ -230,6 +233,7 @@ pub const Terminal = struct {
             .applyOffset(buffer.offset.negate())
             .applyOffset(.{ .row = 1, .col = 0 });
 
+        try self.resetAttributes();
         try co.attributes.write(co.attributes.completion_menu, self.writer.writer());
 
         var longest_item: usize = 0;
