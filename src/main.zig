@@ -121,6 +121,10 @@ pub fn main() !void {
                     try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = 0, .col = -1 }));
                 } else if (normal_or_select and ch == 'l') {
                     try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = 0, .col = 1 }));
+                } else if (normal_or_select and ch == 'w') {
+                    try buffer.moveToNextWord();
+                } else if (normal_or_select and ch == 'W') {
+                    try buffer.moveToPrevWord();
 
                     // single-key normal mode
                 } else if (editor.mode == .normal and ch == 's') {
@@ -204,6 +208,7 @@ comptime {
 pub fn testSetup() !void {
     allocator = std.testing.allocator;
     log_enabled = true;
+    editor = try edi.Editor.init(allocator);
     term = ter.Terminal{
         .writer = .{ .unbuffered_writer = std.io.null_writer.any() },
         .dimensions = .{ .width = 50, .height = 30 },

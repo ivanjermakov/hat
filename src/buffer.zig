@@ -249,6 +249,69 @@ pub const Buffer = struct {
         main.editor.needs_update_cursor = true;
     }
 
+    /// TODO: search for next word in subsequent lines
+    pub fn moveToNextWord(self: *Buffer) !void {
+        const old_cursor = self.cursor;
+        const cbp = try self.cursorBytePos(self.cursor);
+        var line = self.content.items[@intCast(cbp.row)];
+        const start_byte = try utf8BytePos(line.items, @intCast(cbp.col));
+        const view = try std.unicode.Utf8View.init(line.items[start_byte..]);
+        var iter = view.iterator();
+        var still_inside_word = true;
+        var col_offset: i32 = 0;
+        while (iter.nextCodepoint()) |ch| {
+            // TODO: unicode
+            const is_word_char = std.ascii.isAlphabetic(@intCast(ch));
+            if (still_inside_word and !is_word_char) {
+                still_inside_word = false;
+                continue;
+            }
+            if (!still_inside_word and is_word_char) {
+                col_offset += 1;
+                break;
+            }
+            col_offset += 1;
+        } else {
+            // no word found on this line
+            return;
+        }
+        try self.moveCursor(self.cursor.applyOffset(.{ .row = 0, .col = col_offset }));
+        if (self.selection == null) {
+            self.selection = .{ .start = old_cursor, .end = self.cursor };
+            main.editor.needs_redraw = true;
+        }
+    }
+
+    test "moveToNextWord plain words" {
+        var buffer = try testSetup(
+            \\one two three
+        );
+        defer buffer.deinit();
+
+        buffer.cursor = .{ .row = 0, .col = 0 };
+        try buffer.moveToNextWord();
+        try testing.expectEqual(
+            SelectionSpan{ .start = .{ .row = 0, .col = 0 }, .end = .{ .row = 0, .col = 4 } },
+            buffer.selection,
+        );
+    }
+
+    test "moveToNextWord no move" {
+        var buffer = try testSetup(
+            \\one two three
+        );
+        defer buffer.deinit();
+
+        buffer.cursor = .{ .row = 0, .col = 9 };
+        try buffer.moveToNextWord();
+        try testing.expectEqual(null, buffer.selection);
+    }
+
+    pub fn moveToPrevWord(self: *Buffer) !void {
+        _ = self;
+        return error.Todo;
+    }
+
     pub fn insertText(self: *Buffer, text: []u8) !void {
         const view = try std.unicode.Utf8View.init(text);
         var iter = view.iterator();
@@ -357,7 +420,7 @@ pub const Buffer = struct {
         defer buffer.deinit();
 
         buffer.cursor = .{ .row = 0, .col = 1 };
-        try buffer.selectChar();
+        try buffer.enterMode(.select);
         try buffer.selectionDelete();
 
         try buffer.updateRaw();
@@ -373,7 +436,7 @@ pub const Buffer = struct {
         defer buffer.deinit();
 
         try buffer.moveCursor(.{ .row = 0, .col = 1 });
-        try buffer.selectChar();
+        try buffer.enterMode(.select);
         try buffer.moveCursor(Cursor{ .row = 2, .col = 2 });
 
         try testing.expectEqual(Cursor{ .row = 0, .col = 1 }, buffer.selection.?.start);
@@ -418,12 +481,6 @@ pub const Buffer = struct {
         main.editor.needs_reparse = true;
     }
 
-    pub fn selectChar(self: *Buffer) !void {
-        const pos = self.position();
-        self.selection = .{ .start = pos, .end = pos };
-        main.editor.needs_redraw = true;
-    }
-
     pub fn clearSelection(self: *Buffer) !void {
         self.selection = null;
         main.editor.needs_redraw = true;
@@ -443,6 +500,12 @@ pub const Buffer = struct {
             // new line
             byte += 1;
         }
+    }
+
+    fn selectChar(self: *Buffer) !void {
+        const pos = self.position();
+        self.selection = .{ .start = pos, .end = pos };
+        main.editor.needs_redraw = true;
     }
 
     pub fn textAt(self: *Buffer, range: lsp.types.Range) ![]const u8 {
