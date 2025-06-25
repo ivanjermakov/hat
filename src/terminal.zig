@@ -147,24 +147,18 @@ pub const Terminal = struct {
             var byte: usize = buffer.line_positions.items[@intCast(buffer_row)];
             var term_col: i32 = 0;
 
-            const line: []u8 = buffer.content.items[@intCast(buffer_row)].items;
-            const line_view = try std.unicode.Utf8View.init(line);
-            var line_iter = line_view.iterator();
+            const line = buffer.content.items[@intCast(buffer_row)].items;
             try self.moveCursor(.{ .row = @intCast(term_row), .col = 0 });
 
             if (buffer.offset.col > 0) {
-                for (0..@intCast(buffer.offset.col)) |_| {
-                    if (line_iter.nextCodepoint()) |ch| {
-                        byte += try std.unicode.utf8CodepointSequenceLength(ch);
-                    }
-                }
+                return error.PositiveColOffset;
             } else {
                 for (0..@intCast(-buffer.offset.col)) |_| {
                     try self.write(" ");
                 }
             }
 
-            while (line_iter.nextCodepoint()) |ch| {
+            for (line) |ch| {
                 attrs_stream.reset();
                 const buffer_col = @as(i32, @intCast(term_col)) + buffer.offset.col;
 

@@ -9,6 +9,7 @@ const co = @import("color.zig");
 const ter = @import("terminal.zig");
 const lsp = @import("lsp.zig");
 const log = @import("log.zig");
+const uni = @import("unicode.zig");
 
 const Args = struct {
     path: ?[]u8,
@@ -141,7 +142,9 @@ pub fn main() !void {
                 } else if (editor.mode == .insert and code == .enter) {
                     try buffer.insertNewline();
                 } else if (editor.mode == .insert and key.printable != null) {
-                    try buffer.insertText(key.printable.?);
+                    const printable = try uni.utf8FromBytes(allocator, key.printable.?);
+                    defer allocator.free(printable);
+                    try buffer.insertText(printable);
                     editor.needs_completion = true;
 
                     // multiple-key normal mode

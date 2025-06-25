@@ -2,6 +2,7 @@ const std = @import("std");
 const main = @import("../main.zig");
 const lsp = @import("../lsp.zig");
 const log = @import("../log.zig");
+const uni = @import("../unicode.zig");
 
 const max_entries = 10;
 
@@ -67,7 +68,8 @@ pub const CompletionMenu = struct {
             }
         }
 
-        const prompt = try main.editor.active_buffer.?.textAt(self.replace_range.?);
+        const prompt = try uni.utf8ToBytes(self.allocator, try main.editor.active_buffer.?.textAt(self.replace_range.?));
+        defer self.allocator.free(prompt);
         log.log(@This(), "prompt {s}\n", .{prompt});
 
         self.display_items.clearRetainingCapacity();

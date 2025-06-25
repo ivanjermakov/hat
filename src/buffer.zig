@@ -54,7 +54,8 @@ pub const Buffer = struct {
     path: []const u8,
     uri: []const u8,
     file_type: ft.FileTypeConfig,
-    content: BufferContent,
+    /// Array list of array lists of utf8 codepoints
+    content: std.ArrayList(std.ArrayList(u21)),
     content_raw: std.ArrayList(u8),
     spans: std.ArrayList(ts.SpanAttrsTuple),
     parser: ?*ts.ts.TSParser,
@@ -82,7 +83,7 @@ pub const Buffer = struct {
             .path = path,
             .file_type = file_type,
             .uri = uri,
-            .content = std.ArrayList(Line).init(allocator),
+            .content = std.ArrayList(std.ArrayList(u21)).init(allocator),
             .content_raw = raw,
             .spans = std.ArrayList(ts.SpanAttrsTuple).init(allocator),
             .parser = null,
@@ -134,9 +135,12 @@ pub const Buffer = struct {
         var lines_iter = std.mem.splitScalar(u8, self.content_raw.items, '\n');
         while (true) {
             const next: []u8 = @constCast(lines_iter.next() orelse break);
-            log.log(@This(), "line: {s}\n", .{next});
-            var line = std.ArrayList(u8).init(self.allocator);
-            try line.appendSlice(next);
+            const view = try std.unicode.Utf8View.init(next);
+            var iter = view.iterator();
+            var line = std.ArrayList(u21).init(self.allocator);
+            while (iter.nextCodepoint()) |ch| {
+                try line.append(ch);
+            }
             try self.content.append(line);
         }
         if (self.content.getLastOrNull()) |last| {
@@ -182,7 +186,7 @@ pub const Buffer = struct {
 
         if (new_buf_cursor.row > self.content.items.len - 1) return;
         const line = &self.content.items[@intCast(new_buf_cursor.row)];
-        const max_col = utf8CharacterLen(line.items) catch return;
+        const max_col = line.items.len;
         const col: i32 = @intCast(@min(new_buf_cursor.col, max_col));
 
         const valid_cursor = Cursor{
@@ -252,14 +256,11 @@ pub const Buffer = struct {
     /// TODO: search for next word in subsequent lines
     pub fn moveToNextWord(self: *Buffer) !void {
         const old_cursor = self.cursor;
-        const cbp = try self.cursorBytePos(self.cursor);
-        var line = self.content.items[@intCast(cbp.row)];
-        const start_byte = try utf8BytePos(line.items, @intCast(cbp.col));
-        const view = try std.unicode.Utf8View.init(line.items[start_byte..]);
-        var iter = view.iterator();
+        var line = self.content.items[@intCast(self.cursor.row)];
+
         var still_inside_word = true;
         var col_offset: i32 = 0;
-        while (iter.nextCodepoint()) |ch| {
+        for (line.items[@intCast(self.cursor.col)..]) |ch| {
             // TODO: unicode
             const is_word_char = std.ascii.isAlphabetic(@intCast(ch));
             if (still_inside_word and !is_word_char) {
@@ -312,17 +313,14 @@ pub const Buffer = struct {
         return error.Todo;
     }
 
-    pub fn insertText(self: *Buffer, text: []u8) !void {
-        const view = try std.unicode.Utf8View.init(text);
-        var iter = view.iterator();
-        while (iter.nextCodepointSlice()) |ch| {
-            const cbp = try self.cursorBytePos(self.cursor);
-            var line = &self.content.items[@intCast(cbp.row)];
+    pub fn insertText(self: *Buffer, text: []const u21) !void {
+        for (text) |ch| {
+            var line = &self.content.items[@intCast(self.cursor.row)];
 
-            if (std.mem.eql(u8, ch, "\n")) {
+            if (ch == '\n') {
                 try self.insertNewline();
             } else {
-                try line.insertSlice(@intCast(cbp.col), ch);
+                try line.insert(@intCast(self.cursor.col), ch);
                 try self.moveCursor(self.cursor.applyOffset(.{ .row = 0, .col = 1 }));
             }
         }
@@ -330,49 +328,43 @@ pub const Buffer = struct {
     }
 
     pub fn insertNewline(self: *Buffer) !void {
-        const cbp = try self.cursorBytePos(self.cursor);
-        const row: usize = @intCast(cbp.row);
-        var line = try self.content.items[row].toOwnedSlice();
+        var line = try self.content.items[@intCast(self.cursor.row)].toOwnedSlice();
         defer self.allocator.free(line);
-        try self.content.items[row].appendSlice(line[0..@intCast(cbp.col)]);
-        var new_line = std.ArrayList(u8).init(main.allocator);
-        try new_line.appendSlice(line[@intCast(cbp.col)..]);
-        try self.content.insert(@intCast(cbp.row + 1), new_line);
+        try self.content.items[@intCast(self.cursor.row)].appendSlice(line[0..@intCast(self.cursor.col)]);
+        var new_line = std.ArrayList(u21).init(main.allocator);
+        try new_line.appendSlice(line[@intCast(self.cursor.col)..]);
+        try self.content.insert(@intCast(self.cursor.row + 1), new_line);
         try self.moveCursor(.{ .row = self.cursor.row + 1, .col = 0 });
         main.editor.needs_reparse = true;
     }
 
     pub fn removeChar(self: *Buffer) !void {
-        const cbp = try self.cursorBytePos(self.cursor);
-        var line = &self.content.items[@intCast(cbp.row)];
-        if (self.cursor.col == try utf8CharacterLen(line.items)) {
+        var line = &self.content.items[@intCast(self.cursor.row)];
+        if (self.cursor.col == line.items.len) {
             if (self.cursor.row < self.content.items.len - 1) {
-                try self.joinWithLineBelow(@intCast(cbp.row));
+                try self.joinWithLineBelow(@intCast(self.cursor.row));
             } else {
                 return;
             }
         } else {
-            _ = line.orderedRemove(@intCast(cbp.col));
+            _ = line.orderedRemove(@intCast(self.cursor.col));
             main.editor.needs_reparse = true;
         }
     }
 
     pub fn removePrevChar(self: *Buffer) !void {
-        const cbp = try self.cursorBytePos(self.cursor);
-        var line = &self.content.items[@intCast(cbp.row)];
-        if (cbp.col == 0) {
+        var line = &self.content.items[@intCast(self.cursor.row)];
+        if (self.cursor.col == 0) {
             if (self.cursor.row > 0) {
-                const prev_line = &self.content.items[@intCast(cbp.row - 1)];
-                const col = try utf8CharacterLen(prev_line.items);
-                try self.joinWithLineBelow(@intCast(cbp.row - 1));
-                try self.moveCursor(.{ .row = self.cursor.row - 1, .col = @intCast(col) });
+                const prev_line = &self.content.items[@intCast(self.cursor.row - 1)];
+                try self.joinWithLineBelow(@intCast(self.cursor.row - 1));
+                try self.moveCursor(.{ .row = self.cursor.row - 1, .col = @intCast(prev_line.items.len) });
             } else {
                 return;
             }
         } else {
             try self.moveCursor(self.cursor.applyOffset(.{ .row = 0, .col = -1 }));
-            const col_byte = try utf8BytePos(line.items, @intCast(self.cursor.col));
-            _ = line.orderedRemove(col_byte);
+            _ = line.orderedRemove(@intCast(self.cursor.col));
             main.editor.needs_reparse = true;
         }
     }
@@ -398,13 +390,11 @@ pub const Buffer = struct {
                 try self.deleteToStart(new_end);
                 try self.joinWithLineBelow(@intCast(selection.start.row));
             } else {
-                const cbp_start = try self.cursorBytePos(selection.start);
-                const cbp_end = try self.cursorBytePos(selection.end);
-                var line = &self.content.items[@intCast(cbp_start.row)];
+                var line = &self.content.items[@intCast(selection.start.row)];
                 try line.replaceRange(
-                    @intCast(cbp_start.col),
-                    @intCast(1 + cbp_end.col - cbp_start.col),
-                    &[_]u8{},
+                    @intCast(selection.start.col),
+                    @intCast(1 + selection.end.col - selection.start.col),
+                    &[_]u21{},
                 );
             }
             try self.moveCursor(selection.start);
@@ -449,24 +439,22 @@ pub const Buffer = struct {
 
     /// Delete every character from cursor (including) to the end of line
     pub fn deleteToEnd(self: *Buffer, cursor: Cursor) !void {
-        const cbp = try self.cursorBytePos(cursor);
-        var line = &self.content.items[@intCast(cbp.row)];
+        var line = &self.content.items[@intCast(cursor.row)];
         try line.replaceRange(
-            @intCast(cbp.col),
-            line.items.len - @as(usize, @intCast(cbp.col)),
-            &[_]u8{},
+            @intCast(cursor.col),
+            line.items.len - @as(usize, @intCast(cursor.col)),
+            &[_]u21{},
         );
         main.editor.needs_reparse = true;
     }
 
     /// Delete every character from start of line to cursor (excluding)
     pub fn deleteToStart(self: *Buffer, cursor: Cursor) !void {
-        const cbp = try self.cursorBytePos(cursor);
-        var line = &self.content.items[@intCast(cbp.row)];
+        var line = &self.content.items[@intCast(cursor.row)];
         try line.replaceRange(
             0,
-            @intCast(cbp.col),
-            &[_]u8{},
+            @intCast(cursor.col),
+            &[_]u21{},
         );
         main.editor.needs_reparse = true;
     }
@@ -492,9 +480,7 @@ pub const Buffer = struct {
         for (0..self.content.items.len) |i| {
             try self.line_positions.append(byte);
             const line = &self.content.items[i];
-            const line_view = try std.unicode.Utf8View.init(line.items);
-            var line_iter = line_view.iterator();
-            while (line_iter.nextCodepoint()) |ch| {
+            for (line.items) |ch| {
                 byte += try std.unicode.utf8CodepointSequenceLength(ch);
             }
             // new line
@@ -508,35 +494,27 @@ pub const Buffer = struct {
         main.editor.needs_redraw = true;
     }
 
-    pub fn textAt(self: *Buffer, range: lsp.types.Range) ![]const u8 {
+    pub fn textAt(self: *Buffer, range: lsp.types.Range) ![]const u21 {
         std.debug.assert(range.start.line == range.end.line);
         const line = &self.content.items[range.start.line];
-        const char_start = try utf8BytePos(line.items, range.start.character);
-        const char_end = try utf8BytePos(line.items, range.end.character);
-        return line.items[char_start..char_end];
-    }
-
-    fn cursorBytePos(self: *Buffer, cursor: Cursor) !Cursor {
-        if (cursor.row < 0 or cursor.col < 0) return error.OutOfBounds;
-        if (cursor.row >= self.content.items.len) return error.OutOfBounds;
-        const line = &self.content.items[@intCast(cursor.row)];
-        const col = try utf8BytePos(line.items, @intCast(cursor.col));
-        return .{
-            .row = cursor.row,
-            .col = @intCast(col),
-        };
+        return line.items[range.start.character..range.end.character];
     }
 
     fn updateRaw(self: *Buffer) !void {
         self.content_raw.clearRetainingCapacity();
         if (self.content.items.len == 0) return;
 
-        for (0..self.content.items.len - 1) |i| {
+        var b: [3]u8 = undefined;
+        for (0..self.content.items.len) |i| {
             const line = &self.content.items[i];
-            try self.content_raw.appendSlice(line.items);
-            try self.content_raw.append('\n');
+            for (line.items) |ch| {
+                const len = try std.unicode.utf8Encode(ch, &b);
+                try self.content_raw.appendSlice(b[0..len]);
+            }
+            if (i != self.content.items.len - 1) {
+                try self.content_raw.append('\n');
+            }
         }
-        try self.content_raw.appendSlice(self.content.getLast().items);
     }
 
     fn makeSpans(self: *Buffer) !void {
@@ -580,7 +558,7 @@ pub const Buffer = struct {
         }
         if (term_cursor.col >= dims.width and new_buf_cursor.row >= 0 and new_buf_cursor.row < self.content.items.len - 1) {
             const line = &self.content.items[@intCast(new_buf_cursor.row)];
-            const line_len = utf8CharacterLen(line.items) catch return;
+            const line_len = line.items.len;
             if (new_buf_cursor.col <= line_len) {
                 self.offset.col += 1 + term_cursor.col - @as(i32, @intCast(dims.width));
                 main.editor.needs_redraw = true;
@@ -605,31 +583,3 @@ pub const Buffer = struct {
         try testing.expectEqualStrings("abc", buffer.content_raw.items);
     }
 };
-
-pub const BufferContent = std.ArrayList(Line);
-
-pub const Line = std.ArrayList(u8);
-
-/// Find a byte position of a codepoint at cp_index in a UTF-8 byte string
-fn utf8BytePos(str: []u8, cp_index: usize) !usize {
-    const view = try std.unicode.Utf8View.init(str);
-    var iter = view.iterator();
-    var pos: usize = 0;
-    var i: usize = 0;
-    if (i == cp_index) return pos;
-    while (iter.nextCodepointSlice()) |ch| {
-        i += 1;
-        pos += ch.len;
-        if (i == cp_index) return pos;
-    }
-    return error.OutOfBounds;
-}
-
-/// Find UTF-8 byte string length in characters
-fn utf8CharacterLen(str: []u8) !usize {
-    const view = try std.unicode.Utf8View.init(str);
-    var iter = view.iterator();
-    var len: usize = 0;
-    while (iter.nextCodepointSlice()) |_| len += 1;
-    return len;
-}
