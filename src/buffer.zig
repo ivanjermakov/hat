@@ -48,6 +48,13 @@ pub const SelectionSpan = struct {
         const end = self.end.order(pos);
         return start != .gt and end != .lt;
     }
+
+    pub fn fromLsp(position: lsp.types.Range) SelectionSpan {
+        return .{
+            .start = Cursor.fromLsp(position.start),
+            .end = Cursor.fromLsp(position.end).applyOffset(.{ .row = 0, .col = -1 }),
+        };
+    }
 };
 
 pub const Buffer = struct {
@@ -239,8 +246,7 @@ pub const Buffer = struct {
         switch (mode) {
             .normal => {
                 try self.clearSelection();
-                try main.editor.completion_menu.reset();
-                log.log(@This(), "mode: {}\n", .{main.editor.mode});
+                main.editor.completion_menu.reset();
             },
             .select => {
                 try self.selectChar();
@@ -250,6 +256,7 @@ pub const Buffer = struct {
             },
         }
         main.editor.mode = mode;
+        log.log(@This(), "mode: {}\n", .{main.editor.mode});
         main.editor.needs_update_cursor = true;
     }
 
@@ -398,7 +405,6 @@ pub const Buffer = struct {
                 );
             }
             try self.moveCursor(selection.start);
-            try self.enterMode(.normal);
             main.editor.needs_reparse = true;
         }
     }

@@ -94,9 +94,19 @@ pub fn main() !void {
 
                 const multiple_key = key_queue.items.len > 0;
                 const normal_or_select = editor.mode.normalOrSelect();
+                const cmp_menu_active = editor.mode == .insert and
+                    editor.completion_menu.display_items.items.len > 0;
 
-                // single-key global
-                if (code == .up) {
+                // cmp_menu
+                if (cmp_menu_active and code == .up) {
+                    editor.completion_menu.prevItem();
+                } else if (cmp_menu_active and code == .down) {
+                    editor.completion_menu.nextItem();
+                } else if (cmp_menu_active and ch == '\n') {
+                    try editor.completion_menu.accept();
+
+                    // global
+                } else if (code == .up) {
                     try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = -1, .col = 0 }));
                 } else if (code == .down) {
                     try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = 1, .col = 0 }));
@@ -107,11 +117,7 @@ pub fn main() !void {
                 } else if (code == .escape) {
                     try buffer.enterMode(.normal);
 
-                    // single-key select mode
-                } else if (editor.mode == .select and ch == 'd') {
-                    try buffer.selectionDelete();
-
-                    // single-key normal or select mode
+                    // normal or select mode
                 } else if (normal_or_select and ch == 'q') {
                     break :main_loop;
                 } else if (normal_or_select and ch == 'i') {
@@ -127,20 +133,23 @@ pub fn main() !void {
                 } else if (normal_or_select and ch == 'W') {
                     try buffer.moveToPrevWord();
 
-                    // single-key normal mode
+                    // select mode
+                } else if (editor.mode == .select and ch == 'd') {
+                    try buffer.selectionDelete();
+                    try buffer.enterMode(.normal);
+
+                    // normal mode
                 } else if (editor.mode == .normal and ch == 's') {
                     try buffer.enterMode(.select);
                 } else if (editor.mode == .normal and ch == 'h') {
                     try buffer.enterMode(.insert);
 
-                    // single-key insert mode
+                    // insert mode
                 } else if (editor.mode == .insert and code == .delete) {
                     try buffer.removeChar();
                 } else if (editor.mode == .insert and code == .backspace) {
                     try buffer.removePrevChar();
                     editor.needs_completion = true;
-                } else if (editor.mode == .insert and code == .enter) {
-                    try buffer.insertNewline();
                 } else if (editor.mode == .insert and key.printable != null) {
                     const printable = try uni.utf8FromBytes(allocator, key.printable.?);
                     defer allocator.free(printable);

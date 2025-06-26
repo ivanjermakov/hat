@@ -228,7 +228,6 @@ pub const Terminal = struct {
             .applyOffset(.{ .row = 1, .col = 0 });
 
         try self.resetAttributes();
-        try co.attributes.write(co.attributes.completion_menu, self.writer.writer());
 
         var longest_item: usize = 0;
         for (cmp_menu.display_items.items) |idx| {
@@ -244,6 +243,11 @@ pub const Terminal = struct {
                 .row = menu_pos.row + @as(i32, @intCast(menu_row)),
                 .col = menu_pos.col,
             });
+            if (menu_row == cmp_menu.active_item) {
+                try co.attributes.write(co.attributes.completion_menu_active, self.writer.writer());
+            } else {
+                try co.attributes.write(co.attributes.completion_menu, self.writer.writer());
+            }
             try self.write(cmp_item.label[0..@min(cmp_item.label.len, menu_width)]);
 
             const padding_len: i32 = menu_width - @as(i32, @intCast(cmp_item.label.len));
@@ -286,7 +290,7 @@ pub fn parseAnsi(allocator: std.mem.Allocator, input: *std.ArrayList(u8)) !inp.K
         },
         0x09 => key.code = .tab,
         0x7f => key.code = .backspace,
-        0x0d => key.code = .enter,
+        0x0d => key.printable = @constCast("\n"),
         0x1b => {
             if (input.items.len > 0 and input.items[0] == '[') {
                 _ = input.orderedRemove(0);

@@ -2,6 +2,7 @@ const std = @import("std");
 const main = @import("../main.zig");
 const lsp = @import("../lsp.zig");
 const log = @import("../log.zig");
+const buf = @import("../buffer.zig");
 const uni = @import("../unicode.zig");
 
 const max_entries = 10;
@@ -51,23 +52,24 @@ pub const CompletionMenu = struct {
     pub fn updateItems(self: *CompletionMenu, lsp_items: []const lsp.types.CompletionItem) !void {
         log.log(@This(), "got {} completion items\n", .{lsp_items.len});
         if (lsp_items.len == 0) {
-            try self.reset();
+            self.reset();
             return;
         }
-        errdefer self.reset() catch {};
+        errdefer self.reset();
 
         const prev_range_start = if (self.replace_range) |r| r.start else null;
         const text_edit = lsp.extractTextEdit(lsp_items[0]) orelse return;
         self.replace_range = text_edit.range;
 
         if (prev_range_start == null or !std.meta.eql(text_edit.range.start, prev_range_start.?)) {
-            try self.reset();
+            self.reset();
             for (lsp_items) |lsp_item| {
                 const item = try CompletionItem.fromLsp(self.allocator, lsp_item);
                 try self.completion_items.append(item);
             }
         }
 
+        // TODO: replace_range might not end at cursor position
         const prompt = try uni.utf8ToBytes(self.allocator, try main.editor.active_buffer.?.textAt(self.replace_range.?));
         defer self.allocator.free(prompt);
         log.log(@This(), "prompt {s}\n", .{prompt});
@@ -75,11 +77,13 @@ pub const CompletionMenu = struct {
         self.display_items.clearRetainingCapacity();
         for (0..self.completion_items.items.len) |i| {
             const cmp_item = self.completion_items.items[i];
-            if (std.mem.startsWith(u8, cmp_item.filter_text, prompt)) {
+            if (std.ascii.startsWithIgnoreCase(cmp_item.filter_text, prompt)) {
                 try self.display_items.append(i);
                 if (self.display_items.items.len >= max_entries) break;
             }
         }
+        self.active_item = 0;
+
         if (main.log_enabled) {
             if (self.display_items.items.len > 0) {
                 log.log(@This(), "menu:", .{});
@@ -93,22 +97,55 @@ pub const CompletionMenu = struct {
         main.editor.needs_redraw = true;
     }
 
-    pub fn reset(self: *CompletionMenu) !void {
+    pub fn reset(self: *CompletionMenu) void {
         log.log(@This(), "menu reset\n", .{});
         for (self.completion_items.items) |*item| {
             item.deinit();
         }
         self.completion_items.clearRetainingCapacity();
         self.display_items.clearRetainingCapacity();
+        self.active_item = 0;
 
         main.editor.needs_redraw = true;
     }
 
     pub fn deinit(self: *CompletionMenu) void {
-        for (self.completion_items.items) |*item| {
-            item.deinit();
-        }
+        self.reset();
         self.completion_items.deinit();
         self.display_items.deinit();
+    }
+
+    pub fn nextItem(self: *CompletionMenu) void {
+        if (self.active_item == self.display_items.items.len - 1) {
+            self.active_item = 0;
+        } else {
+            self.active_item += 1;
+        }
+        main.editor.needs_redraw = true;
+    }
+
+    pub fn prevItem(self: *CompletionMenu) void {
+        if (self.active_item == 0) {
+            self.active_item = self.display_items.items.len - 1;
+        } else {
+            self.active_item -= 1;
+        }
+        main.editor.needs_redraw = true;
+    }
+
+    pub fn accept(self: *CompletionMenu) !void {
+        defer self.reset();
+        const item = self.completion_items.items[self.display_items.items[self.active_item]];
+        log.log(@This(), "accept item {}: {s}, replace text: {any}\n", .{ self.active_item, item.label, item.replace_text });
+        var buffer = main.editor.active_buffer.?;
+
+        const selection = buf.SelectionSpan.fromLsp(self.replace_range.?);
+        buffer.selection = selection;
+        try buffer.selectionDelete();
+        try buffer.moveCursor(selection.start);
+
+        const new_text = try uni.utf8FromBytes(self.allocator, item.replace_text);
+        defer self.allocator.free(new_text);
+        try buffer.insertText(new_text);
     }
 };

@@ -9,7 +9,6 @@ pub const KeyCode = enum {
     right,
     backspace,
     delete,
-    enter,
     tab,
     escape,
 };

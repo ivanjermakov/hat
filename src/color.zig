@@ -55,7 +55,7 @@ pub const attributes = enum {
     pub const number = &[_]Attr{.{ .fg = color.yellow }};
     pub const comment = &[_]Attr{.{ .fg = color.gray7 }};
     pub const diagnostic_error = &[_]Attr{ .curly_underline, .{ .underline = color.red } };
-    pub const completion_menu = &[_]Attr{.{ .bg = color.gray3 }};
+    pub const completion_menu = &[_]Attr{.{ .bg = color.gray2 }};
     pub const completion_menu_active = &[_]Attr{.{ .bg = color.gray4 }};
 
     pub fn write(attrs: []const Attr, writer: anytype) !void {
