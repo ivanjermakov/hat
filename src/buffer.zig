@@ -262,7 +262,7 @@ pub const Buffer = struct {
         while (col < line.items.len - 1) {
             const ch = line.items[@intCast(col)];
             const next = line.items[@intCast(col + 1)];
-            if (!isWord(ch) and isWord(next)) {
+            if (std.meta.eql(boundary(ch, next), .wordStart)) {
                 col += 1;
                 break;
             }
@@ -308,17 +308,13 @@ pub const Buffer = struct {
         const old_cursor = self.cursor;
         const line = self.content.items[@intCast(self.cursor.row)];
 
-        var inside_first_word = true;
         var col = self.cursor.col;
         while (col > 0) {
             const ch = line.items[@intCast(col)];
             const next = line.items[@intCast(col - 1)];
-            if (isWord(ch) and !isWord(next)) {
-                if (inside_first_word) {
-                    inside_first_word = false;
-                } else {
-                    break;
-                }
+            if (std.meta.eql(boundary(ch, next), .wordStart)) {
+                col -= 1;
+                break;
             }
             col -= 1;
         } else {
@@ -603,7 +599,35 @@ pub const Buffer = struct {
     }
 };
 
-/// Whether ch is considered a part of a word
-fn isWord(ch: u21) bool {
+const Boundary = union(enum) {
+    wordStart,
+    wordEnd,
+
+    /// 0: whitespace
+    /// 1: symbols
+    /// 2: alphabet
+    fn rank(ch: u21) u8 {
+        if (isWhitespace(ch)) return 0;
+        if (isAlphabet(ch)) return 2;
+        return 1;
+    }
+};
+
+fn boundary(ch1: u21, ch2: u21) ?Boundary {
+    const r1 = Boundary.rank(ch1);
+    const r2 = Boundary.rank(ch2);
+    switch (std.math.order(r1, r2)) {
+        .eq => return null,
+        .lt => return .wordStart,
+        .gt => return .wordEnd,
+    }
+}
+
+fn isAlphabet(ch: u21) bool {
     return (ch >= 65 and ch <= 90) or (ch >= 97 and ch <= 122) or ch > 127;
+}
+
+fn isWhitespace(ch: u21) bool {
+    // TODO: tabs, other
+    return ch == ' ';
 }
