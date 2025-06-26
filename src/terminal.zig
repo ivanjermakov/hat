@@ -11,6 +11,7 @@ const log = @import("log.zig");
 const fs = @import("fs.zig");
 const inp = @import("input.zig");
 const cmp = @import("ui/completion_menu.zig");
+const uni = @import("unicode.zig");
 
 pub const TerminalDimensions = struct {
     width: usize,
@@ -147,11 +148,14 @@ pub const Terminal = struct {
             var byte: usize = buffer.line_positions.items[@intCast(buffer_row)];
             var term_col: i32 = 0;
 
-            const line = buffer.content.items[@intCast(buffer_row)].items;
+            var line = buffer.content.items[@intCast(buffer_row)].items;
             try self.moveCursor(.{ .row = @intCast(term_row), .col = 0 });
 
             if (buffer.offset.col > 0) {
-                return error.PositiveColOffset;
+                if (buffer.offset.col >= line.len) continue;
+                const offscreen_line = line[0..@intCast(buffer.offset.col)];
+                byte += try uni.utf8ByteLen(offscreen_line);
+                line = line[@intCast(buffer.offset.col)..];
             } else {
                 for (0..@intCast(-buffer.offset.col)) |_| {
                     try self.write(" ");

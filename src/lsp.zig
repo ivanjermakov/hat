@@ -314,7 +314,7 @@ pub const LspConnection = struct {
             .params = params,
         };
         const json_message = try std.json.stringifyAlloc(self.allocator, request, .{});
-        log.log(@This(), "> raw request: {s}\n", .{json_message});
+        // log.log(@This(), "> raw request: {s}\n", .{json_message});
         const rpc_message = try std.fmt.allocPrint(self.allocator, "Content-Length: {}\r\n\r\n{s}", .{ json_message.len, json_message });
         _ = try self.child.stdin.?.write(rpc_message);
         defer self.allocator.free(rpc_message);

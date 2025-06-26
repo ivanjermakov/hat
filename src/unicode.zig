@@ -19,3 +19,9 @@ pub fn utf8ToBytes(allocator: std.mem.Allocator, utf: []const u21) ![]const u8 {
     }
     return b;
 }
+
+pub fn utf8ByteLen(utf: []const u21) !usize {
+    var len: usize = 0;
+    for (utf) |ch| len += try std.unicode.utf8CodepointSequenceLength(ch);
+    return len;
+}
