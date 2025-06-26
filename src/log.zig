@@ -9,16 +9,16 @@ pub fn log(comptime caller: type, comptime fmt: []const u8, args: anytype) void 
     const now_str = dt.Datetime.now().formatISO8601(allocator, false) catch "";
     defer allocator.free(now_str);
 
-    const caller_name = @typeName(caller);
+    const caller_name_full = @typeName(caller);
+    var caller_name_iter = std.mem.splitBackwardsScalar(u8, caller_name_full, '.');
+    const caller_name = caller_name_iter.next() orelse caller_name_full;
     const caller_name_colored = color(allocator, caller_name, 5) catch "";
     defer allocator.free(caller_name_colored);
-    const caller_name_bracketed = std.fmt.allocPrint(allocator, "[{s}]", .{caller_name_colored}) catch "";
-    defer allocator.free(caller_name_bracketed);
 
     const str = std.fmt.allocPrint(allocator, fmt, args) catch "";
     defer allocator.free(str);
 
-    std.debug.print("{s} {s: <30} {s}", .{ now_str, caller_name_bracketed, str });
+    std.debug.print("{s} {s: <30} {s}", .{ now_str, caller_name_colored, str });
 }
 
 fn color(allocator: std.mem.Allocator, str: []const u8, color_code: u8) ![]const u8 {
