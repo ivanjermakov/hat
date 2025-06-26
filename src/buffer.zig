@@ -258,23 +258,12 @@ pub const Buffer = struct {
         const old_cursor = self.cursor;
         const line = self.content.items[@intCast(self.cursor.row)];
 
-        var col = self.cursor.col;
-        while (col < line.items.len - 1) {
-            const ch = line.items[@intCast(col)];
-            const next = line.items[@intCast(col + 1)];
-            if (std.meta.eql(boundary(ch, next), .wordStart)) {
-                col += 1;
-                break;
+        if (nextWordStart(line.items, @intCast(self.cursor.col))) |col| {
+            try self.moveCursor(.{ .row = self.cursor.row, .col = @intCast(col) });
+            if (self.selection == null) {
+                self.selection = .{ .start = old_cursor, .end = self.cursor };
+                main.editor.needs_redraw = true;
             }
-            col += 1;
-        } else {
-            // no word found on this line
-            return;
-        }
-        try self.moveCursor(.{ .row = self.cursor.row, .col = col });
-        if (self.selection == null) {
-            self.selection = .{ .start = old_cursor, .end = self.cursor };
-            main.editor.needs_redraw = true;
         }
     }
 
@@ -308,20 +297,16 @@ pub const Buffer = struct {
         const old_cursor = self.cursor;
         const line = self.content.items[@intCast(self.cursor.row)];
 
-        var col = self.cursor.col;
-        while (col > 0) {
-            const ch = line.items[@intCast(col)];
-            const next = line.items[@intCast(col - 1)];
-            if (std.meta.eql(boundary(ch, next), .wordStart)) {
-                col -= 1;
-                break;
+        var col: usize = 0;
+        while (col < self.cursor.col) {
+            if (nextWordStart(line.items, col)) |word_start| {
+                if (word_start >= self.cursor.col) break;
+                col = word_start;
             }
-            col -= 1;
         } else {
-            // no word found on this line
             return;
         }
-        try self.moveCursor(.{ .row = self.cursor.row, .col = col });
+        try self.moveCursor(.{ .row = self.cursor.row, .col = @intCast(col) });
         if (self.selection == null) {
             self.selection = .{ .start = old_cursor, .end = self.cursor };
             main.editor.needs_redraw = true;
@@ -598,6 +583,20 @@ pub const Buffer = struct {
         try testing.expectEqualStrings("abc", buffer.content_raw.items);
     }
 };
+
+fn nextWordStart(line: []u21, pos: usize) ?usize {
+    var col = pos;
+    while (col < line.len - 1) {
+        const next = line[col];
+        col += 1;
+        const ch = line[col];
+        if (boundary(ch, next) != null and !isWhitespace(next)) {
+            if (isWhitespace(ch)) col += 1;
+            return col;
+        }
+    }
+    return null;
+}
 
 const Boundary = union(enum) {
     wordStart,
