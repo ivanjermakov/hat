@@ -38,9 +38,6 @@ pub fn main() !void {
 
     log.log(@This(), "logging enabled\n", .{});
 
-    try ft.initFileTypes(allocator);
-    defer ft.deinitFileTypes(allocator);
-
     var cmd_args = std.process.args();
     _ = cmd_args.skip();
     while (cmd_args.next()) |arg| {
@@ -225,5 +222,4 @@ pub fn testSetup() !void {
         .writer = .{ .unbuffered_writer = std.io.null_writer.any() },
         .dimensions = .{ .width = 50, .height = 30 },
     };
-    ft.file_type = std.StringHashMap(ft.FileTypeConfig).init(allocator);
 }

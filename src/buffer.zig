@@ -110,10 +110,11 @@ pub const Buffer = struct {
 
     fn initParser(self: *Buffer) !void {
         if (self.file_type.ts) |ts_conf| {
-            const language = try ts_conf.loadLanguage();
+            const language = try ts_conf.loadLanguage(self.allocator);
             self.parser = ts.ts.ts_parser_new();
             _ = ts.ts.ts_parser_set_language(self.parser, language());
-            const query_str = self.file_type.ts.?.highlight_query;
+            const query_str = try self.file_type.ts.?.loadHighlightQuery(self.allocator);
+            defer self.allocator.free(query_str);
             var err: ts.ts.TSQueryError = undefined;
             self.query = ts.ts.ts_query_new(language(), query_str.ptr, @intCast(query_str.len), null, &err);
             if (err > 0) return error.Query;

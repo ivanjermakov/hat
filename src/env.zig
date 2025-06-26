@@ -4,7 +4,7 @@ const reg = @import("regex");
 /// Given string str, expand env variables
 /// Variable is a sequence in format of /\$[A-Z0-Z]+/
 /// Not resolved vars substituted with ""
-pub fn expand(allocator: std.mem.Allocator, str: []u8, getenv: *const @TypeOf(std.posix.getenv)) ![]u8 {
+pub fn expand(allocator: std.mem.Allocator, str: []const u8, getenv: *const @TypeOf(std.posix.getenv)) ![]u8 {
     var res = std.ArrayList(u8).init(allocator);
 
     var re = try reg.Regex.compile(allocator, "\\$[A-Z0-Z]+");
