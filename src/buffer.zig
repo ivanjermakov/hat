@@ -258,24 +258,20 @@ pub const Buffer = struct {
         const old_cursor = self.cursor;
         const line = self.content.items[@intCast(self.cursor.row)];
 
-        var still_inside_word = true;
-        var col_offset: i32 = 0;
-        for (line.items[@intCast(self.cursor.col)..]) |ch| {
-            const is_word_char = isWord(ch);
-            if (still_inside_word and !is_word_char) {
-                still_inside_word = false;
-                continue;
-            }
-            if (!still_inside_word and is_word_char) {
-                col_offset += 1;
+        var col = self.cursor.col;
+        while (col < line.items.len - 1) {
+            const ch = line.items[@intCast(col)];
+            const next = line.items[@intCast(col + 1)];
+            if (!isWord(ch) and isWord(next)) {
+                col += 1;
                 break;
             }
-            col_offset += 1;
+            col += 1;
         } else {
             // no word found on this line
             return;
         }
-        try self.moveCursor(self.cursor.applyOffset(.{ .row = 0, .col = col_offset }));
+        try self.moveCursor(.{ .row = self.cursor.row, .col = col });
         if (self.selection == null) {
             self.selection = .{ .start = old_cursor, .end = self.cursor };
             main.editor.needs_redraw = true;
@@ -313,10 +309,10 @@ pub const Buffer = struct {
         const line = self.content.items[@intCast(self.cursor.row)];
 
         var inside_first_word = true;
-        var col_offset = self.cursor.col;
-        while (col_offset > 0) {
-            const ch = line.items[@intCast(col_offset)];
-            const next = line.items[@intCast(col_offset - 1)];
+        var col = self.cursor.col;
+        while (col > 0) {
+            const ch = line.items[@intCast(col)];
+            const next = line.items[@intCast(col - 1)];
             if (isWord(ch) and !isWord(next)) {
                 if (inside_first_word) {
                     inside_first_word = false;
@@ -324,17 +320,16 @@ pub const Buffer = struct {
                     break;
                 }
             }
-            col_offset -= 1;
+            col -= 1;
         } else {
             // no word found on this line
             return;
         }
-        try self.moveCursor(.{ .row = self.cursor.row, .col = col_offset });
+        try self.moveCursor(.{ .row = self.cursor.row, .col = col });
         if (self.selection == null) {
             self.selection = .{ .start = old_cursor, .end = self.cursor };
             main.editor.needs_redraw = true;
         }
-        log.log(@This(), "offset: \n{}\n", .{col_offset});
     }
 
     pub fn insertText(self: *Buffer, text: []const u21) !void {
