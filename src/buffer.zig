@@ -402,11 +402,16 @@ pub const Buffer = struct {
                 try self.joinWithLineBelow(@intCast(selection.start.row));
             } else {
                 var line = &self.content.items[@intCast(selection.start.row)];
-                try line.replaceRange(
-                    @intCast(selection.start.col),
-                    @intCast(1 + selection.end.col - selection.start.col),
-                    &[_]u21{},
-                );
+                if (selection.end.col == line.items.len) {
+                    try self.deleteToEnd(selection.start);
+                    try self.joinWithLineBelow(@intCast(selection.start.row));
+                } else {
+                    try line.replaceRange(
+                        @intCast(selection.start.col),
+                        @intCast(1 + selection.end.col - selection.start.col),
+                        &[_]u21{},
+                    );
+                }
             }
             try self.moveCursor(selection.start);
             main.editor.needs_reparse = true;
@@ -425,6 +430,22 @@ pub const Buffer = struct {
 
         try buffer.updateRaw();
         try testing.expectEqualStrings("ac", buffer.content_raw.items);
+    }
+
+    test "selectionDelete line to end" {
+        var buffer = try testSetup(
+            \\abc
+            \\def
+        );
+        defer buffer.deinit();
+
+        try buffer.moveCursor(.{ .row = 0, .col = 1 });
+        try buffer.enterMode(.select);
+        try buffer.moveCursor(.{ .row = 0, .col = 3 });
+        try buffer.selectionDelete();
+
+        try buffer.updateRaw();
+        try testing.expectEqualStrings("adef", buffer.content_raw.items);
     }
 
     test "selectionDelete multiple lines" {
