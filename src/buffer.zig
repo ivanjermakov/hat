@@ -507,7 +507,8 @@ pub const Buffer = struct {
     pub fn textAt(self: *Buffer, range: lsp.types.Range) ![]const u21 {
         std.debug.assert(range.start.line == range.end.line);
         const line = &self.content.items[range.start.line];
-        return line.items[range.start.character..range.end.character];
+        if (range.start.character >= line.items.len) return error.OutOfBounds;
+        return line.items[range.start.character..@min(line.items.len - 1, range.end.character)];
     }
 
     fn updateRaw(self: *Buffer) !void {
