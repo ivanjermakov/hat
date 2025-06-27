@@ -38,9 +38,9 @@ pub const Terminal = struct {
         _ = c.setlocale(c.LC_ALL, "");
 
         var tty: c.struct_termios = undefined;
-        _ = c.tcgetattr(std.posix.STDIN_FILENO, &tty);
+        _ = c.tcgetattr(main.tty_in.handle, &tty);
         tty.c_lflag &= @bitCast(~(c.ICANON | c.ECHO));
-        _ = c.tcsetattr(std.posix.STDIN_FILENO, c.TCSANOW, &tty);
+        _ = c.tcsetattr(main.tty_in.handle, c.TCSANOW, &tty);
 
         var term = Terminal{
             .writer = .{ .unbuffered_writer = std_out_writer },
@@ -351,29 +351,18 @@ pub fn parseAnsi(allocator: std.mem.Allocator, input: *std.ArrayList(u8)) !inp.K
 }
 
 pub fn getCodes(allocator: std.mem.Allocator) !?[]u8 {
-    if (!fs.poll(main.std_in)) return null;
+    if (!fs.poll(main.tty_in)) return null;
     var in_buf = std.ArrayList(u8).init(allocator);
     while (true) {
-        if (!fs.poll(main.std_in)) break;
+        if (!fs.poll(main.tty_in)) break;
         var b: [1]u8 = undefined;
-        const bytes_read = std.posix.read(main.std_in.handle, &b) catch break;
+        const bytes_read = std.posix.read(main.tty_in.handle, &b) catch break;
         if (bytes_read == 0) break;
         try in_buf.appendSlice(b[0..]);
-        // 1ns seems to be enough wait time for stdin to fill up with the next code
+        // 1ns seems to be enough wait time for /dev/tty to fill up with the next code
         std.Thread.sleep(1);
     }
     if (in_buf.items.len == 0) return null;
-
-    if (main.log_enabled) {
-        log.log(@This(), "input: ", .{});
-        for (in_buf.items) |code| {
-            const code_str = try ansiCodeToString(allocator, code);
-            defer allocator.free(code_str);
-            std.debug.print("{s}", .{code_str});
-        }
-        std.debug.print("\n", .{});
-    }
-
     return try in_buf.toOwnedSlice();
 }
 

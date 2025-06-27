@@ -19,7 +19,8 @@ const Args = struct {
 pub const sleep_ns = 16 * 1e6;
 pub var allocator: std.mem.Allocator = undefined;
 pub const std_out = std.io.getStdOut();
-pub const std_in = std.io.getStdIn();
+pub const std_in = std.io.getStdOut();
+pub var tty_in: std.fs.File = undefined;
 
 pub var editor: edi.Editor = undefined;
 pub var term: ter.Terminal = undefined;
@@ -37,6 +38,8 @@ pub fn main() !void {
     allocator = if (builtin.mode == .Debug) debug_allocator.allocator() else std.heap.c_allocator;
 
     log.log(@This(), "logging enabled\n", .{});
+
+    tty_in = try std.fs.cwd().openFile("/dev/tty", .{});
 
     var cmd_args = std.process.args();
     _ = cmd_args.skip();
