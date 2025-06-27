@@ -6,32 +6,27 @@ pub fn log(comptime caller: type, comptime fmt: []const u8, args: anytype) void 
     if (!main.log_enabled) return;
     const writer = main.std_err.writer();
 
-    dt.Datetime.now().formatISO8601(writer, false) catch {};
-    _ = writer.write(" ") catch {};
-    printCaller(caller, writer) catch {};
-    _ = writer.write(" ") catch {};
+    var now_buf: [32]u8 = undefined;
+    const now_str = dt.Datetime.now().formatISO8601Buf(&now_buf, false) catch "";
+
+    std.fmt.format(writer, "{s} {s}{s: <16}{s} ", .{ now_str, color(5), callerName(caller), colorReset() }) catch {};
     std.fmt.format(writer, fmt, args) catch {};
 }
 
-fn printCaller(comptime caller: type, writer: anytype) !void {
+fn callerName(comptime caller: type) []const u8 {
     const caller_name_full = @typeName(caller);
     var caller_name_iter = std.mem.splitBackwardsScalar(u8, caller_name_full, '.');
-    const caller_name = caller_name_iter.next() orelse caller_name_full;
-    colored(writer, 5) catch {};
-    std.fmt.format(writer, "{s: <16}", .{caller_name}) catch {};
-    colorReset(writer) catch {};
+    return caller_name_iter.next() orelse caller_name_full;
 }
 
-fn colored(writer: anytype, color_code: u8) !void {
+fn color(comptime color_code: u8) []const u8 {
     const escapeCode = "\x1b[38;5;";
-    try std.fmt.format(
-        writer,
+    return std.fmt.comptimePrint(
         "{s}{}{s}",
         .{ escapeCode, color_code, "m" },
     );
 }
 
-fn colorReset(writer: anytype) !void {
-    const resetCode = "\x1b[0m";
-    _ = try writer.write(resetCode);
+fn colorReset() []const u8 {
+    return std.fmt.comptimePrint("\x1b[0m", .{});
 }
