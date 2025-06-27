@@ -153,7 +153,7 @@ pub fn main() !void {
                     try buffer.insertText(printable);
                     editor.needs_completion = true;
 
-                    // multiple-key normal mode
+                    // multiple-key
                 } else if (multiple_key) {
                     const key2 = key_queue.orderedRemove(0);
                     defer if (key2.printable) |p| allocator.free(p);
@@ -162,17 +162,17 @@ pub fn main() !void {
 
                     if (editor.mode == .normal and ch == ' ' and ch2 == 'd') {
                         if (lsp_conn) |*conn| try conn.goToDefinition();
-                    } else if (editor.mode == .normal and ch == 'g' and ch2 == 'i') {
+                    } else if (normal_or_select and ch == 'g' and ch2 == 'i') {
                         try buffer.moveCursor(.{ .row = 0, .col = buffer.cursor.col });
-                    } else if (editor.mode == .normal and ch == 'g' and ch2 == 'k') {
+                    } else if (normal_or_select and ch == 'g' and ch2 == 'k') {
                         try buffer.moveCursor(.{
                             .row = @as(i32, @intCast(buffer.content.items.len)) - 1,
                             .col = buffer.cursor.col,
                         });
-                    } else if (editor.mode == .normal and ch == 'g' and ch2 == 'l') {
+                    } else if (normal_or_select and ch == 'g' and ch2 == 'l') {
                         const line = buffer.content.items[@intCast(buffer.cursor.row)].items;
                         try buffer.moveCursor(.{ .row = buffer.cursor.row, .col = @intCast(line.len) });
-                    } else if (editor.mode == .normal and ch == 'g' and ch2 == 'j') {
+                    } else if (normal_or_select and ch == 'g' and ch2 == 'j') {
                         try buffer.moveCursor(.{ .row = buffer.cursor.row, .col = 0 });
                     } else {
                         // no matches, reinsert key2 and try it as a single key mapping on next iteration
