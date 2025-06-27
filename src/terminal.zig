@@ -351,6 +351,7 @@ pub fn parseAnsi(allocator: std.mem.Allocator, input: *std.ArrayList(u8)) !inp.K
 }
 
 pub fn getCodes(allocator: std.mem.Allocator) !?[]u8 {
+    if (!fs.poll(main.std_in)) return null;
     var in_buf = std.ArrayList(u8).init(allocator);
     while (true) {
         if (!fs.poll(main.std_in)) break;

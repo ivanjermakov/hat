@@ -2,6 +2,8 @@ const std = @import("std");
 const posix = std.posix;
 
 pub fn readNonblock(allocator: std.mem.Allocator, file: std.fs.File) !?[]u8 {
+    if (!poll(file)) return null;
+
     var res = std.ArrayList(u8).init(allocator);
     errdefer res.deinit();
 

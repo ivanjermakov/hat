@@ -73,7 +73,6 @@ pub const LspConnection = struct {
     }
 
     pub fn update(self: *LspConnection) !void {
-        const buffer = main.editor.active_buffer.?;
         const raw_msgs = try self.poll() orelse return;
         defer {
             for (raw_msgs) |msg| self.allocator.free(msg);
@@ -95,95 +94,17 @@ pub const LspConnection = struct {
                     const response_id = resp.id.?.number;
                     const matched_request = self.messages_unreplied.fetchRemove(response_id) orelse continue;
                     defer self.allocator.free(matched_request.value.message);
-                    log.log(@This(), "response: {}\n", .{resp});
 
                     if (std.mem.eql(u8, matched_request.value.method, "initialize")) {
-                        const resp_typed = try std.json.parseFromValue(
-                            lsp.types.InitializeResult,
-                            arena.allocator(),
-                            resp.result_or_error.result.?,
-                            .{},
-                        );
-                        log.log(@This(), "got init response: {}\n", .{resp_typed});
-                        try self.sendNotification("initialized", .{});
-
-                        try self.didOpen();
+                        try self.handleInitializeResponse(arena.allocator(), resp);
                     } else if (std.mem.eql(u8, matched_request.value.method, "textDocument/definition")) {
-                        const ResponseType = union(enum) {
-                            Definition: lsp.types.Definition,
-                            array_of_DefinitionLink: []const lsp.types.DefinitionLink,
-                        };
-
-                        const resp_typed = try lsp.parser.UnionParser(ResponseType).jsonParseFromValue(
-                            arena.allocator(),
-                            resp.result_or_error.result.?,
-                            .{},
-                        );
-                        log.log(@This(), "got definition response: {}\n", .{resp_typed});
-
-                        const location = b: switch (resp_typed.Definition) {
-                            .Location => |location| {
-                                break :b location;
-                            },
-                            .array_of_Location => |locations| {
-                                if (locations.len == 0) break :b null;
-                                if (locations.len > 1) log.log(@This(), "TODO: multiple locations\n", .{});
-                                break :b locations[0];
-                            },
-                        };
-                        if (location) |loc| {
-                            if (std.mem.eql(u8, loc.uri, buffer.uri)) {
-                                log.log(@This(), "jump to {}\n", .{loc.range.start});
-                                const new_cursor = buf.Cursor.fromLsp(loc.range.start);
-                                try buffer.moveCursor(new_cursor);
-                            } else {
-                                log.log(@This(), "TODO: jump to another file {s}\n", .{loc.uri});
-                            }
-                        }
+                        try self.handleDefinitionResponse(arena.allocator(), resp);
                     } else if (std.mem.eql(u8, matched_request.value.method, "textDocument/completion")) {
-                        const ResponseType = union(enum) {
-                            array_of_CompletionItem: []const lsp.types.CompletionItem,
-                            CompletionList: lsp.types.CompletionList,
-                        };
-                        switch (resp.result_or_error) {
-                            .@"error" => {
-                                log.log(@This(), "Lsp error: {}\n", .{resp.result_or_error.@"error"});
-                                return;
-                            },
-                            .result => {},
-                        }
-
-                        const items: []const lsp.types.CompletionItem = b: {
-                            const empty = [_]lsp.types.CompletionItem{};
-                            const resp_typed = lsp.parser.UnionParser(ResponseType).jsonParseFromValue(
-                                arena.allocator(),
-                                resp.result_or_error.result.?,
-                                .{},
-                            ) catch break :b &empty;
-                            switch (resp_typed) {
-                                .array_of_CompletionItem => |a| break :b a,
-                                .CompletionList => |l| break :b l.items,
-                            }
-                        };
-                        main.editor.completion_menu.updateItems(items) catch |e| {
-                            log.log(@This(), "cmp menu update failed: {}\n", .{e});
-                        };
+                        try self.handleCompletionResponse(arena.allocator(), resp);
                     }
                 },
                 .notification => |notif| {
-                    log.log(@This(), "notification: {s}\n", .{notif.method});
-                    if (std.mem.eql(u8, notif.method, "textDocument/publishDiagnostics")) {
-                        const params_typed = try std.json.parseFromValue(
-                            lsp.types.PublishDiagnosticsParams,
-                            arena.allocator(),
-                            notif.params.?,
-                            .{},
-                        );
-                        log.log(@This(), "got {} diagnostics\n", .{params_typed.value.diagnostics.len});
-                        buffer.diagnostics.clearRetainingCapacity();
-                        try buffer.diagnostics.appendSlice(params_typed.value.diagnostics);
-                        main.editor.needs_redraw = true;
-                    }
+                    try self.handleNotification(arena.allocator(), notif);
                 },
                 else => {},
             }
@@ -337,6 +258,104 @@ pub const LspConnection = struct {
         const rpc_message = try std.fmt.allocPrint(self.allocator, "Content-Length: {}\r\n\r\n{s}", .{ json_message.len, json_message });
         _ = try self.child.stdin.?.write(rpc_message);
         defer self.allocator.free(rpc_message);
+    }
+
+    fn handleInitializeResponse(self: *LspConnection, arena: std.mem.Allocator, resp: lsp.JsonRPCMessage.Response) !void {
+        const resp_typed = try std.json.parseFromValue(
+            lsp.types.InitializeResult,
+            arena,
+            resp.result_or_error.result.?,
+            .{},
+        );
+        log.log(@This(), "got init response: {}\n", .{resp_typed});
+        try self.sendNotification("initialized", .{});
+
+        try self.didOpen();
+    }
+
+    fn handleDefinitionResponse(self: *LspConnection, arena: std.mem.Allocator, resp: lsp.JsonRPCMessage.Response) !void {
+        _ = self;
+        const ResponseType = union(enum) {
+            Definition: lsp.types.Definition,
+            array_of_DefinitionLink: []const lsp.types.DefinitionLink,
+        };
+
+        const resp_typed = try lsp.parser.UnionParser(ResponseType).jsonParseFromValue(
+            arena,
+            resp.result_or_error.result.?,
+            .{},
+        );
+        log.log(@This(), "got definition response: {}\n", .{resp_typed});
+
+        const location = b: switch (resp_typed.Definition) {
+            .Location => |location| {
+                break :b location;
+            },
+            .array_of_Location => |locations| {
+                if (locations.len == 0) break :b null;
+                if (locations.len > 1) log.log(@This(), "TODO: multiple locations\n", .{});
+                break :b locations[0];
+            },
+        };
+        if (location) |loc| {
+            const buffer = main.editor.active_buffer.?;
+            if (std.mem.eql(u8, loc.uri, buffer.uri)) {
+                log.log(@This(), "jump to {}\n", .{loc.range.start});
+                const new_cursor = buf.Cursor.fromLsp(loc.range.start);
+                try buffer.moveCursor(new_cursor);
+            } else {
+                log.log(@This(), "TODO: jump to another file {s}\n", .{loc.uri});
+            }
+        }
+    }
+
+    fn handleCompletionResponse(self: *LspConnection, arena: std.mem.Allocator, resp: lsp.JsonRPCMessage.Response) !void {
+        _ = self;
+        const ResponseType = union(enum) {
+            array_of_CompletionItem: []const lsp.types.CompletionItem,
+            CompletionList: lsp.types.CompletionList,
+        };
+        switch (resp.result_or_error) {
+            .@"error" => {
+                log.log(@This(), "Lsp error: {}\n", .{resp.result_or_error.@"error"});
+                return;
+            },
+            .result => {},
+        }
+
+        const items: []const lsp.types.CompletionItem = b: {
+            const empty = [_]lsp.types.CompletionItem{};
+            const resp_typed = lsp.parser.UnionParser(ResponseType).jsonParseFromValue(
+                arena,
+                resp.result_or_error.result.?,
+                .{},
+            ) catch break :b &empty;
+            switch (resp_typed) {
+                .array_of_CompletionItem => |a| break :b a,
+                .CompletionList => |l| break :b l.items,
+            }
+        };
+        main.editor.completion_menu.updateItems(items) catch |e| {
+            log.log(@This(), "cmp menu update failed: {}\n", .{e});
+        };
+    }
+
+    fn handleNotification(self: *LspConnection, arena: std.mem.Allocator, notif: lsp.JsonRPCMessage.Notification) !void {
+        _ = self;
+        // log.log(@This(), "notification: {s}\n", .{notif.method});
+        if (std.mem.eql(u8, notif.method, "textDocument/publishDiagnostics")) {
+            const params_typed = try std.json.parseFromValue(
+                lsp.types.PublishDiagnosticsParams,
+                arena,
+                notif.params.?,
+                .{},
+            );
+            log.log(@This(), "got {} diagnostics\n", .{params_typed.value.diagnostics.len});
+            const buffer = main.editor.active_buffer.?;
+            buffer.diagnostics.clearRetainingCapacity();
+            try buffer.diagnostics.appendSlice(params_typed.value.diagnostics);
+            main.editor.needs_redraw = true;
+        }
     }
 };
 
