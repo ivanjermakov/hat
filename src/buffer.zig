@@ -558,16 +558,13 @@ pub const Buffer = struct {
         if (term_cursor.row < 0 and new_buf_cursor.row >= 0) {
             self.offset.row += term_cursor.row;
             main.editor.needs_redraw = true;
-        }
-        if (term_cursor.row >= dims.height and new_buf_cursor.row < self.content.items.len - 1) {
+        } else if (term_cursor.row >= dims.height and new_buf_cursor.row < self.content.items.len) {
             self.offset.row += 1 + term_cursor.row - @as(i32, @intCast(dims.height));
             main.editor.needs_redraw = true;
-        }
-        if (term_cursor.col < 0 and new_buf_cursor.col >= 0) {
+        } else if (term_cursor.col < 0 and new_buf_cursor.col >= 0) {
             self.offset.col += term_cursor.col;
             main.editor.needs_redraw = true;
-        }
-        if (term_cursor.col >= dims.width and new_buf_cursor.row >= 0 and new_buf_cursor.row < self.content.items.len - 1) {
+        } else if (term_cursor.col >= dims.width and new_buf_cursor.row >= 0 and new_buf_cursor.row < self.content.items.len) {
             const line = &self.content.items[@intCast(new_buf_cursor.row)];
             const line_len = line.items.len;
             if (new_buf_cursor.col <= line_len) {
