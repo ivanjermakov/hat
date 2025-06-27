@@ -21,7 +21,6 @@ pub const std_in = std.io.getStdOut();
 pub const std_out = std.io.getStdOut();
 pub const std_err = std.io.getStdErr();
 pub var tty_in: std.fs.File = undefined;
-pub var allocator: std.mem.Allocator = undefined;
 
 pub var editor: edi.Editor = undefined;
 pub var term: ter.Terminal = undefined;
@@ -36,7 +35,7 @@ pub var key_queue: std.ArrayList(inp.Key) = undefined;
 pub fn main() !void {
     var debug_allocator: std.heap.DebugAllocator(.{ .stack_trace_frames = 10 }) = .init;
     defer _ = debug_allocator.deinit();
-    allocator = if (builtin.mode == .Debug) debug_allocator.allocator() else std.heap.c_allocator;
+    const allocator = if (builtin.mode == .Debug) debug_allocator.allocator() else std.heap.c_allocator;
 
     log.log(@This(), "logging enabled\n", .{});
 

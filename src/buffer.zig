@@ -335,7 +335,7 @@ pub const Buffer = struct {
         var line = try self.content.items[@intCast(self.cursor.row)].toOwnedSlice();
         defer self.allocator.free(line);
         try self.content.items[@intCast(self.cursor.row)].appendSlice(line[0..@intCast(self.cursor.col)]);
-        var new_line = std.ArrayList(u21).init(main.allocator);
+        var new_line = std.ArrayList(u21).init(self.allocator);
         try new_line.appendSlice(line[@intCast(self.cursor.col)..]);
         try self.content.insert(@intCast(self.cursor.row + 1), new_line);
         try self.moveCursor(.{ .row = self.cursor.row + 1, .col = 0 });
