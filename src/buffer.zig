@@ -349,7 +349,7 @@ pub const Buffer = struct {
         main.editor.needs_reparse = true;
     }
 
-    pub fn removeChar(self: *Buffer) !void {
+    pub fn deleteChar(self: *Buffer) !void {
         var line = &self.content.items[@intCast(self.cursor.row)];
         if (self.cursor.col == line.items.len) {
             if (self.cursor.row < self.content.items.len - 1) {
@@ -363,13 +363,14 @@ pub const Buffer = struct {
         }
     }
 
-    pub fn removePrevChar(self: *Buffer) !void {
+    pub fn deletePrevChar(self: *Buffer) !void {
         var line = &self.content.items[@intCast(self.cursor.row)];
         if (self.cursor.col == 0) {
             if (self.cursor.row > 0) {
                 const prev_line = &self.content.items[@intCast(self.cursor.row - 1)];
+                const col: i32 = @intCast(prev_line.items.len);
                 try self.joinWithLineBelow(@intCast(self.cursor.row - 1));
-                try self.moveCursor(.{ .row = self.cursor.row - 1, .col = @intCast(prev_line.items.len) });
+                try self.moveCursor(.{ .row = self.cursor.row - 1, .col = col });
             } else {
                 return;
             }

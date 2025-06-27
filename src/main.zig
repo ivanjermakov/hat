@@ -143,9 +143,9 @@ pub fn main() !void {
 
                     // insert mode
                 } else if (editor.mode == .insert and code == .delete) {
-                    try buffer.removeChar();
+                    try buffer.deleteChar();
                 } else if (editor.mode == .insert and code == .backspace) {
-                    try buffer.removePrevChar();
+                    try buffer.deletePrevChar();
                     editor.needs_completion = true;
                 } else if (editor.mode == .insert and key.printable != null) {
                     const printable = try uni.utf8FromBytes(allocator, key.printable.?);
