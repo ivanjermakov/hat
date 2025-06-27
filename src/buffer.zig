@@ -60,6 +60,8 @@ pub const SelectionSpan = struct {
 pub const Buffer = struct {
     path: []const u8,
     uri: []const u8,
+    /// Incremented on every content change
+    version: usize,
     file_type: ft.FileTypeConfig,
     /// Array list of array lists of utf8 codepoints
     content: std.ArrayList(std.ArrayList(u21)),
@@ -90,6 +92,7 @@ pub const Buffer = struct {
             .path = path,
             .file_type = file_type,
             .uri = uri,
+            .version = 0,
             .content = std.ArrayList(std.ArrayList(u21)).init(allocator),
             .content_raw = raw,
             .spans = std.ArrayList(ts.SpanAttrsTuple).init(allocator),
@@ -132,10 +135,10 @@ pub const Buffer = struct {
             @ptrCast(self.content_raw.items),
             @intCast(self.content_raw.items.len),
         );
-        if (main.log_enabled) {
-            const node = ts.ts.ts_tree_root_node(self.tree);
-            log.log(@This(), "tree: {s}\n", .{std.mem.span(ts.ts.ts_node_string(node))});
-        }
+        // if (main.log_enabled) {
+        //     const node = ts.ts.ts_tree_root_node(self.tree);
+        //     log.log(@This(), "tree: {s}\n", .{std.mem.span(ts.ts.ts_node_string(node))});
+        // }
         try self.makeSpans();
     }
 

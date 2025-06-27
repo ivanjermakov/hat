@@ -228,8 +228,9 @@ pub const LspConnection = struct {
             .{ .literal_1 = .{ .text = buffer.content_raw.items } },
         };
         buffer.diagnostics.clearRetainingCapacity();
+        buffer.version += 1;
         try self.sendNotification("textDocument/didChange", .{
-            .textDocument = .{ .uri = buffer.uri, .version = 0 },
+            .textDocument = .{ .uri = buffer.uri, .version = @intCast(buffer.version) },
             .contentChanges = &changes,
         });
     }
@@ -332,7 +333,7 @@ pub const LspConnection = struct {
         };
         const json_message = try std.json.stringifyAlloc(self.allocator, request, .{});
         defer self.allocator.free(json_message);
-        log.log(@This(), "> raw notification: {s}\n", .{json_message});
+        // log.log(@This(), "> raw notification: {s}\n", .{json_message});
         const rpc_message = try std.fmt.allocPrint(self.allocator, "Content-Length: {}\r\n\r\n{s}", .{ json_message.len, json_message });
         _ = try self.child.stdin.?.write(rpc_message);
         defer self.allocator.free(rpc_message);
