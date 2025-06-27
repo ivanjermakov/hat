@@ -9,8 +9,8 @@ const log = @import("log.zig");
 const lsp = @import("lsp.zig");
 
 pub const Cursor = struct {
-    row: i32,
-    col: i32,
+    row: i32 = 0,
+    col: i32 = 0,
 
     pub fn applyOffset(self: Cursor, offset: Cursor) Cursor {
         return .{ .row = self.row + offset.row, .col = self.col + offset.col };
@@ -52,7 +52,7 @@ pub const SelectionSpan = struct {
     pub fn fromLsp(position: lsp.types.Range) SelectionSpan {
         return .{
             .start = Cursor.fromLsp(position.start),
-            .end = Cursor.fromLsp(position.end).applyOffset(.{ .row = 0, .col = -1 }),
+            .end = Cursor.fromLsp(position.end).applyOffset(.{ .col = -1 }),
         };
     }
 };
@@ -61,22 +61,22 @@ pub const Buffer = struct {
     path: []const u8,
     uri: []const u8,
     /// Incremented on every content change
-    version: usize,
+    version: usize = 0,
     file_type: ft.FileTypeConfig,
     /// Array list of array lists of utf8 codepoints
     content: std.ArrayList(std.ArrayList(u21)),
     content_raw: std.ArrayList(u8),
     spans: std.ArrayList(ts.SpanAttrsTuple),
-    parser: ?*ts.ts.TSParser,
-    query: ?*ts.ts.TSQuery,
-    tree: ?*ts.ts.TSTree,
-    selection: ?SelectionSpan,
+    parser: ?*ts.ts.TSParser = null,
+    query: ?*ts.ts.TSQuery = null,
+    tree: ?*ts.ts.TSTree = null,
+    selection: ?SelectionSpan = null,
     diagnostics: std.ArrayList(lsp.types.Diagnostic),
     /// Cursor position in local buffer character space
-    cursor: Cursor,
+    cursor: Cursor = .{},
     /// How buffer is positioned relative to the window
     /// (0, 0) means Buffer.cursor is the same as window cursor
-    offset: Cursor,
+    offset: Cursor = .{},
     line_positions: std.ArrayList(usize),
     allocator: std.mem.Allocator,
 
@@ -92,17 +92,10 @@ pub const Buffer = struct {
             .path = path,
             .file_type = file_type,
             .uri = uri,
-            .version = 0,
             .content = std.ArrayList(std.ArrayList(u21)).init(allocator),
             .content_raw = raw,
             .spans = std.ArrayList(ts.SpanAttrsTuple).init(allocator),
-            .parser = null,
-            .query = null,
-            .tree = null,
-            .selection = null,
             .diagnostics = std.ArrayList(lsp.types.Diagnostic).init(allocator),
-            .cursor = .{ .row = 0, .col = 0 },
-            .offset = .{ .row = 0, .col = 0 },
             .line_positions = std.ArrayList(usize).init(allocator),
             .allocator = allocator,
         };
@@ -238,8 +231,8 @@ pub const Buffer = struct {
         );
         defer buffer.deinit();
 
-        try buffer.moveCursor(.{ .row = 0, .col = 1 });
-        try testing.expectEqual(Cursor{ .row = 0, .col = 1 }, buffer.cursor);
+        try buffer.moveCursor(.{ .col = 1 });
+        try testing.expectEqual(Cursor{ .col = 1 }, buffer.cursor);
 
         try buffer.moveCursor(Cursor{ .row = 2, .col = 2 });
         try testing.expectEqual(Cursor{ .row = 2, .col = 2 }, buffer.cursor);
@@ -287,7 +280,7 @@ pub const Buffer = struct {
         buffer.cursor = .{ .row = 0, .col = 0 };
         try buffer.moveToNextWord();
         try testing.expectEqual(
-            SelectionSpan{ .start = .{ .row = 0, .col = 0 }, .end = .{ .row = 0, .col = 4 } },
+            SelectionSpan{ .start = .{}, .end = .{ .col = 4 } },
             buffer.selection,
         );
     }
@@ -332,7 +325,7 @@ pub const Buffer = struct {
                 try self.insertNewline();
             } else {
                 try line.insert(@intCast(self.cursor.col), ch);
-                try self.moveCursor(self.cursor.applyOffset(.{ .row = 0, .col = 1 }));
+                try self.moveCursor(self.cursor.applyOffset(.{ .col = 1 }));
             }
         }
         main.editor.needs_reparse = true;
@@ -375,7 +368,7 @@ pub const Buffer = struct {
                 return;
             }
         } else {
-            try self.moveCursor(self.cursor.applyOffset(.{ .row = 0, .col = -1 }));
+            try self.moveCursor(self.cursor.applyOffset(.{ .col = -1 }));
             _ = line.orderedRemove(@intCast(self.cursor.col));
             main.editor.needs_reparse = true;
         }

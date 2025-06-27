@@ -107,13 +107,13 @@ pub fn main() !void {
 
                     // global
                 } else if (code == .up) {
-                    try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = -1, .col = 0 }));
+                    try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = -1 }));
                 } else if (code == .down) {
-                    try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = 1, .col = 0 }));
+                    try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = 1 }));
                 } else if (code == .left) {
-                    try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = 0, .col = -1 }));
+                    try buffer.moveCursor(buffer.cursor.applyOffset(.{ .col = -1 }));
                 } else if (code == .right) {
-                    try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = 0, .col = 1 }));
+                    try buffer.moveCursor(buffer.cursor.applyOffset(.{ .col = 1 }));
                 } else if (code == .escape) {
                     try buffer.enterMode(.normal);
 
@@ -121,13 +121,13 @@ pub fn main() !void {
                 } else if (normal_or_select and ch == 'q') {
                     break :main_loop;
                 } else if (normal_or_select and ch == 'i') {
-                    try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = -1, .col = 0 }));
+                    try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = -1 }));
                 } else if (normal_or_select and ch == 'k') {
-                    try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = 1, .col = 0 }));
+                    try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = 1 }));
                 } else if (normal_or_select and ch == 'j') {
-                    try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = 0, .col = -1 }));
+                    try buffer.moveCursor(buffer.cursor.applyOffset(.{ .col = -1 }));
                 } else if (normal_or_select and ch == 'l') {
-                    try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = 0, .col = 1 }));
+                    try buffer.moveCursor(buffer.cursor.applyOffset(.{ .col = 1 }));
                 } else if (normal_or_select and ch == 'w') {
                     try buffer.moveToNextWord();
                 } else if (normal_or_select and ch == 'W') {
@@ -166,7 +166,7 @@ pub fn main() !void {
                     if (editor.mode == .normal and ch == ' ' and ch2 == 'd') {
                         if (lsp_conn) |*conn| try conn.goToDefinition();
                     } else if (normal_or_select and ch == 'g' and ch2 == 'i') {
-                        try buffer.moveCursor(.{ .row = 0, .col = buffer.cursor.col });
+                        try buffer.moveCursor(.{ .col = buffer.cursor.col });
                     } else if (normal_or_select and ch == 'g' and ch2 == 'k') {
                         try buffer.moveCursor(.{
                             .row = @as(i32, @intCast(buffer.content.items.len)) - 1,

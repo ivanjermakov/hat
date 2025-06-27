@@ -229,7 +229,7 @@ pub const Terminal = struct {
             .col = @intCast(replace_range.start.character),
         })
             .applyOffset(buffer.offset.negate())
-            .applyOffset(.{ .row = 1, .col = 0 });
+            .applyOffset(.{ .row = 1 });
 
         try self.resetAttributes();
 
@@ -278,11 +278,7 @@ pub fn terminalSize() !TerminalDimensions {
 }
 
 pub fn parseAnsi(allocator: std.mem.Allocator, input: *std.ArrayList(u8)) !inp.Key {
-    var key: inp.Key = .{
-        .printable = null,
-        .code = null,
-        .modifiers = 0,
-    };
+    var key: inp.Key = .{};
     const code = input.orderedRemove(0);
     s: switch (code) {
         0x00...0x08, 0x10...0x19 => {

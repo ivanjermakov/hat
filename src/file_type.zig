@@ -9,8 +9,8 @@ const log = @import("log.zig");
 const nvim_ts_path = "$HOME/.local/share/nvim/lazy/nvim-treesitter";
 
 pub const FileTypeConfig = struct {
-    ts: ?TsConfig,
-    lsp: ?lsp.LspConfig,
+    ts: ?TsConfig = null,
+    lsp: ?lsp.LspConfig = null,
 };
 
 pub const TsConfig = struct {
@@ -57,7 +57,6 @@ pub const plain: FileTypeConfig = .{ .ts = null, .lsp = null };
 pub const file_type = std.StaticStringMap(FileTypeConfig).initComptime(.{
     .{ ".c", FileTypeConfig{
         .ts = TsConfig.from_nvim("c"),
-        .lsp = null,
     } },
     .{ ".ts", FileTypeConfig{
         .ts = .{

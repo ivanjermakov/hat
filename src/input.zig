@@ -22,11 +22,11 @@ pub const Modifier = enum(u8) {
 
 pub const Key = struct {
     /// Printable UTF-8 string
-    printable: ?[]u8,
+    printable: ?[]u8 = null,
     /// Non-printable key code
-    code: ?KeyCode,
+    code: ?KeyCode = null,
     /// Bit mask of Modifier enum
-    modifiers: u4,
+    modifiers: u4 = 0,
 
     pub fn clone(self: *const Key, allocator: std.mem.Allocator) !Key {
         var k = self.*;
