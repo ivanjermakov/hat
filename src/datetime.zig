@@ -1339,7 +1339,7 @@ pub const Datetime = struct {
 
     /// Format datetime to ISO8601 format
     /// e.g. "2023-06-10T14:06:40.015006"
-    pub fn formatISO8601(self: Datetime, allocator: Allocator, with_micro: bool) ![]const u8 {
+    pub fn formatISO8601Alloc(self: Datetime, allocator: Allocator, with_micro: bool) ![]const u8 {
         var micro_part_len: u3 = 0;
         var micro_part: [7]u8 = undefined;
         if (with_micro) {
@@ -1372,6 +1372,29 @@ pub const Datetime = struct {
 
         return try std.fmt.bufPrint(
             buf,
+            "{d:0>4}-{d:0>2}-{d:0>2}T{d:0>2}:{d:0>2}:{d:0>2}{s}",
+            .{
+                self.date.year,
+                self.date.month,
+                self.date.day,
+                self.time.hour,
+                self.time.minute,
+                self.time.second,
+                micro_part[0..micro_part_len],
+            },
+        );
+    }
+
+    pub fn formatISO8601(self: Datetime, writer: anytype, with_micro: bool) !void {
+        var micro_part_len: usize = 0;
+        var micro_part: [7]u8 = undefined;
+        if (with_micro) {
+            _ = try std.fmt.bufPrint(&micro_part, ".{:0>6}", .{self.time.nanosecond / 1000});
+            micro_part_len = 7;
+        }
+
+        try std.fmt.format(
+            writer,
             "{d:0>4}-{d:0>2}-{d:0>2}T{d:0>2}:{d:0>2}:{d:0>2}{s}",
             .{
                 self.date.year,
@@ -1505,31 +1528,31 @@ test "datetime-format-ISO8601" {
     const allocator = std.testing.allocator;
 
     var dt = try Datetime.create(2023, 6, 10, 9, 12, 52, 49612000);
-    var dt_str = try dt.formatISO8601(allocator, false);
+    var dt_str = try dt.formatISO8601Alloc(allocator, false);
     try testing.expectEqualStrings("2023-06-10T09:12:52", dt_str);
     allocator.free(dt_str);
 
     // test positive tz
     dt = try Datetime.create(2023, 6, 10, 18, 12, 52, 49612000);
-    dt_str = try dt.formatISO8601(allocator, false);
+    dt_str = try dt.formatISO8601Alloc(allocator, false);
     try testing.expectEqualStrings("2023-06-10T18:12:52", dt_str);
     allocator.free(dt_str);
 
     // test negative tz
     dt = try Datetime.create(2023, 6, 10, 6, 12, 52, 49612000);
-    dt_str = try dt.formatISO8601(allocator, false);
+    dt_str = try dt.formatISO8601Alloc(allocator, false);
     try testing.expectEqualStrings("2023-06-10T06:12:52", dt_str);
     allocator.free(dt_str);
 
     // test tz offset div and mod
     dt = try Datetime.create(2023, 6, 10, 22, 57, 52, 49612000);
-    dt_str = try dt.formatISO8601(allocator, false);
+    dt_str = try dt.formatISO8601Alloc(allocator, false);
     try testing.expectEqualStrings("2023-06-10T22:57:52", dt_str);
     allocator.free(dt_str);
 
     // test microseconds
     dt = try Datetime.create(2023, 6, 10, 5, 57, 52, 49612000);
-    dt_str = try dt.formatISO8601(allocator, true);
+    dt_str = try dt.formatISO8601Alloc(allocator, true);
     try testing.expectEqualStrings("2023-06-10T05:57:52.049612", dt_str);
     allocator.free(dt_str);
 

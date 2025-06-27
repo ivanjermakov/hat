@@ -4,29 +4,34 @@ const dt = @import("datetime.zig");
 
 pub fn log(comptime caller: type, comptime fmt: []const u8, args: anytype) void {
     if (!main.log_enabled) return;
-    const allocator = main.allocator;
+    const writer = main.std_err.writer();
 
-    const now_str = dt.Datetime.now().formatISO8601(allocator, false) catch "";
-    defer allocator.free(now_str);
+    dt.Datetime.now().formatISO8601(writer, false) catch {};
+    _ = writer.write(" ") catch {};
+    printCaller(caller, writer) catch {};
+    _ = writer.write(" ") catch {};
+    std.fmt.format(writer, fmt, args) catch {};
+}
 
+fn printCaller(comptime caller: type, writer: anytype) !void {
     const caller_name_full = @typeName(caller);
     var caller_name_iter = std.mem.splitBackwardsScalar(u8, caller_name_full, '.');
     const caller_name = caller_name_iter.next() orelse caller_name_full;
-    const caller_name_colored = color(allocator, caller_name, 5) catch "";
-    defer allocator.free(caller_name_colored);
-
-    const str = std.fmt.allocPrint(allocator, fmt, args) catch "";
-    defer allocator.free(str);
-
-    std.debug.print("{s} {s: <30} {s}", .{ now_str, caller_name_colored, str });
+    colored(writer, 5) catch {};
+    std.fmt.format(writer, "{s: <16}", .{caller_name}) catch {};
+    colorReset(writer) catch {};
 }
 
-fn color(allocator: std.mem.Allocator, str: []const u8, color_code: u8) ![]const u8 {
+fn colored(writer: anytype, color_code: u8) !void {
     const escapeCode = "\x1b[38;5;";
-    const resetCode = "\x1b[0m";
-    return try std.fmt.allocPrint(
-        allocator,
-        "{s}{}{s}{s}{s}",
-        .{ escapeCode, color_code, "m", str, resetCode },
+    try std.fmt.format(
+        writer,
+        "{s}{}{s}",
+        .{ escapeCode, color_code, "m" },
     );
+}
+
+fn colorReset(writer: anytype) !void {
+    const resetCode = "\x1b[0m";
+    _ = try writer.write(resetCode);
 }

@@ -17,10 +17,11 @@ const Args = struct {
 };
 
 pub const sleep_ns = 16 * 1e6;
-pub var allocator: std.mem.Allocator = undefined;
-pub const std_out = std.io.getStdOut();
 pub const std_in = std.io.getStdOut();
+pub const std_out = std.io.getStdOut();
+pub const std_err = std.io.getStdErr();
 pub var tty_in: std.fs.File = undefined;
+pub var allocator: std.mem.Allocator = undefined;
 
 pub var editor: edi.Editor = undefined;
 pub var term: ter.Terminal = undefined;
@@ -230,9 +231,8 @@ comptime {
 }
 
 pub fn testSetup() !void {
-    allocator = std.testing.allocator;
     log_enabled = true;
-    editor = try edi.Editor.init(allocator);
+    editor = try edi.Editor.init(std.testing.allocator);
     term = ter.Terminal{
         .writer = .{ .unbuffered_writer = std.io.null_writer.any() },
         .dimensions = .{ .width = 50, .height = 30 },
