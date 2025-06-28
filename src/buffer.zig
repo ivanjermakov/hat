@@ -379,8 +379,10 @@ pub const Buffer = struct {
 
     pub fn changeJoinWithLineBelow(self: *Buffer, row: usize) !void {
         const line = &self.content.items[row];
-        const start: Cursor = .{ .row = @intCast(row), .col = @intCast(line.items.len) };
-        const span: Span = .{ .start = start, .end = start.applyOffset(.{ .col = 1 }) };
+        const span: Span = .{
+            .start = .{ .row = @intCast(row), .col = @intCast(line.items.len) },
+            .end = .{ .row = @intCast(row + 1), .col = 0 },
+        };
         try self.changes.append(.{
             .span = span,
             .new_text = &.{},
@@ -529,15 +531,23 @@ pub const Buffer = struct {
     }
 
     pub fn textAt(self: *Buffer, allocator: std.mem.Allocator, span: Span) ![]const u21 {
-        // same line
-        if (span.start.row == span.end.row) {
-            const line = &self.content.items[@intCast(span.start.row)];
-            if (span.start.col >= line.items.len) return error.OutOfBounds;
-            const res = line.items[@intCast(span.start.col)..@min(line.items.len - 1, @as(usize, @intCast(span.end.col)))];
-            return try allocator.dupe(u21, res);
-        } else {
-            return error.Todo;
+        var res = std.ArrayList(u21).init(allocator);
+        for (@intCast(span.start.row)..@intCast(span.end.row)) |row| {
+            const line = &self.content.items[row];
+            if (row == span.start.row and row == span.end.row) {
+                try res.appendSlice(line.items[@intCast(span.start.col)..@intCast(span.end.col)]);
+            } else if (row == span.start.row) {
+                try res.appendSlice(line.items[@intCast(span.start.col)..]);
+            } else if (row == span.end.row) {
+                try res.appendSlice(line.items[0..@intCast(span.end.col)]);
+            } else {
+                try res.appendSlice(line.items);
+            }
+            if (row == span.end.row) {
+                try res.append('\n');
+            }
         }
+        return res.toOwnedSlice();
     }
 
     fn deleteSpan(self: *Buffer, span: Span) !void {
