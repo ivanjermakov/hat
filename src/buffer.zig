@@ -39,17 +39,17 @@ pub const Cursor = struct {
     }
 };
 
-pub const SelectionSpan = struct {
+pub const Span = struct {
     start: Cursor,
     end: Cursor,
 
-    pub fn inRange(self: SelectionSpan, pos: Cursor) bool {
+    pub fn inRange(self: Span, pos: Cursor) bool {
         const start = self.start.order(pos);
         const end = self.end.order(pos);
         return start != .gt and end != .lt;
     }
 
-    pub fn fromLsp(position: lsp.types.Range) SelectionSpan {
+    pub fn fromLsp(position: lsp.types.Range) Span {
         return .{
             .start = Cursor.fromLsp(position.start),
             .end = Cursor.fromLsp(position.end).applyOffset(.{ .col = -1 }),
@@ -70,7 +70,7 @@ pub const Buffer = struct {
     parser: ?*ts.ts.TSParser = null,
     query: ?*ts.ts.TSQuery = null,
     tree: ?*ts.ts.TSTree = null,
-    selection: ?SelectionSpan = null,
+    selection: ?Span = null,
     diagnostics: std.ArrayList(lsp.types.Diagnostic),
     /// Cursor position in local buffer character space
     cursor: Cursor = .{},
@@ -280,7 +280,7 @@ pub const Buffer = struct {
         buffer.cursor = .{ .row = 0, .col = 0 };
         try buffer.moveToNextWord();
         try testing.expectEqual(
-            SelectionSpan{ .start = .{}, .end = .{ .col = 4 } },
+            Span{ .start = .{}, .end = .{ .col = 4 } },
             buffer.selection,
         );
     }

@@ -139,7 +139,7 @@ pub const CompletionMenu = struct {
         log.log(@This(), "accept item {}: {s}, replace text: {any}\n", .{ self.active_item, item.label, item.replace_text });
         var buffer = main.editor.active_buffer.?;
 
-        const selection = buf.SelectionSpan.fromLsp(self.replace_range.?);
+        const selection = buf.Span.fromLsp(self.replace_range.?);
         buffer.selection = selection;
         try buffer.selectionDelete();
         try buffer.moveCursor(selection.start);
