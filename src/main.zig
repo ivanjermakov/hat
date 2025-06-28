@@ -135,7 +135,7 @@ pub fn main() !void {
 
                     // select mode
                 } else if (editor.mode == .select and ch == 'd') {
-                    try buffer.selectionDelete();
+                    try buffer.changeSelectionDelete();
                     try buffer.enterMode(.normal);
 
                     // normal mode

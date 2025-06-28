@@ -47,13 +47,13 @@ pub const Span = struct {
     pub fn inRange(self: Span, pos: Cursor) bool {
         const start = self.start.order(pos);
         const end = self.end.order(pos);
-        return start != .gt and end != .lt;
+        return start != .gt and end == .gt;
     }
 
     pub fn fromLsp(position: lsp.types.Range) Span {
         return .{
             .start = Cursor.fromLsp(position.start),
-            .end = Cursor.fromLsp(position.end).applyOffset(.{ .col = -1 }),
+            .end = Cursor.fromLsp(position.end),
         };
     }
 };
@@ -170,7 +170,10 @@ pub const Buffer = struct {
         self.spans.deinit();
         self.diagnostics.deinit();
         self.line_positions.deinit();
-        for (self.changes.items) |change| self.allocator.free(change.old_text);
+        for (self.changes.items) |change| {
+            if (change.old_text) |old_text| self.allocator.free(old_text);
+            if (change.new_text) |new_text| self.allocator.free(new_text);
+        }
         self.changes.deinit();
     }
 
@@ -326,14 +329,18 @@ pub const Buffer = struct {
     pub fn applyChange(self: *Buffer, change_index: usize) !void {
         var change = self.changes.items[change_index];
         const span = change.span;
-
-        const text_at = try self.textAt(self.allocator, span);
-        defer self.allocator.free(text_at);
-        std.debug.assert(std.mem.eql(u21, change.old_text, text_at));
         log.log(@This(), "applying change: {}\n", .{change});
 
+        if (change.old_text) |old_text| {
+            const text_at = try self.textAt(self.allocator, span);
+            defer self.allocator.free(text_at);
+            std.debug.assert(std.mem.eql(u21, old_text, text_at));
+        } else {
+            std.debug.assert(std.meta.eql(span.start, span.end));
+        }
+
         try self.deleteSpan(span);
-        try self.insertText(change.new_text);
+        if (change.new_text) |new_text| try self.insertText(new_text);
         change.cursor = self.cursor;
 
         self.change_index = change_index;
@@ -344,7 +351,7 @@ pub const Buffer = struct {
         try self.changes.append(.{
             .span = .{ .start = self.cursor, .end = self.cursor },
             .new_text = text,
-            .old_text = &.{},
+            .old_text = null,
         });
         try self.applyChange(self.changes.items.len - 1);
     }
@@ -353,7 +360,7 @@ pub const Buffer = struct {
         const span: Span = .{ .start = self.cursor, .end = self.cursor.applyOffset(.{ .col = 1 }) };
         try self.changes.append(.{
             .span = span,
-            .new_text = &.{},
+            .new_text = null,
             .old_text = try self.textAt(self.allocator, span),
         });
         try self.applyChange(self.changes.items.len - 1);
@@ -370,7 +377,7 @@ pub const Buffer = struct {
             const span: Span = .{ .start = self.cursor.applyOffset(.{ .col = -1 }), .end = self.cursor };
             try self.changes.append(.{
                 .span = span,
-                .new_text = &.{},
+                .new_text = null,
                 .old_text = try self.textAt(self.allocator, span),
             });
             try self.applyChange(self.changes.items.len - 1);
@@ -385,10 +392,21 @@ pub const Buffer = struct {
         };
         try self.changes.append(.{
             .span = span,
-            .new_text = &.{},
+            .new_text = null,
             .old_text = try self.textAt(self.allocator, span),
         });
         try self.applyChange(self.changes.items.len - 1);
+    }
+
+    pub fn changeSelectionDelete(self: *Buffer) !void {
+        if (self.selection) |selection| {
+            try self.changes.append(.{
+                .span = selection,
+                .new_text = null,
+                .old_text = try self.textAt(self.allocator, selection),
+            });
+            try self.applyChange(self.changes.items.len - 1);
+        }
     }
 
     pub fn joinWithLineBelow(self: *Buffer, row: usize) !void {
@@ -399,7 +417,132 @@ pub const Buffer = struct {
         main.editor.needs_reparse = true;
     }
 
-    pub fn selectionDelete(self: *Buffer) !void {
+    /// Delete every character from cursor (including) to the end of line
+    pub fn deleteToEnd(self: *Buffer, cursor: Cursor) !void {
+        var line = &self.content.items[@intCast(cursor.row)];
+        try line.replaceRange(
+            @intCast(cursor.col),
+            line.items.len - @as(usize, @intCast(cursor.col)),
+            &[_]u21{},
+        );
+        main.editor.needs_reparse = true;
+    }
+
+    /// Delete every character from start of line to cursor (excluding)
+    pub fn deleteToStart(self: *Buffer, cursor: Cursor) !void {
+        var line = &self.content.items[@intCast(cursor.row)];
+        try line.replaceRange(
+            0,
+            @intCast(cursor.col),
+            &[_]u21{},
+        );
+        main.editor.needs_reparse = true;
+    }
+
+    /// End is exclusive
+    pub fn deleteLineRange(self: *Buffer, start: usize, end: usize) !void {
+        if (end - start <= 0) return;
+        for (start..end) |_| {
+            const line = self.content.orderedRemove(start);
+            line.deinit();
+        }
+        main.editor.needs_reparse = true;
+    }
+
+    pub fn clearSelection(self: *Buffer) !void {
+        self.selection = null;
+        main.editor.needs_redraw = true;
+    }
+
+    pub fn updateLinePositions(self: *Buffer) !void {
+        self.line_positions.clearRetainingCapacity();
+        var byte: usize = 0;
+        for (0..self.content.items.len) |i| {
+            try self.line_positions.append(byte);
+            const line = &self.content.items[i];
+            for (line.items) |ch| {
+                byte += try std.unicode.utf8CodepointSequenceLength(ch);
+            }
+            // new line
+            byte += 1;
+        }
+    }
+
+    pub fn textAt(self: *Buffer, allocator: std.mem.Allocator, span: Span) ![]const u21 {
+        var res = std.ArrayList(u21).init(allocator);
+        for (@intCast(span.start.row)..@intCast(span.end.row + 1)) |row| {
+            const line = &self.content.items[row];
+            if (row == span.start.row and row == span.end.row) {
+                try res.appendSlice(line.items[@intCast(span.start.col)..@intCast(span.end.col)]);
+            } else if (row == span.start.row) {
+                try res.appendSlice(line.items[@intCast(span.start.col)..]);
+                try res.append('\n');
+            } else if (row == span.end.row) {
+                try res.appendSlice(line.items[0..@intCast(span.end.col)]);
+            } else {
+                try res.appendSlice(line.items);
+                try res.append('\n');
+            }
+        }
+        return res.toOwnedSlice();
+    }
+
+    fn deleteSpan(self: *Buffer, span: Span) !void {
+        if (!std.meta.eql(span.start, span.end)) {
+            if (span.end.row - span.start.row > 1) {
+                // remove fully selected lines
+                try self.deleteLineRange(@intCast(span.start.row + 1), @intCast(span.end.row));
+            }
+            // start and end on separate lines
+            if (span.end.row - span.start.row > 0) {
+                try self.deleteToEnd(span.start);
+                const new_end: Cursor = .{ .row = span.start.row + 1, .col = span.end.col };
+                try self.deleteToStart(new_end);
+                try self.joinWithLineBelow(@intCast(span.start.row));
+            } else {
+                // start and end on the same line
+                var line = &self.content.items[@intCast(span.start.row)];
+                try line.replaceRange(
+                    @intCast(span.start.col),
+                    @intCast(span.end.col - span.start.col),
+                    &[_]u21{},
+                );
+            }
+        }
+        try self.moveCursor(span.start);
+    }
+
+    fn insertText(self: *Buffer, text: []const u21) !void {
+        for (text) |ch| {
+            var line = &self.content.items[@intCast(self.cursor.row)];
+
+            if (ch == '\n') {
+                try self.insertNewline();
+            } else {
+                try line.insert(@intCast(self.cursor.col), ch);
+                try self.moveCursor(self.cursor.applyOffset(.{ .col = 1 }));
+            }
+        }
+        main.editor.needs_reparse = true;
+    }
+
+    fn insertNewline(self: *Buffer) !void {
+        var line = try self.content.items[@intCast(self.cursor.row)].toOwnedSlice();
+        defer self.allocator.free(line);
+        try self.content.items[@intCast(self.cursor.row)].appendSlice(line[0..@intCast(self.cursor.col)]);
+        var new_line = std.ArrayList(u21).init(self.allocator);
+        try new_line.appendSlice(line[@intCast(self.cursor.col)..]);
+        try self.content.insert(@intCast(self.cursor.row + 1), new_line);
+        try self.moveCursor(.{ .row = self.cursor.row + 1, .col = 0 });
+    }
+
+    fn selectChar(self: *Buffer) !void {
+        const pos = self.position();
+        self.selection = .{ .start = pos, .end = pos };
+        main.editor.needs_redraw = true;
+    }
+
+    fn selectionDelete(self: *Buffer) !void {
         if (self.selection) |selection| {
             if (selection.end.row - selection.start.row > 1) {
                 // remove fully selected lines
@@ -477,137 +620,6 @@ pub const Buffer = struct {
 
         try buffer.updateRaw();
         try testing.expectEqualStrings("ajk", buffer.content_raw.items);
-    }
-
-    /// Delete every character from cursor (including) to the end of line
-    pub fn deleteToEnd(self: *Buffer, cursor: Cursor) !void {
-        var line = &self.content.items[@intCast(cursor.row)];
-        try line.replaceRange(
-            @intCast(cursor.col),
-            line.items.len - @as(usize, @intCast(cursor.col)),
-            &[_]u21{},
-        );
-        main.editor.needs_reparse = true;
-    }
-
-    /// Delete every character from start of line to cursor (excluding)
-    pub fn deleteToStart(self: *Buffer, cursor: Cursor) !void {
-        var line = &self.content.items[@intCast(cursor.row)];
-        try line.replaceRange(
-            0,
-            @intCast(cursor.col),
-            &[_]u21{},
-        );
-        main.editor.needs_reparse = true;
-    }
-
-    /// End is exclusive
-    pub fn deleteLineRange(self: *Buffer, start: usize, end: usize) !void {
-        if (end - start <= 0) return;
-        for (start..end) |_| {
-            const line = self.content.orderedRemove(start);
-            line.deinit();
-        }
-        main.editor.needs_reparse = true;
-    }
-
-    pub fn clearSelection(self: *Buffer) !void {
-        self.selection = null;
-        main.editor.needs_redraw = true;
-    }
-
-    pub fn updateLinePositions(self: *Buffer) !void {
-        self.line_positions.clearRetainingCapacity();
-        var byte: usize = 0;
-        for (0..self.content.items.len) |i| {
-            try self.line_positions.append(byte);
-            const line = &self.content.items[i];
-            for (line.items) |ch| {
-                byte += try std.unicode.utf8CodepointSequenceLength(ch);
-            }
-            // new line
-            byte += 1;
-        }
-    }
-
-    pub fn textAt(self: *Buffer, allocator: std.mem.Allocator, span: Span) ![]const u21 {
-        var res = std.ArrayList(u21).init(allocator);
-        for (@intCast(span.start.row)..@intCast(span.end.row)) |row| {
-            const line = &self.content.items[row];
-            if (row == span.start.row and row == span.end.row) {
-                try res.appendSlice(line.items[@intCast(span.start.col)..@intCast(span.end.col)]);
-            } else if (row == span.start.row) {
-                try res.appendSlice(line.items[@intCast(span.start.col)..]);
-            } else if (row == span.end.row) {
-                try res.appendSlice(line.items[0..@intCast(span.end.col)]);
-            } else {
-                try res.appendSlice(line.items);
-            }
-            if (row == span.end.row) {
-                try res.append('\n');
-            }
-        }
-        return res.toOwnedSlice();
-    }
-
-    fn deleteSpan(self: *Buffer, span: Span) !void {
-        if (!std.meta.eql(span.start, span.end)) {
-            if (span.end.row - span.start.row > 1) {
-                // remove fully selected lines
-                try self.deleteLineRange(@intCast(span.start.row + 1), @intCast(span.end.row));
-            }
-            // start and end on separate lines
-            if (span.end.row - span.start.row > 0) {
-                try self.deleteToEnd(span.start);
-                const new_end: Cursor = .{ .row = span.start.row + 1, .col = span.end.col };
-                try self.deleteToStart(new_end);
-                try self.joinWithLineBelow(@intCast(span.start.row));
-            } else {
-                // start and end on the same line
-                var line = &self.content.items[@intCast(span.start.row)];
-                if (span.end.col == line.items.len) {
-                    try self.deleteToEnd(span.start);
-                    try self.joinWithLineBelow(@intCast(span.start.row));
-                } else {
-                    try line.replaceRange(
-                        @intCast(span.start.col),
-                        @intCast(span.end.col - span.start.col),
-                        &[_]u21{},
-                    );
-                }
-            }
-        }
-        try self.moveCursor(span.start);
-    }
-
-    fn insertText(self: *Buffer, text: []const u21) !void {
-        for (text) |ch| {
-            var line = &self.content.items[@intCast(self.cursor.row)];
-
-            if (ch == '\n') {
-                try self.insertNewline();
-            } else {
-                try line.insert(@intCast(self.cursor.col), ch);
-                try self.moveCursor(self.cursor.applyOffset(.{ .col = 1 }));
-            }
-        }
-        main.editor.needs_reparse = true;
-    }
-
-    fn insertNewline(self: *Buffer) !void {
-        var line = try self.content.items[@intCast(self.cursor.row)].toOwnedSlice();
-        defer self.allocator.free(line);
-        try self.content.items[@intCast(self.cursor.row)].appendSlice(line[0..@intCast(self.cursor.col)]);
-        var new_line = std.ArrayList(u21).init(self.allocator);
-        try new_line.appendSlice(line[@intCast(self.cursor.col)..]);
-        try self.content.insert(@intCast(self.cursor.row + 1), new_line);
-        try self.moveCursor(.{ .row = self.cursor.row + 1, .col = 0 });
-    }
-
-    fn selectChar(self: *Buffer) !void {
-        const pos = self.position();
-        self.selection = .{ .start = pos, .end = pos };
-        main.editor.needs_redraw = true;
     }
 
     fn updateRaw(self: *Buffer) !void {

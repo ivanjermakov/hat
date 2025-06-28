@@ -70,8 +70,7 @@ pub const CompletionMenu = struct {
         }
 
         // TODO: replace_range might not end at cursor position
-        const span = buf.Span.fromLsp(self.replace_range.?);
-        const text_at = try main.editor.active_buffer.?.textAt(self.allocator, span);
+        const text_at = try main.editor.active_buffer.?.textAt(self.allocator, buf.Span.fromLsp(self.replace_range.?));
         defer self.allocator.free(text_at);
         const prompt = try uni.utf8ToBytes(self.allocator, text_at);
         defer self.allocator.free(prompt);
@@ -142,13 +141,12 @@ pub const CompletionMenu = struct {
         log.log(@This(), "accept item {}: {s}, replace text: {any}\n", .{ self.active_item, item.label, item.replace_text });
         var buffer = main.editor.active_buffer.?;
 
-        const selection = buf.Span.fromLsp(self.replace_range.?);
-        buffer.selection = selection;
-        try buffer.selectionDelete();
-        try buffer.moveCursor(selection.start);
-
-        const new_text = try uni.utf8FromBytes(self.allocator, item.replace_text);
-        defer self.allocator.free(new_text);
-        try buffer.changeInsertText(new_text);
+        const span = buf.Span.fromLsp(self.replace_range.?);
+        try buffer.changes.append(.{
+            .span = span,
+            .new_text = try uni.utf8FromBytes(buffer.allocator, item.replace_text),
+            .old_text = try buffer.textAt(buffer.allocator, span),
+        });
+        try buffer.applyChange(buffer.changes.items.len - 1);
     }
 };
