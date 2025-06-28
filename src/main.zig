@@ -146,14 +146,14 @@ pub fn main() !void {
 
                     // insert mode
                 } else if (editor.mode == .insert and code == .delete) {
-                    try buffer.deleteChar();
+                    try buffer.changeDeleteChar();
                 } else if (editor.mode == .insert and code == .backspace) {
-                    try buffer.deletePrevChar();
+                    try buffer.changeDeletePrevChar();
                     editor.needs_completion = true;
                 } else if (editor.mode == .insert and key.printable != null) {
                     const printable = try uni.utf8FromBytes(allocator, key.printable.?);
                     defer allocator.free(printable);
-                    try buffer.insertText(printable);
+                    try buffer.changeInsertText(printable);
                     editor.needs_completion = true;
 
                     // multiple-key

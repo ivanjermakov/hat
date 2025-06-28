@@ -70,7 +70,10 @@ pub const CompletionMenu = struct {
         }
 
         // TODO: replace_range might not end at cursor position
-        const prompt = try uni.utf8ToBytes(self.allocator, try main.editor.active_buffer.?.textAt(self.replace_range.?));
+        const span = buf.Span.fromLsp(self.replace_range.?);
+        const text_at = try main.editor.active_buffer.?.textAt(self.allocator, span);
+        defer self.allocator.free(text_at);
+        const prompt = try uni.utf8ToBytes(self.allocator, text_at);
         defer self.allocator.free(prompt);
         log.log(@This(), "prompt {s}\n", .{prompt});
 
@@ -146,6 +149,6 @@ pub const CompletionMenu = struct {
 
         const new_text = try uni.utf8FromBytes(self.allocator, item.replace_text);
         defer self.allocator.free(new_text);
-        try buffer.insertText(new_text);
+        try buffer.changeInsertText(new_text);
     }
 };

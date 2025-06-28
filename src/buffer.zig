@@ -7,6 +7,7 @@ const ft = @import("file_type.zig");
 const ts = @import("ts.zig");
 const log = @import("log.zig");
 const lsp = @import("lsp.zig");
+const cha = @import("change.zig");
 
 pub const Cursor = struct {
     row: i32 = 0,
@@ -78,6 +79,8 @@ pub const Buffer = struct {
     /// (0, 0) means Buffer.cursor is the same as window cursor
     offset: Cursor = .{},
     line_positions: std.ArrayList(usize),
+    changes: std.ArrayList(cha.Change),
+    change_index: usize = 0,
     allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator, path: []const u8, content_raw: []const u8) !Buffer {
@@ -97,6 +100,7 @@ pub const Buffer = struct {
             .spans = std.ArrayList(ts.SpanAttrsTuple).init(allocator),
             .diagnostics = std.ArrayList(lsp.types.Diagnostic).init(allocator),
             .line_positions = std.ArrayList(usize).init(allocator),
+            .changes = std.ArrayList(cha.Change).init(allocator),
             .allocator = allocator,
         };
         try buffer.initParser();
@@ -156,6 +160,7 @@ pub const Buffer = struct {
     }
 
     pub fn deinit(self: *Buffer) void {
+        self.allocator.free(self.uri);
         if (self.parser) |p| ts.ts.ts_parser_delete(p);
         if (self.tree) |t| ts.ts.ts_tree_delete(t);
         defer if (self.query) |query| ts.ts.ts_query_delete(query);
@@ -165,7 +170,8 @@ pub const Buffer = struct {
         self.spans.deinit();
         self.diagnostics.deinit();
         self.line_positions.deinit();
-        self.allocator.free(self.uri);
+        for (self.changes.items) |change| self.allocator.free(change.old_text);
+        self.changes.deinit();
     }
 
     /// Character position in buffer space
@@ -317,61 +323,70 @@ pub const Buffer = struct {
         }
     }
 
-    pub fn insertText(self: *Buffer, text: []const u21) !void {
-        for (text) |ch| {
-            var line = &self.content.items[@intCast(self.cursor.row)];
+    pub fn applyChange(self: *Buffer, change_index: usize) !void {
+        var change = self.changes.items[change_index];
+        const span = change.span;
 
-            if (ch == '\n') {
-                try self.insertNewline();
-            } else {
-                try line.insert(@intCast(self.cursor.col), ch);
-                try self.moveCursor(self.cursor.applyOffset(.{ .col = 1 }));
-            }
-        }
+        const text_at = try self.textAt(self.allocator, span);
+        defer self.allocator.free(text_at);
+        std.debug.assert(std.mem.eql(u21, change.old_text, text_at));
+        log.log(@This(), "applying change: {}\n", .{change});
+
+        try self.deleteSpan(span);
+        try self.insertText(change.new_text);
+        change.cursor = self.cursor;
+
+        self.change_index = change_index;
         main.editor.needs_reparse = true;
     }
 
-    pub fn insertNewline(self: *Buffer) !void {
-        var line = try self.content.items[@intCast(self.cursor.row)].toOwnedSlice();
-        defer self.allocator.free(line);
-        try self.content.items[@intCast(self.cursor.row)].appendSlice(line[0..@intCast(self.cursor.col)]);
-        var new_line = std.ArrayList(u21).init(self.allocator);
-        try new_line.appendSlice(line[@intCast(self.cursor.col)..]);
-        try self.content.insert(@intCast(self.cursor.row + 1), new_line);
-        try self.moveCursor(.{ .row = self.cursor.row + 1, .col = 0 });
-        main.editor.needs_reparse = true;
+    pub fn changeInsertText(self: *Buffer, text: []const u21) !void {
+        try self.changes.append(.{
+            .span = .{ .start = self.cursor, .end = self.cursor },
+            .new_text = text,
+            .old_text = &.{},
+        });
+        try self.applyChange(self.changes.items.len - 1);
     }
 
-    pub fn deleteChar(self: *Buffer) !void {
-        var line = &self.content.items[@intCast(self.cursor.row)];
-        if (self.cursor.col == line.items.len) {
-            if (self.cursor.row < self.content.items.len - 1) {
-                try self.joinWithLineBelow(@intCast(self.cursor.row));
-            } else {
-                return;
-            }
-        } else {
-            _ = line.orderedRemove(@intCast(self.cursor.col));
-            main.editor.needs_reparse = true;
-        }
+    pub fn changeDeleteChar(self: *Buffer) !void {
+        const span: Span = .{ .start = self.cursor, .end = self.cursor.applyOffset(.{ .col = 1 }) };
+        try self.changes.append(.{
+            .span = span,
+            .new_text = &.{},
+            .old_text = try self.textAt(self.allocator, span),
+        });
+        try self.applyChange(self.changes.items.len - 1);
     }
 
-    pub fn deletePrevChar(self: *Buffer) !void {
-        var line = &self.content.items[@intCast(self.cursor.row)];
+    pub fn changeDeletePrevChar(self: *Buffer) !void {
         if (self.cursor.col == 0) {
             if (self.cursor.row > 0) {
-                const prev_line = &self.content.items[@intCast(self.cursor.row - 1)];
-                const col: i32 = @intCast(prev_line.items.len);
-                try self.joinWithLineBelow(@intCast(self.cursor.row - 1));
-                try self.moveCursor(.{ .row = self.cursor.row - 1, .col = col });
+                try self.changeJoinWithLineBelow(@intCast(self.cursor.row - 1));
             } else {
                 return;
             }
         } else {
-            try self.moveCursor(self.cursor.applyOffset(.{ .col = -1 }));
-            _ = line.orderedRemove(@intCast(self.cursor.col));
-            main.editor.needs_reparse = true;
+            const span: Span = .{ .start = self.cursor.applyOffset(.{ .col = -1 }), .end = self.cursor };
+            try self.changes.append(.{
+                .span = span,
+                .new_text = &.{},
+                .old_text = try self.textAt(self.allocator, span),
+            });
+            try self.applyChange(self.changes.items.len - 1);
         }
+    }
+
+    pub fn changeJoinWithLineBelow(self: *Buffer, row: usize) !void {
+        const line = &self.content.items[row];
+        const start: Cursor = .{ .row = @intCast(row), .col = @intCast(line.items.len) };
+        const span: Span = .{ .start = start, .end = start.applyOffset(.{ .col = 1 }) };
+        try self.changes.append(.{
+            .span = span,
+            .new_text = &.{},
+            .old_text = try self.textAt(self.allocator, span),
+        });
+        try self.applyChange(self.changes.items.len - 1);
     }
 
     pub fn joinWithLineBelow(self: *Buffer, row: usize) !void {
@@ -513,17 +528,76 @@ pub const Buffer = struct {
         }
     }
 
+    pub fn textAt(self: *Buffer, allocator: std.mem.Allocator, span: Span) ![]const u21 {
+        // same line
+        if (span.start.row == span.end.row) {
+            const line = &self.content.items[@intCast(span.start.row)];
+            if (span.start.col >= line.items.len) return error.OutOfBounds;
+            const res = line.items[@intCast(span.start.col)..@min(line.items.len - 1, @as(usize, @intCast(span.end.col)))];
+            return try allocator.dupe(u21, res);
+        } else {
+            return error.Todo;
+        }
+    }
+
+    fn deleteSpan(self: *Buffer, span: Span) !void {
+        if (!std.meta.eql(span.start, span.end)) {
+            if (span.end.row - span.start.row > 1) {
+                // remove fully selected lines
+                try self.deleteLineRange(@intCast(span.start.row + 1), @intCast(span.end.row));
+            }
+            // start and end on separate lines
+            if (span.end.row - span.start.row > 0) {
+                try self.deleteToEnd(span.start);
+                const new_end: Cursor = .{ .row = span.start.row + 1, .col = span.end.col };
+                try self.deleteToStart(new_end);
+                try self.joinWithLineBelow(@intCast(span.start.row));
+            } else {
+                // start and end on the same line
+                var line = &self.content.items[@intCast(span.start.row)];
+                if (span.end.col == line.items.len) {
+                    try self.deleteToEnd(span.start);
+                    try self.joinWithLineBelow(@intCast(span.start.row));
+                } else {
+                    try line.replaceRange(
+                        @intCast(span.start.col),
+                        @intCast(span.end.col - span.start.col),
+                        &[_]u21{},
+                    );
+                }
+            }
+        }
+        try self.moveCursor(span.start);
+    }
+
+    fn insertText(self: *Buffer, text: []const u21) !void {
+        for (text) |ch| {
+            var line = &self.content.items[@intCast(self.cursor.row)];
+
+            if (ch == '\n') {
+                try self.insertNewline();
+            } else {
+                try line.insert(@intCast(self.cursor.col), ch);
+                try self.moveCursor(self.cursor.applyOffset(.{ .col = 1 }));
+            }
+        }
+        main.editor.needs_reparse = true;
+    }
+
+    fn insertNewline(self: *Buffer) !void {
+        var line = try self.content.items[@intCast(self.cursor.row)].toOwnedSlice();
+        defer self.allocator.free(line);
+        try self.content.items[@intCast(self.cursor.row)].appendSlice(line[0..@intCast(self.cursor.col)]);
+        var new_line = std.ArrayList(u21).init(self.allocator);
+        try new_line.appendSlice(line[@intCast(self.cursor.col)..]);
+        try self.content.insert(@intCast(self.cursor.row + 1), new_line);
+        try self.moveCursor(.{ .row = self.cursor.row + 1, .col = 0 });
+    }
+
     fn selectChar(self: *Buffer) !void {
         const pos = self.position();
         self.selection = .{ .start = pos, .end = pos };
         main.editor.needs_redraw = true;
-    }
-
-    pub fn textAt(self: *Buffer, range: lsp.types.Range) ![]const u21 {
-        std.debug.assert(range.start.line == range.end.line);
-        const line = &self.content.items[range.start.line];
-        if (range.start.character >= line.items.len) return error.OutOfBounds;
-        return line.items[range.start.character..@min(line.items.len - 1, range.end.character)];
     }
 
     fn updateRaw(self: *Buffer) !void {
