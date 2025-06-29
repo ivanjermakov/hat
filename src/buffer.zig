@@ -409,6 +409,17 @@ pub const Buffer = struct {
         }
     }
 
+    pub fn changeInsertLineBelow(self: *Buffer, row: usize) !void {
+        const pos: Cursor = .{ .row = @intCast(row + 1), .col = 0 };
+        const span: Span = .{ .start = pos, .end = pos };
+        try self.changes.append(.{
+            .span = span,
+            .new_text = try self.allocator.dupe(u21, &.{'\n'}),
+            .old_text = null,
+        });
+        try self.applyChange(self.changes.items.len - 1);
+    }
+
     pub fn clearSelection(self: *Buffer) !void {
         self.selection = null;
         main.editor.needs_redraw = true;
@@ -518,6 +529,7 @@ pub const Buffer = struct {
 
             if (ch == '\n') {
                 try self.insertNewline();
+                try self.moveCursor(self.cursor.applyOffset(.{ .row = -1 }));
             } else {
                 try line.insert(@intCast(self.cursor.col), ch);
                 try self.moveCursor(self.cursor.applyOffset(.{ .col = 1 }));

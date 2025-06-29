@@ -143,6 +143,12 @@ pub fn main() !void {
                     try buffer.enterMode(.select);
                 } else if (editor.mode == .normal and ch == 'h') {
                     try buffer.enterMode(.insert);
+                } else if (editor.mode == .normal and ch == 'o') {
+                    try buffer.changeInsertLineBelow(@intCast(buffer.cursor.row));
+                    try buffer.enterMode(.insert);
+                } else if (editor.mode == .normal and ch == 'O') {
+                    try buffer.changeInsertLineBelow(@intCast(buffer.cursor.row - 1));
+                    try buffer.enterMode(.insert);
 
                     // insert mode
                 } else if (editor.mode == .insert and code == .delete) {
