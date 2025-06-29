@@ -526,6 +526,7 @@ pub const Buffer = struct {
     pub fn textAt(self: *Buffer, allocator: std.mem.Allocator, span: Span) ![]const u21 {
         var res = std.ArrayList(u21).init(allocator);
         for (@intCast(span.start.row)..@intCast(span.end.row + 1)) |row| {
+            if (row >= self.content.items.len) break;
             const line = &self.content.items[row];
             if (row == span.start.row and row == span.end.row) {
                 try res.appendSlice(line.items[@intCast(span.start.col)..@intCast(span.end.col)]);
@@ -552,8 +553,10 @@ pub const Buffer = struct {
             if (span.end.row - span.start.row > 0) {
                 try self.deleteToEnd(span.start);
                 const new_end: Cursor = .{ .row = span.start.row + 1, .col = span.end.col };
-                try self.deleteToStart(new_end);
-                try self.joinWithLineBelow(@intCast(span.start.row));
+                if (new_end.row < self.content.items.len) {
+                    try self.deleteToStart(new_end);
+                    try self.joinWithLineBelow(@intCast(span.start.row));
+                }
             } else {
                 // start and end on the same line
                 var line = &self.content.items[@intCast(span.start.row)];
