@@ -332,16 +332,15 @@ pub fn parseAnsi(allocator: std.mem.Allocator, input: *std.ArrayList(u8)) !inp.K
     var key: inp.Key = .{};
     const code = input.orderedRemove(0);
     s: switch (code) {
-        0x00...0x08, 0x10...0x19 => {
+        0x00...0x08, 0x0e, 0x10...0x19 => {
             // offset 96 converts \x1 to 'a', \x2 to 'b', and so on
-            var key_buf = [1]u8{code + 96};
             // TODO: might not be printable
-            key.printable = key_buf[0..];
+            key.printable = try allocator.dupe(u8, &.{code + 96});
             key.modifiers = @intFromEnum(inp.Modifier.control);
         },
         0x09 => key.code = .tab,
         0x7f => key.code = .backspace,
-        0x0d => key.printable = @constCast("\n"),
+        0x0d => key.printable = try allocator.dupe(u8, &.{'\n'}),
         0x1b => {
             if (input.items.len > 0 and input.items[0] == '[') {
                 _ = input.orderedRemove(0);
