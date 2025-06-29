@@ -76,7 +76,7 @@ pub const Terminal = struct {
         try self.moveCursor(buffer.cursor.applyOffset(buffer.offset.negate()));
         switch (main.editor.mode) {
             .normal => _ = try self.write(cursor_type.steady_block),
-            .select => _ = try self.write(cursor_type.steady_underline),
+            .select, .select_line => _ = try self.write(cursor_type.steady_underline),
             .insert => _ = try self.write(cursor_type.steady_bar),
         }
         try self.flush();

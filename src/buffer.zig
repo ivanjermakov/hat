@@ -193,7 +193,7 @@ pub const Buffer = struct {
     }
 
     pub fn moveCursor(self: *Buffer, new_buf_cursor: Cursor) !void {
-        const old_position = self.position();
+        const old_cursor = self.position();
 
         if (new_buf_cursor.row < 0) return;
         self.scrollForCursor(new_buf_cursor);
@@ -218,22 +218,41 @@ pub const Buffer = struct {
 
         (&self.cursor).* = valid_cursor;
 
-        if (main.editor.mode == .select) {
-            const selection = &self.selection.?;
-            const cursor_was_at_start = std.meta.eql(selection.start, old_position);
-            if (cursor_was_at_start) {
-                selection.start = self.position();
-            } else {
-                selection.end = self.position();
-            }
-            if (selection.start.order(selection.end) == .gt) {
-                const tmp = selection.start;
-                selection.start = selection.end;
-                selection.end = tmp;
-            }
-            main.editor.needs_redraw = true;
-        } else {
-            try self.clearSelection();
+        switch (main.editor.mode) {
+            .select => {
+                const selection = &self.selection.?;
+                const cursor_was_at_start = std.meta.eql(selection.start, old_cursor);
+                if (cursor_was_at_start) {
+                    selection.start = self.position();
+                } else {
+                    selection.end = self.position();
+                }
+                if (selection.start.order(selection.end) == .gt) {
+                    const tmp = selection.start;
+                    selection.start = selection.end;
+                    selection.end = tmp;
+                }
+                main.editor.needs_redraw = true;
+            },
+            .select_line => {
+                var selection = &self.selection.?;
+                const move_start = selection.start.row == old_cursor.row and
+                    (selection.end.row != old_cursor.row or self.cursor.row < selection.start.row);
+                if (move_start) {
+                    selection.start = .{ .row = self.cursor.row, .col = 0 };
+                    const last_line = self.content.items[@intCast(selection.end.row)].items;
+                    selection.end.col = @intCast(last_line.len);
+                } else {
+                    selection.start.col = 0;
+                    selection.end.row = self.cursor.row;
+                    const last_line = self.content.items[@intCast(selection.end.row)].items;
+                    selection.end.col = @intCast(last_line.len);
+                }
+                main.editor.needs_redraw = true;
+            },
+            else => {
+                try self.clearSelection();
+            },
         }
 
         main.editor.needs_update_cursor = true;
@@ -261,9 +280,8 @@ pub const Buffer = struct {
                 try self.clearSelection();
                 main.editor.completion_menu.reset();
             },
-            .select => {
-                try self.selectChar();
-            },
+            .select => try self.selectChar(),
+            .select_line => try self.selectLine(),
             .insert => {
                 try self.clearSelection();
             },
@@ -414,6 +432,8 @@ pub const Buffer = struct {
             } else {
                 span.end = span.end.applyOffset(.{ .col = 1 });
             }
+
+            try self.enterMode(.normal);
             try self.changes.append(.{
                 .span = span,
                 .new_text = null,
@@ -615,6 +635,16 @@ pub const Buffer = struct {
     fn selectChar(self: *Buffer) !void {
         const pos = self.position();
         self.selection = .{ .start = pos, .end = pos };
+        main.editor.needs_redraw = true;
+    }
+
+    fn selectLine(self: *Buffer) !void {
+        const row = self.cursor.row;
+        const line = self.content.items[@intCast(row)].items;
+        self.selection = .{
+            .start = .{ .row = row, .col = 0 },
+            .end = .{ .row = row, .col = @intCast(line.len) },
+        };
         main.editor.needs_redraw = true;
     }
 

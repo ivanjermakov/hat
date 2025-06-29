@@ -94,6 +94,7 @@ pub fn main() !void {
 
                 const multiple_key = key_queue.items.len > 0;
                 const normal_or_select = editor.mode.normalOrSelect();
+                const select = editor.mode == .select or editor.mode == .select_line;
                 const cmp_menu_active = editor.mode == .insert and
                     editor.completion_menu.display_items.items.len > 0;
 
@@ -134,13 +135,14 @@ pub fn main() !void {
                     try buffer.moveToPrevWord();
 
                     // select mode
-                } else if (editor.mode == .select and ch == 'd') {
+                } else if (select and ch == 'd') {
                     try buffer.changeSelectionDelete();
-                    try buffer.enterMode(.normal);
 
                     // normal mode
                 } else if (editor.mode == .normal and ch == 's') {
                     try buffer.enterMode(.select);
+                } else if (editor.mode == .normal and ch == 'S') {
+                    try buffer.enterMode(.select_line);
                 } else if (editor.mode == .normal and ch == 'h') {
                     try buffer.enterMode(.insert);
                 } else if (editor.mode == .normal and ch == 'o') {

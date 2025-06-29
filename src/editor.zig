@@ -39,9 +39,10 @@ pub const Editor = struct {
 pub const Mode = enum {
     normal,
     select,
+    select_line,
     insert,
 
     pub fn normalOrSelect(self: Mode) bool {
-        return self == .normal or self == .select;
+        return self == .normal or self == .select or self == .select_line;
     }
 };
