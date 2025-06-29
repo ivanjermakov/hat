@@ -383,7 +383,11 @@ pub const Buffer = struct {
     }
 
     pub fn changeDeleteChar(self: *Buffer) !void {
-        const span: Span = .{ .start = self.cursor, .end = self.cursor.applyOffset(.{ .col = 1 }) };
+        var span: Span = .{ .start = self.cursor, .end = self.cursor.applyOffset(.{ .col = 1 }) };
+        const line = self.content.items[@intCast(self.cursor.row)];
+        if (self.cursor.col == line.items.len) {
+            span.end = .{ .row = self.cursor.row + 1, .col = 0 };
+        }
         try self.changes.append(.{
             .span = span,
             .new_text = null,
