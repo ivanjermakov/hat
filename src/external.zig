@@ -4,7 +4,11 @@ const log = @import("log.zig");
 
 pub fn runExternalWait(allocator: std.mem.Allocator, cmd: []const []const u8, input: ?[]const u8) ![]const u8 {
     try main.term.switchBuf(false);
-    log.log(@This(), "running external command {any}\n", .{cmd});
+    if (main.log_enabled) {
+        log.log(@This(), "running external command:", .{});
+        for (cmd) |c| std.debug.print(" {s}", .{c});
+        std.debug.print("\n", .{});
+    }
     var child = std.process.Child.init(cmd, allocator);
     if (input != null) child.stdin_behavior = .Pipe;
     child.stdout_behavior = .Pipe;

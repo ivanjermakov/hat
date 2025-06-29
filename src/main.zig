@@ -52,11 +52,9 @@ pub fn main() !void {
     }
     log_enabled = args.log;
     log.log(@This(), "logging enabled\n", .{});
-    const path = args.path orelse return error.NoPath;
-
-    log.log(@This(), "opening file at path {s}\n", .{path});
 
     if (args.printer) {
+        const path = args.path orelse return error.NoPath;
         const file = try std.fs.cwd().openFile(path, .{ .mode = .read_write });
         const file_content = try file.readToEndAlloc(allocator, std.math.maxInt(usize));
         defer allocator.free(file_content);
@@ -67,17 +65,21 @@ pub fn main() !void {
         try ter.printBuffer(&buffer, std_out.writer().any());
         return;
     } else {
+        term = try ter.Terminal.init(std_out.writer().any(), try ter.terminalSize());
+        defer term.deinit();
+
         editor = try edi.Editor.init(allocator);
         defer editor.deinit();
+
+        const path = if (args.path) |path| try allocator.dupe(u8, path) else try fzf.pickFile(allocator);
+        defer allocator.free(path);
+
         try editor.openBuffer(path);
         try startEditor(allocator);
     }
 }
 
 fn startEditor(allocator: std.mem.Allocator) !void {
-    term = try ter.Terminal.init(std_out.writer().any(), try ter.terminalSize());
-    defer term.deinit();
-
     key_queue = std.ArrayList(inp.Key).init(allocator);
     defer {
         for (key_queue.items) |key| if (key.printable) |p| allocator.free(p);
