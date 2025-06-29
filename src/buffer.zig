@@ -507,6 +507,7 @@ pub const Buffer = struct {
             .old_text = null,
         });
         try self.applyChange(self.changes.items.len - 1);
+        try self.moveCursor(pos);
     }
 
     pub fn clearSelection(self: *Buffer) !void {
@@ -625,7 +626,6 @@ pub const Buffer = struct {
 
             if (ch == '\n') {
                 try self.insertNewline();
-                try self.moveCursor(self.cursor.applyOffset(.{ .row = -1 }));
             } else {
                 try line.insert(@intCast(self.cursor.col), ch);
                 try self.moveCursor(self.cursor.applyOffset(.{ .col = 1 }));
