@@ -364,6 +364,7 @@ pub const Buffer = struct {
         }
 
         try self.deleteSpan(span);
+        self.cursor = span.start;
         if (change.new_text) |new_text| try self.insertText(new_text);
         change.cursor = self.cursor;
 
@@ -492,8 +493,8 @@ pub const Buffer = struct {
         try testing.expectEqualStrings("ajk", buffer.content_raw.items);
     }
 
-    pub fn changeInsertLineBelow(self: *Buffer, row: usize) !void {
-        const pos: Cursor = .{ .row = @intCast(row + 1), .col = 0 };
+    pub fn changeInsertLineBelow(self: *Buffer, row: i32) !void {
+        const pos: Cursor = .{ .row = row + 1, .col = 0 };
         const span: Span = .{ .start = pos, .end = pos };
         try self.changes.append(.{
             .span = span,
@@ -607,6 +608,10 @@ pub const Buffer = struct {
     }
 
     fn insertText(self: *Buffer, text: []const u21) !void {
+        if (self.cursor.row == self.content.items.len) {
+            const new_line = std.ArrayList(u21).init(self.allocator);
+            try self.content.append(new_line);
+        }
         for (text) |ch| {
             var line = &self.content.items[@intCast(self.cursor.row)];
 
