@@ -38,6 +38,13 @@ pub const Cursor = struct {
             .col = @intCast(position.character),
         };
     }
+
+    pub fn toLsp(self: Cursor) lsp.types.Position {
+        return .{
+            .line = @intCast(self.row),
+            .character = @intCast(self.col),
+        };
+    }
 };
 
 pub const Span = struct {
@@ -184,16 +191,8 @@ pub const Buffer = struct {
         self.changes.deinit();
     }
 
-    /// Character position in buffer space
-    pub fn position(self: *Buffer) Cursor {
-        return .{
-            .row = @intCast(self.cursor.row),
-            .col = @intCast(self.cursor.col),
-        };
-    }
-
     pub fn moveCursor(self: *Buffer, new_buf_cursor: Cursor) !void {
-        const old_cursor = self.position();
+        const old_cursor = self.cursor;
 
         if (new_buf_cursor.row < 0) return;
         self.scrollForCursor(new_buf_cursor);
@@ -223,9 +222,9 @@ pub const Buffer = struct {
                 const selection = &self.selection.?;
                 const cursor_was_at_start = std.meta.eql(selection.start, old_cursor);
                 if (cursor_was_at_start) {
-                    selection.start = self.position();
+                    selection.start = self.cursor;
                 } else {
-                    selection.end = self.position();
+                    selection.end = self.cursor;
                 }
                 if (selection.start.order(selection.end) == .gt) {
                     const tmp = selection.start;
@@ -375,7 +374,7 @@ pub const Buffer = struct {
     pub fn changeInsertText(self: *Buffer, text: []const u21) !void {
         try self.changes.append(.{
             .span = .{ .start = self.cursor, .end = self.cursor },
-            .new_text = text,
+            .new_text = try self.allocator.dupe(u21, text),
             .old_text = null,
         });
         try self.applyChange(self.changes.items.len - 1);
@@ -633,8 +632,7 @@ pub const Buffer = struct {
     }
 
     fn selectChar(self: *Buffer) !void {
-        const pos = self.position();
-        self.selection = .{ .start = pos, .end = pos };
+        self.selection = .{ .start = self.cursor, .end = self.cursor };
         main.editor.needs_redraw = true;
     }
 

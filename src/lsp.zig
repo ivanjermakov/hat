@@ -121,13 +121,9 @@ pub const LspConnection = struct {
 
     pub fn goToDefinition(self: *LspConnection) !void {
         const buffer = main.editor.active_buffer.?;
-        const position = buffer.position();
         try self.sendRequest("textDocument/definition", .{
             .textDocument = .{ .uri = buffer.uri },
-            .position = .{
-                .line = @intCast(position.row),
-                .character = @intCast(position.col),
-            },
+            .position = buffer.cursor.toLsp(),
         });
     }
 
@@ -158,13 +154,9 @@ pub const LspConnection = struct {
 
     pub fn sendCompletionRequest(self: *LspConnection) !void {
         const buffer = main.editor.active_buffer.?;
-        const position = buffer.position();
         try self.sendRequest("textDocument/completion", .{
             .textDocument = .{ .uri = buffer.uri },
-            .position = .{
-                .line = @intCast(position.row),
-                .character = @intCast(position.col),
-            },
+            .position = buffer.cursor.toLsp(),
         });
     }
 
