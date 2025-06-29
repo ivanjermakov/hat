@@ -180,7 +180,7 @@ pub const Terminal = struct {
                 try co.attributes.write(ch_attrs, attrs_stream.writer());
 
                 if (buffer.selection) |selection| {
-                    if (selection.inRange(.{ .row = buffer_row, .col = buffer_col })) {
+                    if (selection.inRangeInclusive(.{ .row = buffer_row, .col = buffer_col })) {
                         try co.attributes.write(co.attributes.selection, attrs_stream.writer());
                     }
                 }

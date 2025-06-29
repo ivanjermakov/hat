@@ -50,6 +50,12 @@ pub const Span = struct {
         return start != .gt and end == .gt;
     }
 
+    pub fn inRangeInclusive(self: Span, pos: Cursor) bool {
+        const start = self.start.order(pos);
+        const end = self.end.order(pos);
+        return start != .gt and end != .lt;
+    }
+
     pub fn fromLsp(position: lsp.types.Range) Span {
         return .{
             .start = Cursor.fromLsp(position.start),
@@ -71,6 +77,7 @@ pub const Buffer = struct {
     parser: ?*ts.ts.TSParser = null,
     query: ?*ts.ts.TSQuery = null,
     tree: ?*ts.ts.TSTree = null,
+    /// End is inclusive
     selection: ?Span = null,
     diagnostics: std.ArrayList(lsp.types.Diagnostic),
     /// Cursor position in local buffer character space
@@ -400,13 +407,70 @@ pub const Buffer = struct {
 
     pub fn changeSelectionDelete(self: *Buffer) !void {
         if (self.selection) |selection| {
+            var span = selection;
+            const last_line = self.content.items[@intCast(selection.end.row)].items;
+            if (selection.end.col == last_line.len) {
+                span.end = .{ .row = selection.end.row + 1, .col = 0 };
+            } else {
+                span.end = span.end.applyOffset(.{ .col = 1 });
+            }
             try self.changes.append(.{
-                .span = selection,
+                .span = span,
                 .new_text = null,
-                .old_text = try self.textAt(self.allocator, selection),
+                .old_text = try self.textAt(self.allocator, span),
             });
             try self.applyChange(self.changes.items.len - 1);
         }
+    }
+
+    test "changeSelectionDelete same line" {
+        var buffer = try testSetup(
+            \\abc
+        );
+        defer buffer.deinit();
+
+        buffer.cursor = .{ .row = 0, .col = 1 };
+        try buffer.enterMode(.select);
+        try buffer.changeSelectionDelete();
+
+        try buffer.updateRaw();
+        try testing.expectEqualStrings("ac", buffer.content_raw.items);
+    }
+
+    test "changeSelectionDelete line to end" {
+        var buffer = try testSetup(
+            \\abc
+            \\def
+        );
+        defer buffer.deinit();
+
+        try buffer.moveCursor(.{ .row = 0, .col = 1 });
+        try buffer.enterMode(.select);
+        try buffer.moveCursor(.{ .row = 0, .col = 3 });
+        try buffer.changeSelectionDelete();
+
+        try buffer.updateRaw();
+        try testing.expectEqualStrings("adef", buffer.content_raw.items);
+    }
+
+    test "changeSelectionDelete multiple lines" {
+        var buffer = try testSetup(
+            \\abc
+            \\def
+            \\ghijk
+        );
+        defer buffer.deinit();
+
+        try buffer.moveCursor(.{ .row = 0, .col = 1 });
+        try buffer.enterMode(.select);
+        try buffer.moveCursor(Cursor{ .row = 2, .col = 2 });
+
+        try testing.expectEqual(Cursor{ .row = 0, .col = 1 }, buffer.selection.?.start);
+        try testing.expectEqual(Cursor{ .row = 2, .col = 2 }, buffer.selection.?.end);
+        try buffer.changeSelectionDelete();
+
+        try buffer.updateRaw();
+        try testing.expectEqualStrings("ajk", buffer.content_raw.items);
     }
 
     pub fn changeInsertLineBelow(self: *Buffer, row: usize) !void {
@@ -552,86 +616,6 @@ pub const Buffer = struct {
         const pos = self.position();
         self.selection = .{ .start = pos, .end = pos };
         main.editor.needs_redraw = true;
-    }
-
-    fn selectionDelete(self: *Buffer) !void {
-        if (self.selection) |selection| {
-            if (selection.end.row - selection.start.row > 1) {
-                // remove fully selected lines
-                try self.deleteLineRange(@intCast(selection.start.row + 1), @intCast(selection.end.row));
-            }
-            // start and end on separate lines
-            if (selection.end.row - selection.start.row > 0) {
-                try self.deleteToEnd(selection.start);
-                const new_end: Cursor = .{ .row = selection.start.row + 1, .col = selection.end.col + 1 };
-                try self.deleteToStart(new_end);
-                try self.joinWithLineBelow(@intCast(selection.start.row));
-            } else {
-                var line = &self.content.items[@intCast(selection.start.row)];
-                if (selection.end.col == line.items.len) {
-                    try self.deleteToEnd(selection.start);
-                    try self.joinWithLineBelow(@intCast(selection.start.row));
-                } else {
-                    try line.replaceRange(
-                        @intCast(selection.start.col),
-                        @intCast(1 + selection.end.col - selection.start.col),
-                        &[_]u21{},
-                    );
-                }
-            }
-            try self.moveCursor(selection.start);
-            main.editor.needs_reparse = true;
-        }
-    }
-
-    test "selectionDelete same line" {
-        var buffer = try testSetup(
-            \\abc
-        );
-        defer buffer.deinit();
-
-        buffer.cursor = .{ .row = 0, .col = 1 };
-        try buffer.enterMode(.select);
-        try buffer.selectionDelete();
-
-        try buffer.updateRaw();
-        try testing.expectEqualStrings("ac", buffer.content_raw.items);
-    }
-
-    test "selectionDelete line to end" {
-        var buffer = try testSetup(
-            \\abc
-            \\def
-        );
-        defer buffer.deinit();
-
-        try buffer.moveCursor(.{ .row = 0, .col = 1 });
-        try buffer.enterMode(.select);
-        try buffer.moveCursor(.{ .row = 0, .col = 3 });
-        try buffer.selectionDelete();
-
-        try buffer.updateRaw();
-        try testing.expectEqualStrings("adef", buffer.content_raw.items);
-    }
-
-    test "selectionDelete multiple lines" {
-        var buffer = try testSetup(
-            \\abc
-            \\def
-            \\ghijk
-        );
-        defer buffer.deinit();
-
-        try buffer.moveCursor(.{ .row = 0, .col = 1 });
-        try buffer.enterMode(.select);
-        try buffer.moveCursor(Cursor{ .row = 2, .col = 2 });
-
-        try testing.expectEqual(Cursor{ .row = 0, .col = 1 }, buffer.selection.?.start);
-        try testing.expectEqual(Cursor{ .row = 2, .col = 2 }, buffer.selection.?.end);
-        try buffer.selectionDelete();
-
-        try buffer.updateRaw();
-        try testing.expectEqualStrings("ajk", buffer.content_raw.items);
     }
 
     fn updateRaw(self: *Buffer) !void {
