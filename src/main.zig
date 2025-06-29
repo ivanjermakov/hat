@@ -71,7 +71,7 @@ pub fn main() !void {
         editor = try edi.Editor.init(allocator);
         defer editor.deinit();
 
-        const path = if (args.path) |path| try allocator.dupe(u8, path) else try fzf.pickFile(allocator);
+        const path = if (args.path) |path| try allocator.dupe(u8, path) else fzf.pickFile(allocator) catch return;
         defer allocator.free(path);
 
         try editor.openBuffer(path);
