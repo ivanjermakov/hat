@@ -409,46 +409,6 @@ pub const Buffer = struct {
         }
     }
 
-    pub fn joinWithLineBelow(self: *Buffer, row: usize) !void {
-        var line = &self.content.items[row];
-        var next_line = self.content.orderedRemove(row + 1);
-        defer next_line.deinit();
-        try line.appendSlice(next_line.items);
-        main.editor.needs_reparse = true;
-    }
-
-    /// Delete every character from cursor (including) to the end of line
-    pub fn deleteToEnd(self: *Buffer, cursor: Cursor) !void {
-        var line = &self.content.items[@intCast(cursor.row)];
-        try line.replaceRange(
-            @intCast(cursor.col),
-            line.items.len - @as(usize, @intCast(cursor.col)),
-            &[_]u21{},
-        );
-        main.editor.needs_reparse = true;
-    }
-
-    /// Delete every character from start of line to cursor (excluding)
-    pub fn deleteToStart(self: *Buffer, cursor: Cursor) !void {
-        var line = &self.content.items[@intCast(cursor.row)];
-        try line.replaceRange(
-            0,
-            @intCast(cursor.col),
-            &[_]u21{},
-        );
-        main.editor.needs_reparse = true;
-    }
-
-    /// End is exclusive
-    pub fn deleteLineRange(self: *Buffer, start: usize, end: usize) !void {
-        if (end - start <= 0) return;
-        for (start..end) |_| {
-            const line = self.content.orderedRemove(start);
-            line.deinit();
-        }
-        main.editor.needs_reparse = true;
-    }
-
     pub fn clearSelection(self: *Buffer) !void {
         self.selection = null;
         main.editor.needs_redraw = true;
@@ -510,6 +470,46 @@ pub const Buffer = struct {
             }
         }
         try self.moveCursor(span.start);
+    }
+
+    fn joinWithLineBelow(self: *Buffer, row: usize) !void {
+        var line = &self.content.items[row];
+        var next_line = self.content.orderedRemove(row + 1);
+        defer next_line.deinit();
+        try line.appendSlice(next_line.items);
+        main.editor.needs_reparse = true;
+    }
+
+    /// Delete every character from cursor (including) to the end of line
+    fn deleteToEnd(self: *Buffer, cursor: Cursor) !void {
+        var line = &self.content.items[@intCast(cursor.row)];
+        try line.replaceRange(
+            @intCast(cursor.col),
+            line.items.len - @as(usize, @intCast(cursor.col)),
+            &[_]u21{},
+        );
+        main.editor.needs_reparse = true;
+    }
+
+    /// Delete every character from start of line to cursor (excluding)
+    fn deleteToStart(self: *Buffer, cursor: Cursor) !void {
+        var line = &self.content.items[@intCast(cursor.row)];
+        try line.replaceRange(
+            0,
+            @intCast(cursor.col),
+            &[_]u21{},
+        );
+        main.editor.needs_reparse = true;
+    }
+
+    /// End is exclusive
+    fn deleteLineRange(self: *Buffer, start: usize, end: usize) !void {
+        if (end - start <= 0) return;
+        for (start..end) |_| {
+            const line = self.content.orderedRemove(start);
+            line.deinit();
+        }
+        main.editor.needs_reparse = true;
     }
 
     fn insertText(self: *Buffer, text: []const u21) !void {

@@ -17,7 +17,7 @@ const Args = struct {
 };
 
 pub const sleep_ns = 16 * 1e6;
-pub const std_in = std.io.getStdOut();
+pub const std_in = std.io.getStdIn();
 pub const std_out = std.io.getStdOut();
 pub const std_err = std.io.getStdErr();
 pub var tty_in: std.fs.File = undefined;
