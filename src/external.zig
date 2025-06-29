@@ -16,7 +16,11 @@ pub fn runExternalWait(allocator: std.mem.Allocator, cmd: []const []const u8, in
     try child.spawn();
     try child.waitForSpawn();
 
-    if (input) |inp| try child.stdin.?.writeAll(inp);
+    if (input) |inp| {
+        try child.stdin.?.writeAll(inp);
+        child.stdin.?.close();
+        child.stdin = null;
+    }
 
     const res = child.stdout.?.readToEndAlloc(allocator, std.math.maxInt(usize));
 
