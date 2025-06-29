@@ -120,7 +120,7 @@ pub const LspConnection = struct {
     }
 
     pub fn goToDefinition(self: *LspConnection) !void {
-        const buffer = main.editor.active_buffer.?;
+        const buffer = main.editor.activeBuffer();
         try self.sendRequest("textDocument/definition", .{
             .textDocument = .{ .uri = buffer.uri },
             .position = buffer.cursor.toLsp(),
@@ -128,7 +128,7 @@ pub const LspConnection = struct {
     }
 
     pub fn didOpen(self: *LspConnection) !void {
-        const buffer = main.editor.active_buffer.?;
+        const buffer = main.editor.activeBuffer();
         try self.sendNotification("textDocument/didOpen", .{
             .textDocument = .{
                 .uri = buffer.uri,
@@ -140,7 +140,7 @@ pub const LspConnection = struct {
     }
 
     pub fn didChange(self: *LspConnection) !void {
-        const buffer = main.editor.active_buffer.?;
+        const buffer = main.editor.activeBuffer();
         const changes = [_]lsp.types.TextDocumentContentChangeEvent{
             .{ .literal_1 = .{ .text = buffer.content_raw.items } },
         };
@@ -153,7 +153,7 @@ pub const LspConnection = struct {
     }
 
     pub fn sendCompletionRequest(self: *LspConnection) !void {
-        const buffer = main.editor.active_buffer.?;
+        const buffer = main.editor.activeBuffer();
         try self.sendRequest("textDocument/completion", .{
             .textDocument = .{ .uri = buffer.uri },
             .position = buffer.cursor.toLsp(),
@@ -290,7 +290,7 @@ pub const LspConnection = struct {
             },
         };
         if (location) |loc| {
-            const buffer = main.editor.active_buffer.?;
+            const buffer = main.editor.activeBuffer();
             if (std.mem.eql(u8, loc.uri, buffer.uri)) {
                 log.log(@This(), "jump to {}\n", .{loc.range.start});
                 const new_cursor = buf.Cursor.fromLsp(loc.range.start);
@@ -343,7 +343,7 @@ pub const LspConnection = struct {
                 .{},
             );
             log.log(@This(), "got {} diagnostics\n", .{params_typed.value.diagnostics.len});
-            const buffer = main.editor.active_buffer.?;
+            const buffer = main.editor.activeBuffer();
             buffer.diagnostics.clearRetainingCapacity();
             try buffer.diagnostics.appendSlice(params_typed.value.diagnostics);
             main.editor.needs_redraw = true;

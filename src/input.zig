@@ -33,4 +33,8 @@ pub const Key = struct {
         if (self.printable) |p| k.printable = try allocator.dupe(u8, p);
         return k;
     }
+
+    pub fn activeModifier(self: *const Key, modifier: Modifier) bool {
+        return self.modifiers & @intFromEnum(modifier) > 0;
+    }
 };

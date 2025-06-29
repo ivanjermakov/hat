@@ -106,7 +106,7 @@ pub const Buffer = struct {
 
         const uri = try std.fmt.allocPrint(allocator, "file://{s}", .{path});
         var buffer = Buffer{
-            .path = path,
+            .path = try allocator.dupe(u8, path),
             .file_type = file_type,
             .uri = uri,
             .content = std.ArrayList(std.ArrayList(u21)).init(allocator),
@@ -175,9 +175,10 @@ pub const Buffer = struct {
 
     pub fn deinit(self: *Buffer) void {
         self.allocator.free(self.uri);
+        self.allocator.free(self.path);
         if (self.parser) |p| ts.ts.ts_parser_delete(p);
         if (self.tree) |t| ts.ts.ts_tree_delete(t);
-        defer if (self.query) |query| ts.ts.ts_query_delete(query);
+        if (self.query) |query| ts.ts.ts_query_delete(query);
         for (self.content.items) |line| line.deinit();
         self.content.deinit();
         self.content_raw.deinit();

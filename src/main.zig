@@ -10,6 +10,7 @@ const ter = @import("terminal.zig");
 const lsp = @import("lsp.zig");
 const log = @import("log.zig");
 const uni = @import("unicode.zig");
+const fzf = @import("ui/fzf.zig");
 
 const Args = struct {
     path: ?[]u8 = null,
@@ -51,26 +52,29 @@ pub fn main() !void {
     }
     log_enabled = args.log;
     log.log(@This(), "logging enabled\n", .{});
-
     const path = args.path orelse return error.NoPath;
+
     log.log(@This(), "opening file at path {s}\n", .{path});
-    const file = try std.fs.cwd().openFile(path, .{ .mode = .read_write });
-    const file_content = try file.readToEndAlloc(allocator, std.math.maxInt(usize));
-    defer allocator.free(file_content);
-    var buffer = try buf.Buffer.init(allocator, path, file_content);
 
     if (args.printer) {
+        const file = try std.fs.cwd().openFile(path, .{ .mode = .read_write });
+        const file_content = try file.readToEndAlloc(allocator, std.math.maxInt(usize));
+        defer allocator.free(file_content);
+        var buffer = try buf.Buffer.init(allocator, path, file_content);
         defer buffer.deinit();
         try buffer.tsParse();
         try buffer.updateLinePositions();
         try ter.printBuffer(&buffer, std_out.writer().any());
         return;
+    } else {
+        editor = try edi.Editor.init(allocator);
+        defer editor.deinit();
+        try editor.openBuffer(path);
+        try startEditor(allocator);
     }
-
-    try startEditor(allocator, &buffer);
 }
 
-fn startEditor(allocator: std.mem.Allocator, buffer: *buf.Buffer) !void {
+fn startEditor(allocator: std.mem.Allocator) !void {
     term = try ter.Terminal.init(std_out.writer().any(), try ter.terminalSize());
     defer term.deinit();
 
@@ -80,13 +84,7 @@ fn startEditor(allocator: std.mem.Allocator, buffer: *buf.Buffer) !void {
         key_queue.deinit();
     }
 
-    editor = try edi.Editor.init(allocator);
-    defer editor.deinit();
-
-    try editor.buffers.append(buffer);
-    editor.active_buffer = buffer;
-    editor.needs_reparse = true;
-
+    var buffer = editor.activeBuffer();
     var lsp_conn: ?lsp.LspConnection = if (buffer.file_type.lsp) |lsp_conf| try lsp.LspConnection.connect(allocator, &lsp_conf) else null;
     defer if (lsp_conn) |*conn| conn.deinit();
 
@@ -163,6 +161,9 @@ fn startEditor(allocator: std.mem.Allocator, buffer: *buf.Buffer) !void {
                 } else if (editor.mode == .normal and ch == 'O') {
                     try buffer.changeInsertLineBelow(@intCast(buffer.cursor.row - 1));
                     try buffer.enterMode(.insert);
+                } else if (editor.mode == .normal and ch == 'n' and key.activeModifier(.control)) {
+                    try editor.pickFile();
+                    buffer = editor.activeBuffer();
 
                     // insert mode
                 } else if (editor.mode == .insert and code == .delete) {
