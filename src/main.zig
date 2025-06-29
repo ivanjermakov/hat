@@ -170,7 +170,6 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     try buffer.changeDeleteChar();
                 } else if (editor.mode == .insert and code == .backspace) {
                     try buffer.changeDeletePrevChar();
-                    editor.needs_completion = true;
                 } else if (editor.mode == .insert and key.printable != null) {
                     const printable = try uni.utf8FromBytes(allocator, key.printable.?);
                     defer allocator.free(printable);
