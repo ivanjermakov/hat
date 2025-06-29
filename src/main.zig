@@ -173,9 +173,29 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                 } else if (editor.mode == .insert and code == .backspace) {
                     try buffer.changeDeletePrevChar();
                 } else if (editor.mode == .insert and key.printable != null) {
-                    const printable = try uni.utf8FromBytes(allocator, key.printable.?);
-                    defer allocator.free(printable);
-                    try buffer.changeInsertText(printable);
+                    var printable = std.ArrayList(u21).init(allocator);
+                    {
+                        const utf = try uni.utf8FromBytes(allocator, key.printable.?);
+                        defer allocator.free(utf);
+                        try printable.appendSlice(utf);
+                    }
+                    // read more printable keys in case this is a paste command
+                    while (true) {
+                        const next_key = if (key_queue.items.len == 0) null else key_queue.items[0];
+                        if (next_key != null and next_key.?.printable != null) {
+                            _ = key_queue.orderedRemove(0);
+                            const p = next_key.?.printable.?;
+                            defer allocator.free(p);
+                            const utf = try uni.utf8FromBytes(allocator, p);
+                            defer allocator.free(utf);
+                            try printable.appendSlice(utf);
+                        } else {
+                            break;
+                        }
+                    }
+                    const insert_text = try printable.toOwnedSlice();
+                    defer allocator.free(insert_text);
+                    try buffer.changeInsertText(insert_text);
                     editor.needs_completion = true;
 
                     // multiple-key
