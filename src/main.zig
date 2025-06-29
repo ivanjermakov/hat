@@ -12,8 +12,9 @@ const log = @import("log.zig");
 const uni = @import("unicode.zig");
 
 const Args = struct {
-    path: ?[]u8,
-    log: bool,
+    path: ?[]u8 = null,
+    log: bool = false,
+    printer: bool = false,
 };
 
 pub const sleep_ns = 16 * 1e6;
@@ -26,18 +27,13 @@ pub var editor: edi.Editor = undefined;
 pub var term: ter.Terminal = undefined;
 
 pub var log_enabled = true;
-pub var args: Args = .{
-    .path = null,
-    .log = false,
-};
+pub var args: Args = .{};
 pub var key_queue: std.ArrayList(inp.Key) = undefined;
 
 pub fn main() !void {
     var debug_allocator: std.heap.DebugAllocator(.{ .stack_trace_frames = 10 }) = .init;
     defer _ = debug_allocator.deinit();
     const allocator = if (builtin.mode == .Debug) debug_allocator.allocator() else std.heap.c_allocator;
-
-    log.log(@This(), "logging enabled\n", .{});
 
     tty_in = try std.fs.cwd().openFile("/dev/tty", .{});
 
@@ -47,10 +43,36 @@ pub fn main() !void {
         if (std.mem.eql(u8, arg, "-v")) {
             args.log = true;
             continue;
+        } else if (std.mem.eql(u8, arg, "--printer")) {
+            args.printer = true;
+            continue;
         }
         args.path = @constCast(arg);
     }
     log_enabled = args.log;
+    log.log(@This(), "logging enabled\n", .{});
+
+    const path = args.path orelse return error.NoPath;
+    log.log(@This(), "opening file at path {s}\n", .{path});
+    const file = try std.fs.cwd().openFile(path, .{ .mode = .read_write });
+    const file_content = try file.readToEndAlloc(allocator, std.math.maxInt(usize));
+    defer allocator.free(file_content);
+    var buffer = try buf.Buffer.init(allocator, path, file_content);
+
+    if (args.printer) {
+        defer buffer.deinit();
+        try buffer.tsParse();
+        try buffer.updateLinePositions();
+        try ter.printBuffer(&buffer, std_out.writer().any());
+        return;
+    }
+
+    try startEditor(allocator, &buffer);
+}
+
+fn startEditor(allocator: std.mem.Allocator, buffer: *buf.Buffer) !void {
+    term = try ter.Terminal.init(std_out.writer().any(), try ter.terminalSize());
+    defer term.deinit();
 
     key_queue = std.ArrayList(inp.Key).init(allocator);
     defer {
@@ -58,22 +80,12 @@ pub fn main() !void {
         key_queue.deinit();
     }
 
-    const path = args.path orelse return error.NoPath;
-    log.log(@This(), "opening file at path {s}\n", .{path});
-    const file = try std.fs.cwd().openFile(path, .{ .mode = .read_write });
-    const file_content = try file.readToEndAlloc(allocator, std.math.maxInt(usize));
-    defer allocator.free(file_content);
-
     editor = try edi.Editor.init(allocator);
     defer editor.deinit();
 
-    var buffer = try buf.Buffer.init(allocator, path, file_content);
+    try editor.buffers.append(buffer);
+    editor.active_buffer = buffer;
     editor.needs_reparse = true;
-    try editor.buffers.append(&buffer);
-    editor.active_buffer = &buffer;
-
-    term = try ter.Terminal.init(std_out.writer().any(), try ter.terminalSize());
-    defer term.deinit();
 
     var lsp_conn: ?lsp.LspConnection = if (buffer.file_type.lsp) |lsp_conf| try lsp.LspConnection.connect(allocator, &lsp_conf) else null;
     defer if (lsp_conn) |*conn| conn.deinit();
@@ -81,7 +93,7 @@ pub fn main() !void {
     main_loop: while (true) {
         if (lsp_conn) |*conn| try conn.update();
 
-        const needs_handle_mappings = try term.update_input(allocator);
+        const needs_handle_mappings = try term.updateInput(allocator);
         if (needs_handle_mappings) {
             handle_mappings: while (key_queue.items.len > 0) {
                 // log.log(@This(), "keys: {any}\n", .{keys.items});

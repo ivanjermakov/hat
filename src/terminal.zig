@@ -82,7 +82,7 @@ pub const Terminal = struct {
         try self.flush();
     }
 
-    pub fn update_input(self: *Terminal, allocator: std.mem.Allocator) !bool {
+    pub fn updateInput(self: *Terminal, allocator: std.mem.Allocator) !bool {
         _ = self;
         var dirty = false;
         if (try getCodes(allocator)) |codes| {
@@ -275,6 +275,57 @@ pub fn terminalSize() !TerminalDimensions {
         .width = w.col,
         .height = w.row,
     };
+}
+
+pub fn printBuffer(buffer: *buf.Buffer, writer: std.io.AnyWriter) !void {
+    var buf_writer = std.io.bufferedWriter(writer);
+    var w = buf_writer.writer();
+
+    var attrs_buf = std.mem.zeroes([128]u8);
+    var attrs_stream = std.io.fixedBufferStream(&attrs_buf);
+    var attrs: []const u8 = undefined;
+    var last_attrs_buf = std.mem.zeroes([128]u8);
+    var last_attrs: ?[]const u8 = null;
+
+    var span_index: usize = 0;
+    for (0..buffer.content.items.len) |row| {
+        const line = buffer.content.items[row].items;
+
+        var byte: usize = buffer.line_positions.items[row];
+        var term_col: i32 = 0;
+
+        for (line) |ch| {
+            attrs_stream.reset();
+            const ch_attrs: []const co.Attr = b: while (span_index < buffer.spans.items.len) {
+                const span = buffer.spans.items[span_index];
+                if (span.span.start_byte > byte) break :b co.attributes.text;
+                if (byte >= span.span.start_byte and byte < span.span.end_byte) {
+                    break :b span.attrs;
+                }
+                span_index += 1;
+            } else {
+                break :b co.attributes.text;
+            };
+            try co.attributes.write(ch_attrs, attrs_stream.writer());
+
+            attrs = attrs_stream.getWritten();
+            if (last_attrs == null or !std.mem.eql(u8, attrs, last_attrs.?)) {
+                _ = try w.write("\x1b[0m");
+                _ = try w.write(attrs);
+                @memcpy(&last_attrs_buf, &attrs_buf);
+                last_attrs = last_attrs_buf[0..try attrs_stream.getPos()];
+            }
+
+            try std.fmt.format(w, "{u}", .{ch});
+
+            byte += try std.unicode.utf8CodepointSequenceLength(ch);
+            term_col += 1;
+        }
+        _ = try w.write("\n");
+        _ = try w.write("\x1b[0m");
+        last_attrs = null;
+    }
+    try buf_writer.flush();
 }
 
 pub fn parseAnsi(allocator: std.mem.Allocator, input: *std.ArrayList(u8)) !inp.Key {
