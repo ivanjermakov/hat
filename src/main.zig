@@ -12,10 +12,12 @@ const log = @import("log.zig");
 const uni = @import("unicode.zig");
 const fzf = @import("ui/fzf.zig");
 
-const Args = struct {
+pub const Args = struct {
     path: ?[]u8 = null,
     log: bool = false,
     printer: bool = false,
+    highlight_line: ?usize = null,
+    term_height: ?usize = null,
 };
 
 pub const sleep_ns = 16 * 1e6;
@@ -47,6 +49,12 @@ pub fn main() !void {
         } else if (std.mem.eql(u8, arg, "--printer")) {
             args.printer = true;
             continue;
+        } else if (std.mem.startsWith(u8, arg, "--highlight-line=")) {
+            args.highlight_line = try std.fmt.parseInt(usize, arg[17..], 10) - 1;
+            continue;
+        } else if (std.mem.startsWith(u8, arg, "--term-height=")) {
+            args.term_height = try std.fmt.parseInt(usize, arg[14..], 10);
+            continue;
         }
         args.path = @constCast(arg);
     }
@@ -62,7 +70,11 @@ pub fn main() !void {
         defer buffer.deinit();
         try buffer.tsParse();
         try buffer.updateLinePositions();
-        try ter.printBuffer(&buffer, std_out.writer().any());
+        try ter.printBuffer(
+            &buffer,
+            std_out.writer().any(),
+            try ter.HighlightConfig.fromArgs(args),
+        );
         return;
     } else {
         term = try ter.Terminal.init(std_out.writer().any(), try ter.terminalSize());

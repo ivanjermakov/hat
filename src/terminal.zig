@@ -277,7 +277,20 @@ pub fn terminalSize() !TerminalDimensions {
     };
 }
 
-pub fn printBuffer(buffer: *buf.Buffer, writer: std.io.AnyWriter) !void {
+pub const HighlightConfig = struct {
+    term_height: usize,
+    highlight_line: usize,
+
+    pub fn fromArgs(args: main.Args) !?HighlightConfig {
+        if (args.highlight_line == null) return null;
+        return .{
+            .highlight_line = args.highlight_line.?,
+            .term_height = args.term_height orelse (try terminalSize()).height,
+        };
+    }
+};
+
+pub fn printBuffer(buffer: *buf.Buffer, writer: std.io.AnyWriter, highlight: ?HighlightConfig) !void {
     var buf_writer = std.io.bufferedWriter(writer);
     var w = buf_writer.writer();
 
@@ -287,11 +300,27 @@ pub fn printBuffer(buffer: *buf.Buffer, writer: std.io.AnyWriter) !void {
     var last_attrs_buf = std.mem.zeroes([128]u8);
     var last_attrs: ?[]const u8 = null;
 
-    var span_index: usize = 0;
-    for (0..buffer.content.items.len) |row| {
-        const line = buffer.content.items[row].items;
+    var start_row: i32 = 0;
+    var end_row: i32 = @intCast(buffer.content.items.len);
+    if (highlight) |hi| {
+        const half_term: i32 = @divFloor(@as(i32, @intCast(hi.term_height)), 2);
+        start_row = @as(i32, @intCast(hi.highlight_line)) - half_term;
+        end_row = start_row + @as(i32, @intCast(hi.term_height));
+    }
 
-        var byte: usize = buffer.line_positions.items[row];
+    var span_index: usize = 0;
+    var row: i32 = start_row;
+    while (row < end_row) {
+        defer {
+            _ = w.write("\x1b[0m") catch {};
+            _ = w.write("\n") catch {};
+            last_attrs = null;
+            row += 1;
+        }
+        if (row < 0 or row >= buffer.content.items.len) continue;
+        const line = buffer.content.items[@intCast(row)].items;
+
+        var byte: usize = buffer.line_positions.items[@intCast(row)];
         var term_col: i32 = 0;
 
         for (line) |ch| {
@@ -308,6 +337,10 @@ pub fn printBuffer(buffer: *buf.Buffer, writer: std.io.AnyWriter) !void {
             };
             try co.attributes.write(ch_attrs, attrs_stream.writer());
 
+            if (highlight != null and row == highlight.?.highlight_line) {
+                try co.attributes.write(co.attributes.selection, attrs_stream.writer());
+            }
+
             attrs = attrs_stream.getWritten();
             if (last_attrs == null or !std.mem.eql(u8, attrs, last_attrs.?)) {
                 _ = try w.write("\x1b[0m");
@@ -321,9 +354,6 @@ pub fn printBuffer(buffer: *buf.Buffer, writer: std.io.AnyWriter) !void {
             byte += try std.unicode.utf8CodepointSequenceLength(ch);
             term_col += 1;
         }
-        _ = try w.write("\n");
-        _ = try w.write("\x1b[0m");
-        last_attrs = null;
     }
     try buf_writer.flush();
 }

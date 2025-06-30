@@ -7,7 +7,12 @@ pub fn pickFile(allocator: std.mem.Allocator) ![]const u8 {
     const files = try ext.runExternalWait(allocator, &.{ "rg", "--files" }, null);
     defer allocator.free(files);
 
-    const out = try ext.runExternalWait(allocator, fzf_command, files);
+    var cmd = std.ArrayList([]const u8).init(allocator);
+    try cmd.appendSlice(fzf_command);
+    try cmd.append("--preview");
+    try cmd.append("hat --printer {}");
+    defer cmd.deinit();
+    const out = try ext.runExternalWait(allocator, cmd.items, files);
     defer allocator.free(out);
     if (out.len == 0) return error.EmptyOut;
     return try allocator.dupe(u8, std.mem.trim(u8, out, "\n"));
@@ -15,9 +20,8 @@ pub fn pickFile(allocator: std.mem.Allocator) ![]const u8 {
 
 const fzf_command: []const []const u8 = &.{
     "fzf",
+    "--cycle",
     "--color=dark",
-    "--preview",
-    "hat --printer {}",
     "--preview-window=noborder",
     "--marker=",
     "--pointer=",
