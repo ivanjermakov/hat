@@ -743,11 +743,11 @@ pub const Buffer = struct {
 fn nextWordStart(line: []u21, pos: usize) ?usize {
     var col = pos;
     while (col < line.len - 1) {
-        const next = line[col];
-        col += 1;
         const ch = line[col];
+        col += 1;
+        const next = line[col];
         if (boundary(ch, next) != null and !isWhitespace(next)) {
-            if (isWhitespace(ch)) col += 1;
+            if (isWhitespace(next)) col += 1;
             return col;
         }
     }

@@ -50,6 +50,7 @@ pub fn findInFiles(allocator: std.mem.Allocator) !FindInFilesResult {
 const fzf_command: []const []const u8 = &.{
     "fzf",
     "--cycle",
+    "--layout=reverse",
     "--color=dark",
     "--preview-window=noborder",
     "--marker=",
@@ -57,6 +58,7 @@ const fzf_command: []const []const u8 = &.{
     "--separator=",
     "--scrollbar=",
     "--no-info",
+    "--no-hscroll",
     "--color=prompt:-1",
     std.fmt.comptimePrint("--color=hl:#{s}", .{col.color.blue.toHexStr()}),
     std.fmt.comptimePrint("--color=hl+:#{s}", .{col.color.blue.toHexStr()}),
