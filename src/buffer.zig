@@ -351,6 +351,20 @@ pub const Buffer = struct {
         }
     }
 
+    /// TODO: search for next word in subsequent lines
+    pub fn moveToWordEnd(self: *Buffer) !void {
+        const old_cursor = self.cursor;
+        const line = self.content.items[@intCast(self.cursor.row)];
+
+        if (wordEnd(line.items, @intCast(self.cursor.col + 1))) |col| {
+            try self.moveCursor(.{ .row = self.cursor.row, .col = @intCast(col) });
+            if (self.selection == null) {
+                self.selection = .{ .start = old_cursor, .end = self.cursor };
+                main.editor.needs_redraw = true;
+            }
+        }
+    }
+
     pub fn applyChange(self: *Buffer, change_index: usize) !void {
         var change = self.changes.items[change_index];
         const span = change.span;
@@ -749,6 +763,19 @@ fn nextWordStart(line: []u21, pos: usize) ?usize {
         if (boundary(ch, next) != null and !isWhitespace(next)) {
             if (isWhitespace(next)) col += 1;
             return col;
+        }
+    }
+    return null;
+}
+
+fn wordEnd(line: []u21, pos: usize) ?usize {
+    var col = pos;
+    while (col < line.len - 1) {
+        const ch = line[col];
+        col += 1;
+        const next = line[col];
+        if (boundary(ch, next)) |b| {
+            if (b == .wordEnd) return col - 1;
         }
     }
     return null;
