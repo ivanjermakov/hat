@@ -162,7 +162,8 @@ pub const Terminal = struct {
                 }
             }
 
-            for (line) |ch| {
+            for (0..line.len+1) |i| {
+                const ch = if (i == line.len) ' ' else line[i];
                 attrs_stream.reset();
                 const buffer_col = @as(i32, @intCast(term_col)) + buffer.offset.col;
 
