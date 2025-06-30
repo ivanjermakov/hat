@@ -11,6 +11,7 @@ const lsp = @import("lsp.zig");
 const log = @import("log.zig");
 const uni = @import("unicode.zig");
 const fzf = @import("ui/fzf.zig");
+const env = @import("env.zig");
 
 pub const Args = struct {
     path: ?[]u8 = null,
@@ -50,10 +51,14 @@ pub fn main() !void {
             args.printer = true;
             continue;
         } else if (std.mem.startsWith(u8, arg, "--highlight-line=")) {
-            args.highlight_line = try std.fmt.parseInt(usize, arg[17..], 10) - 1;
+            const val = arg[17..];
+            const val_exp = try env.expand(allocator, val, std.posix.getenv);
+            args.highlight_line = try std.fmt.parseInt(usize, val_exp, 10) - 1;
             continue;
         } else if (std.mem.startsWith(u8, arg, "--term-height=")) {
-            args.term_height = try std.fmt.parseInt(usize, arg[14..], 10);
+            const val = arg[14..];
+            const val_exp = try env.expand(allocator, val, std.posix.getenv);
+            args.term_height = try std.fmt.parseInt(usize, val_exp, 10);
             continue;
         }
         args.path = @constCast(arg);
@@ -177,6 +182,9 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     try buffer.enterMode(.insert);
                 } else if (editor.mode == .normal and ch == 'n' and key.activeModifier(.control)) {
                     try editor.pickFile();
+                    buffer = editor.activeBuffer();
+                } else if (editor.mode == .normal and ch == 'f' and key.activeModifier(.control)) {
+                    try editor.findInFiles();
                     buffer = editor.activeBuffer();
 
                     // insert mode

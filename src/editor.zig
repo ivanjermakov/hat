@@ -67,6 +67,14 @@ pub const Editor = struct {
         log.log(@This(), "picked path: {s}\n", .{path});
         try self.openBuffer(path);
     }
+
+    pub fn findInFiles(self: *Editor) !void {
+        const find_result = fzf.findInFiles(self.allocator) catch return;
+        defer self.allocator.free(find_result.path);
+        log.log(@This(), "find result: {}\n", .{find_result});
+        try self.openBuffer(find_result.path);
+        try self.activeBuffer().moveCursor(find_result.position);
+    }
 };
 
 pub const Mode = enum {

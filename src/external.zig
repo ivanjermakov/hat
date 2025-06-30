@@ -6,7 +6,7 @@ pub fn runExternalWait(allocator: std.mem.Allocator, cmd: []const []const u8, in
     try main.term.switchBuf(false);
     if (main.log_enabled) {
         log.log(@This(), "running external command:", .{});
-        for (cmd) |c| std.debug.print(" {s}", .{c});
+        for (cmd) |c| std.debug.print(" \"{s}\"", .{c});
         std.debug.print("\n", .{});
     }
     var child = std.process.Child.init(cmd, allocator);
