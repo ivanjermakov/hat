@@ -100,9 +100,9 @@ pub const Buffer = struct {
     /// (0, 0) means Buffer.cursor is the same as window cursor
     offset: Cursor = .{},
     line_positions: std.ArrayList(usize),
-    changes: std.ArrayList(cha.Change),
-    change_index: usize = 0,
-    applied_change_count: usize = 0,
+    change_history: std.ArrayList(cha.Change),
+    history_index: usize = 0,
+    pending_changes: std.ArrayList(cha.Change),
     allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator, path: []const u8, content_raw: []const u8) !Buffer {
@@ -122,7 +122,8 @@ pub const Buffer = struct {
             .spans = std.ArrayList(ts.SpanAttrsTuple).init(allocator),
             .diagnostics = std.ArrayList(lsp.types.Diagnostic).init(allocator),
             .line_positions = std.ArrayList(usize).init(allocator),
-            .changes = std.ArrayList(cha.Change).init(allocator),
+            .change_history = std.ArrayList(cha.Change).init(allocator),
+            .pending_changes = std.ArrayList(cha.Change).init(allocator),
             .allocator = allocator,
         };
         try buffer.updateContent();
@@ -195,11 +196,9 @@ pub const Buffer = struct {
         self.spans.deinit();
         self.diagnostics.deinit();
         self.line_positions.deinit();
-        for (self.changes.items) |change| {
-            if (change.old_text) |old_text| self.allocator.free(old_text);
-            if (change.new_text) |new_text| self.allocator.free(new_text);
-        }
-        self.changes.deinit();
+        for (self.change_history.items) |*c| c.deinit();
+        self.change_history.deinit();
+        self.pending_changes.deinit();
     }
 
     pub fn moveCursor(self: *Buffer, new_buf_cursor: Cursor) !void {
@@ -377,16 +376,16 @@ pub const Buffer = struct {
 
     pub fn appendChange(self: *Buffer, change: *cha.Change) !void {
         try self.applyChange(change);
-        try self.changes.append(change.*);
-        self.applied_change_count += 1;
+        try self.change_history.append(change.*);
+        try self.pending_changes.append(change.*);
     }
 
     pub fn changeInsertText(self: *Buffer, text: []const u21) !void {
-        var change: cha.Change = .{
-            .span = .{ .start = self.cursor, .end = self.cursor },
-            .new_text = try self.allocator.dupe(u21, text),
-            .old_text = null,
-        };
+        var change = try cha.Change.initInsert(
+            self.allocator,
+            .{ .start = self.cursor, .end = self.cursor },
+            text,
+        );
         try self.appendChange(&change);
     }
 
@@ -396,11 +395,9 @@ pub const Buffer = struct {
         if (self.cursor.col == line.items.len) {
             span.end = .{ .row = self.cursor.row + 1, .col = 0 };
         }
-        var change: cha.Change = .{
-            .span = span,
-            .new_text = null,
-            .old_text = try self.textAt(self.allocator, span),
-        };
+        const utf_text = try self.textAt(self.allocator, span);
+        defer self.allocator.free(utf_text);
+        var change = try cha.Change.initDelete(self.allocator, span, utf_text);
         try self.appendChange(&change);
     }
 
@@ -413,11 +410,9 @@ pub const Buffer = struct {
             }
         } else {
             const span: Span = .{ .start = self.cursor.applyOffset(.{ .col = -1 }), .end = self.cursor };
-            var change: cha.Change = .{
-                .span = span,
-                .new_text = null,
-                .old_text = try self.textAt(self.allocator, span),
-            };
+            const utf_text = try self.textAt(self.allocator, span);
+            defer self.allocator.free(utf_text);
+            var change = try cha.Change.initDelete(self.allocator, span, utf_text);
             try self.appendChange(&change);
         }
     }
@@ -428,11 +423,9 @@ pub const Buffer = struct {
             .start = .{ .row = @intCast(row), .col = @intCast(line.items.len) },
             .end = .{ .row = @intCast(row + 1), .col = 0 },
         };
-        var change: cha.Change = .{
-            .span = span,
-            .new_text = null,
-            .old_text = try self.textAt(self.allocator, span),
-        };
+        const utf_text = try self.textAt(self.allocator, span);
+        defer self.allocator.free(utf_text);
+        var change = try cha.Change.initDelete(self.allocator, span, utf_text);
         try self.appendChange(&change);
     }
 
@@ -447,11 +440,9 @@ pub const Buffer = struct {
             }
 
             try self.enterMode(.normal);
-            var change: cha.Change = .{
-                .span = span,
-                .new_text = null,
-                .old_text = try self.textAt(self.allocator, span),
-            };
+            const utf_text = try self.textAt(self.allocator, span);
+            defer self.allocator.free(utf_text);
+            var change = try cha.Change.initDelete(self.allocator, span, utf_text);
             try self.appendChange(&change);
         }
     }
@@ -509,11 +500,7 @@ pub const Buffer = struct {
     pub fn changeInsertLineBelow(self: *Buffer, row: i32) !void {
         const pos: Cursor = .{ .row = row + 1, .col = 0 };
         const span: Span = .{ .start = pos, .end = pos };
-        var change: cha.Change = .{
-            .span = span,
-            .new_text = try self.allocator.dupe(u21, &.{'\n'}),
-            .old_text = null,
-        };
+        var change = try cha.Change.initInsert(self.allocator, span, try self.allocator.dupe(u21, &.{'\n'}));
         try self.appendChange(&change);
         try self.moveCursor(pos);
     }

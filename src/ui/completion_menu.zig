@@ -143,11 +143,11 @@ pub const CompletionMenu = struct {
         const buffer = main.editor.activeBuffer();
 
         const span = buf.Span.fromLsp(self.replace_range.?);
-        var change: cha.Change = .{
-            .span = span,
-            .new_text = try uni.utf8FromBytes(buffer.allocator, item.replace_text),
-            .old_text = try buffer.textAt(buffer.allocator, span),
-        };
+        const old_text = try buffer.textAt(self.allocator, span);
+        defer self.allocator.free(old_text);
+        const new_text = try uni.utf8FromBytes(buffer.allocator, item.replace_text);
+        defer self.allocator.free(new_text);
+        var change = try cha.Change.initReplace(self.allocator, span, old_text, new_text);
         try buffer.appendChange(&change);
     }
 };

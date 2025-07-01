@@ -152,10 +152,9 @@ pub const LspConnection = struct {
             });
         } else {
             var changes = try std.ArrayList(lsp.types.TextDocumentContentChangeEvent)
-                .initCapacity(self.allocator, buffer.changes.items.len);
+                .initCapacity(self.allocator, buffer.pending_changes.items.len);
             defer changes.deinit();
-            const first_applied_change_idx = buffer.changes.items.len - buffer.applied_change_count;
-            for (buffer.changes.items[first_applied_change_idx..]) |change| {
+            for (buffer.pending_changes.items) |change| {
                 const event = try change.toLsp(self.allocator);
                 try changes.append(event);
             }
