@@ -183,6 +183,10 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                 } else if (editor.mode == .normal and ch == 'O') {
                     try buffer.changeInsertLineBelow(@intCast(buffer.cursor.row - 1));
                     try buffer.enterMode(.insert);
+                } else if (editor.mode == .normal and ch == 'u') {
+                    try buffer.undo();
+                } else if (editor.mode == .normal and ch == 'U') {
+                    try buffer.redo();
                 } else if (editor.mode == .normal and ch == 'n' and key.activeModifier(.control)) {
                     try editor.pickFile();
                     buffer = editor.activeBuffer();
@@ -265,6 +269,7 @@ fn startEditor(allocator: std.mem.Allocator) !void {
             try buffer.tsParse();
             try buffer.updateLinePositions();
             if (lsp_conn) |*conn| try conn.didChange();
+            for (buffer.pending_changes.items) |*change| change.deinit();
             buffer.pending_changes.clearRetainingCapacity();
             buffer.version += 1;
         }

@@ -4,15 +4,15 @@ const uni = @import("unicode.zig");
 const lsp = @import("lsp.zig");
 
 pub const Change = struct {
-    span: buf.Span,
+    old_span: buf.Span,
     old_text: ?[]const u21 = null,
+    new_span: ?buf.Span = null,
     new_text: ?[]const u21 = null,
-    cursor: ?buf.Cursor = null,
     allocator: std.mem.Allocator,
 
     pub fn initInsert(allocator: std.mem.Allocator, span: buf.Span, new_text: []const u21) !Change {
         return .{
-            .span = span,
+            .old_span = span,
             .new_text = try allocator.dupe(u21, new_text),
             .allocator = allocator,
         };
@@ -20,7 +20,7 @@ pub const Change = struct {
 
     pub fn initDelete(allocator: std.mem.Allocator, span: buf.Span, old_text: []const u21) !Change {
         return .{
-            .span = span,
+            .old_span = span,
             .old_text = try allocator.dupe(u21, old_text),
             .allocator = allocator,
         };
@@ -28,7 +28,7 @@ pub const Change = struct {
 
     pub fn initReplace(allocator: std.mem.Allocator, span: buf.Span, old_text: []const u21, new_text: []const u21) !Change {
         return .{
-            .span = span,
+            .old_span = span,
             .old_text = try allocator.dupe(u21, old_text),
             .new_text = try allocator.dupe(u21, new_text),
             .allocator = allocator,
@@ -49,10 +49,10 @@ pub const Change = struct {
         _ = fmt;
         _ = options;
         try std.fmt.format(writer, "{},{}-{},{}", .{
-            self.span.start.row,
-            self.span.start.col,
-            self.span.end.row,
-            self.span.end.col,
+            self.old_span.start.row,
+            self.old_span.start.col,
+            self.old_span.end.row,
+            self.old_span.end.col,
         });
         if (self.new_text) |new_text| {
             _ = try writer.write(" \"");
@@ -63,19 +63,26 @@ pub const Change = struct {
 
     pub fn invert(self: *const Change) !Change {
         return .{
-            .span = self.span,
-            .new_text = if (self.old_text) |t| try self.allocator.dupe(u21, t) else null,
-            .old_text = if (self.new_text) |t| try self.allocator.dupe(u21, t) else null,
-            .cursor = self.cursor,
+            .old_span = self.new_span.?,
+            .new_span = self.old_span,
+            .new_text = if (self.old_text) |s| try self.allocator.dupe(u21, s) else null,
+            .old_text = if (self.new_text) |s| try self.allocator.dupe(u21, s) else null,
             .allocator = self.allocator,
         };
+    }
+
+    pub fn clone(self: *const Change, allocator: std.mem.Allocator) !Change {
+        var cloned = self.*;
+        if (self.new_text) |t| cloned.new_text = try allocator.dupe(u21, t);
+        if (self.old_text) |t| cloned.old_text = try allocator.dupe(u21, t);
+        return cloned;
     }
 
     pub fn toLsp(self: *const Change, allocator: std.mem.Allocator) !lsp.types.TextDocumentContentChangeEvent {
         const text = try uni.utf8ToBytes(allocator, self.new_text orelse &.{});
         return .{
             .literal_0 = .{
-                .range = self.span.toLsp(),
+                .range = self.old_span.toLsp(),
                 .text = text,
             },
         };

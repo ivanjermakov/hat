@@ -101,7 +101,7 @@ pub const Buffer = struct {
     offset: Cursor = .{},
     line_positions: std.ArrayList(usize),
     change_history: std.ArrayList(cha.Change),
-    history_index: usize = 0,
+    history_index: ?usize = null,
     pending_changes: std.ArrayList(cha.Change),
     allocator: std.mem.Allocator,
 
@@ -198,6 +198,7 @@ pub const Buffer = struct {
         self.line_positions.deinit();
         for (self.change_history.items) |*c| c.deinit();
         self.change_history.deinit();
+        for (self.pending_changes.items) |*c| c.deinit();
         self.pending_changes.deinit();
     }
 
@@ -376,8 +377,16 @@ pub const Buffer = struct {
 
     pub fn appendChange(self: *Buffer, change: *cha.Change) !void {
         try self.applyChange(change);
+        try self.pending_changes.append(try change.clone(self.allocator));
+
+        // history overwrite
+        if ((self.history_index orelse 0) + 1 != self.change_history.items.len) {
+            const i = self.history_index orelse 0;
+            for (self.change_history.items[i..]) |*ch| ch.deinit();
+            try self.change_history.replaceRange(i, self.change_history.items.len - i, &.{});
+        }
         try self.change_history.append(change.*);
-        try self.pending_changes.append(change.*);
+        self.history_index = self.change_history.items.len - 1;
     }
 
     pub fn changeInsertText(self: *Buffer, text: []const u21) !void {
@@ -524,6 +533,22 @@ pub const Buffer = struct {
         }
     }
 
+    pub fn undo(self: *Buffer) !void {
+        if (self.history_index) |h_idx| {
+            const change_to_undo = self.change_history.items[h_idx];
+            var inv_change = try change_to_undo.invert();
+            try self.applyChange(&inv_change);
+            try self.pending_changes.append(inv_change);
+            self.history_index = if (h_idx > 0) h_idx - 1 else null;
+        }
+        log.log(@This(), "history: {?}\n", .{self.history_index});
+    }
+
+    pub fn redo(self: *Buffer) !void {
+        _ = self;
+        return error.Todo;
+    }
+
     pub fn textAt(self: *Buffer, allocator: std.mem.Allocator, span: Span) ![]const u21 {
         var res = std.ArrayList(u21).init(allocator);
         for (@intCast(span.start.row)..@intCast(span.end.row + 1)) |row| {
@@ -545,7 +570,7 @@ pub const Buffer = struct {
     }
 
     fn applyChange(self: *Buffer, change: *cha.Change) !void {
-        const span = change.span;
+        const span = change.old_span;
         log.log(@This(), "applying change: {}\n", .{change});
 
         if (change.old_text) |old_text| {
@@ -556,10 +581,11 @@ pub const Buffer = struct {
             std.debug.assert(std.meta.eql(span.start, span.end));
         }
 
+        try self.moveCursor(span.start);
         try self.deleteSpan(span);
         self.cursor = span.start;
         if (change.new_text) |new_text| try self.insertText(new_text);
-        change.cursor = self.cursor;
+        change.new_span = .{ .start = span.start, .end = self.cursor };
     }
 
     fn deleteSpan(self: *Buffer, span: Span) !void {
