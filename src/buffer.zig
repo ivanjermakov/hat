@@ -534,6 +534,7 @@ pub const Buffer = struct {
     }
 
     pub fn undo(self: *Buffer) !void {
+        log.log(@This(), "undo: {?}/{}\n", .{ self.history_index, self.change_history.items.len });
         if (self.history_index) |h_idx| {
             const change_to_undo = self.change_history.items[h_idx];
             var inv_change = try change_to_undo.invert();
@@ -541,12 +542,16 @@ pub const Buffer = struct {
             try self.pending_changes.append(inv_change);
             self.history_index = if (h_idx > 0) h_idx - 1 else null;
         }
-        log.log(@This(), "history: {?}\n", .{self.history_index});
     }
 
     pub fn redo(self: *Buffer) !void {
-        _ = self;
-        return error.Todo;
+        log.log(@This(), "redo: {?}/{}\n", .{ self.history_index, self.change_history.items.len });
+        const redo_idx = if (self.history_index) |idx| idx + 1 else 0;
+        if (redo_idx >= self.change_history.items.len) return;
+        var redo_change = try self.change_history.items[redo_idx].clone(self.allocator);
+        try self.applyChange(&redo_change);
+        try self.pending_changes.append(redo_change);
+        self.history_index = redo_idx;
     }
 
     pub fn textAt(self: *Buffer, allocator: std.mem.Allocator, span: Span) ![]const u21 {
