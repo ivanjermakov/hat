@@ -262,8 +262,8 @@ fn startEditor(allocator: std.mem.Allocator) !void {
         editor.needs_redraw = editor.needs_redraw or buffer.applied_change_count > 0;
         if (buffer.applied_change_count > 0) {
             buffer.diagnostics.clearRetainingCapacity();
-            try buffer.updateLinePositions();
             try buffer.tsParse();
+            try buffer.updateLinePositions();
             if (lsp_conn) |*conn| try conn.didChange();
             buffer.applied_change_count = 0;
             buffer.version += 1;

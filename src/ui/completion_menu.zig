@@ -4,6 +4,7 @@ const lsp = @import("../lsp.zig");
 const log = @import("../log.zig");
 const buf = @import("../buffer.zig");
 const uni = @import("../unicode.zig");
+const cha = @import("../change.zig");
 
 const max_entries = 10;
 
@@ -142,11 +143,11 @@ pub const CompletionMenu = struct {
         const buffer = main.editor.activeBuffer();
 
         const span = buf.Span.fromLsp(self.replace_range.?);
-        try buffer.changes.append(.{
+        var change: cha.Change = .{
             .span = span,
             .new_text = try uni.utf8FromBytes(buffer.allocator, item.replace_text),
             .old_text = try buffer.textAt(buffer.allocator, span),
-        });
-        try buffer.applyChange(buffer.changes.items.len - 1);
+        };
+        try buffer.appendChange(&change);
     }
 };

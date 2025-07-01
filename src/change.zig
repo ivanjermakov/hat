@@ -30,6 +30,15 @@ pub const Change = struct {
         }
     }
 
+    pub fn invert(self: Change) Change {
+        return .{
+            .span = self.span,
+            .new_text = self.old_text,
+            .old_text = self.new_text,
+            .cursor = self.cursor,
+        };
+    }
+
     pub fn toLsp(self: Change, allocator: std.mem.Allocator) !lsp.types.TextDocumentContentChangeEvent {
         const text = try uni.utf8ToBytes(allocator, self.new_text orelse &.{});
         return .{
