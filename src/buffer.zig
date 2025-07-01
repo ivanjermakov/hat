@@ -100,7 +100,7 @@ pub const Buffer = struct {
     /// (0, 0) means Buffer.cursor is the same as window cursor
     offset: Cursor = .{},
     line_positions: std.ArrayList(usize),
-    change_history: std.ArrayList(cha.Change),
+    history: std.ArrayList(std.ArrayList(cha.Change)),
     history_index: ?usize = null,
     pending_changes: std.ArrayList(cha.Change),
     allocator: std.mem.Allocator,
@@ -122,7 +122,7 @@ pub const Buffer = struct {
             .spans = std.ArrayList(ts.SpanAttrsTuple).init(allocator),
             .diagnostics = std.ArrayList(lsp.types.Diagnostic).init(allocator),
             .line_positions = std.ArrayList(usize).init(allocator),
-            .change_history = std.ArrayList(cha.Change).init(allocator),
+            .history = std.ArrayList(std.ArrayList(cha.Change)).init(allocator),
             .pending_changes = std.ArrayList(cha.Change).init(allocator),
             .allocator = allocator,
         };
@@ -187,17 +187,25 @@ pub const Buffer = struct {
     pub fn deinit(self: *Buffer) void {
         self.allocator.free(self.uri);
         self.allocator.free(self.path);
+
         if (self.parser) |p| ts.ts.ts_parser_delete(p);
         if (self.tree) |t| ts.ts.ts_tree_delete(t);
         if (self.query) |query| ts.ts.ts_query_delete(query);
+
         for (self.content.items) |line| line.deinit();
         self.content.deinit();
         self.content_raw.deinit();
+
         self.spans.deinit();
         self.diagnostics.deinit();
         self.line_positions.deinit();
-        for (self.change_history.items) |*c| c.deinit();
-        self.change_history.deinit();
+
+        for (self.history.items) |*i| {
+            for (i.items) |*c| c.deinit();
+            i.deinit();
+        }
+        self.history.deinit();
+
         for (self.pending_changes.items) |*c| c.deinit();
         self.pending_changes.deinit();
     }
@@ -285,6 +293,17 @@ pub const Buffer = struct {
 
     pub fn enterMode(self: *Buffer, mode: edi.Mode) !void {
         if (main.editor.mode == mode) return;
+        switch (main.editor.mode) {
+            .insert => {
+                const last_idx = self.history.items.len - 1;
+                if (self.history.items[last_idx].items.len == 0) {
+                    log.log(@This(), "no changes in insert mode, popping history\n", .{});
+                    self.history.items[last_idx].deinit();
+                    _ = self.history.orderedRemove(last_idx);
+                }
+            },
+            else => {},
+        }
         switch (mode) {
             .normal => {
                 try self.clearSelection();
@@ -294,10 +313,11 @@ pub const Buffer = struct {
             .select_line => try self.selectLine(),
             .insert => {
                 try self.clearSelection();
+                try self.history.append(std.ArrayList(cha.Change).init(self.allocator));
             },
         }
+        log.log(@This(), "mode: {}->{}\n", .{ main.editor.mode, mode });
         main.editor.mode = mode;
-        log.log(@This(), "mode: {}\n", .{main.editor.mode});
         main.editor.needs_update_cursor = true;
     }
 
@@ -392,14 +412,22 @@ pub const Buffer = struct {
         try self.applyChange(change);
         try self.pending_changes.append(try change.clone(self.allocator));
 
-        // history overwrite
-        if ((self.history_index orelse 0) + 1 != self.change_history.items.len) {
-            const i = self.history_index orelse 0;
-            for (self.change_history.items[i..]) |*ch| ch.deinit();
-            try self.change_history.replaceRange(i, self.change_history.items.len - i, &.{});
+        if (main.editor.mode == .insert) {
+            var last_hist = &self.history.items[self.history.items.len - 1];
+            try last_hist.append(change.*);
+            log.log(@This(), "appended\n", .{});
+        } else {
+            // history overwrite
+            if ((self.history_index orelse 0) + 1 != self.history.items.len) {
+                const i = self.history_index orelse 0;
+                for (self.history.items[i..]) |*ch| ch.deinit();
+                try self.history.replaceRange(i, self.history.items.len - i, &.{});
+            }
+            var new_hist = try std.ArrayList(cha.Change).initCapacity(self.allocator, 1);
+            try new_hist.append(change.*);
+            try self.history.append(new_hist);
         }
-        try self.change_history.append(change.*);
-        self.history_index = self.change_history.items.len - 1;
+        self.history_index = self.history.items.len - 1;
     }
 
     pub fn changeInsertText(self: *Buffer, text: []const u21) !void {
@@ -547,23 +575,30 @@ pub const Buffer = struct {
     }
 
     pub fn undo(self: *Buffer) !void {
-        log.log(@This(), "undo: {?}/{}\n", .{ self.history_index, self.change_history.items.len });
+        log.log(@This(), "undo: {?}/{}\n", .{ self.history_index, self.history.items.len });
         if (self.history_index) |h_idx| {
-            const change_to_undo = self.change_history.items[h_idx];
-            var inv_change = try change_to_undo.invert();
-            try self.applyChange(&inv_change);
-            try self.pending_changes.append(inv_change);
+            const hist_to_undo = self.history.items[h_idx].items;
+            var change_iter = std.mem.reverseIterator(hist_to_undo);
+            while (change_iter.next()) |change_to_undo| {
+                var inv_change = try change_to_undo.invert();
+                try self.applyChange(&inv_change);
+                try self.pending_changes.append(inv_change);
+                try self.moveCursor(inv_change.new_span.?.start);
+            }
             self.history_index = if (h_idx > 0) h_idx - 1 else null;
         }
     }
 
     pub fn redo(self: *Buffer) !void {
-        log.log(@This(), "redo: {?}/{}\n", .{ self.history_index, self.change_history.items.len });
+        log.log(@This(), "redo: {?}/{}\n", .{ self.history_index, self.history.items.len });
         const redo_idx = if (self.history_index) |idx| idx + 1 else 0;
-        if (redo_idx >= self.change_history.items.len) return;
-        var redo_change = try self.change_history.items[redo_idx].clone(self.allocator);
-        try self.applyChange(&redo_change);
-        try self.pending_changes.append(redo_change);
+        if (redo_idx >= self.history.items.len) return;
+        const redo_hist = self.history.items[redo_idx].items;
+        for (redo_hist) |change| {
+            var redo_change = try change.clone(self.allocator);
+            try self.applyChange(&redo_change);
+            try self.pending_changes.append(redo_change);
+        }
         self.history_index = redo_idx;
     }
 
