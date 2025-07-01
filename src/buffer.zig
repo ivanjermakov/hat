@@ -522,7 +522,7 @@ pub const Buffer = struct {
     pub fn changeInsertLineBelow(self: *Buffer, row: i32) !void {
         const pos: Cursor = .{ .row = row + 1, .col = 0 };
         const span: Span = .{ .start = pos, .end = pos };
-        var change = try cha.Change.initInsert(self.allocator, span, try self.allocator.dupe(u21, &.{'\n'}));
+        var change = try cha.Change.initInsert(self.allocator, span, &.{'\n'});
         try self.appendChange(&change);
         try self.moveCursor(pos);
     }

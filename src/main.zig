@@ -124,7 +124,6 @@ fn startEditor(allocator: std.mem.Allocator) !void {
 
                 const multiple_key = key_queue.items.len > 0;
                 const normal_or_select = editor.mode.normalOrSelect();
-                const select = editor.mode == .select or editor.mode == .select_line;
                 const cmp_menu_active = editor.mode == .insert and
                     editor.completion_menu.display_items.items.len > 0;
 
@@ -167,9 +166,7 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     try buffer.moveToWordEnd();
                 } else if (normal_or_select and ch == 'E') {
                     try buffer.moveToTokenEnd();
-
-                    // select mode
-                } else if (select and ch == 'd') {
+                } else if (normal_or_select and ch == 'd') {
                     try buffer.changeSelectionDelete();
 
                     // normal mode
