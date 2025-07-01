@@ -165,6 +165,8 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     try buffer.moveToPrevWord();
                 } else if (normal_or_select and ch == 'e') {
                     try buffer.moveToWordEnd();
+                } else if (normal_or_select and ch == 'E') {
+                    try buffer.moveToTokenEnd();
 
                     // select mode
                 } else if (select and ch == 'd') {

@@ -375,6 +375,19 @@ pub const Buffer = struct {
         }
     }
 
+    pub fn moveToTokenEnd(self: *Buffer) !void {
+        const old_cursor = self.cursor;
+        const line = self.content.items[@intCast(self.cursor.row)];
+
+        if (tokenEnd(line.items, @intCast(self.cursor.col + 1))) |col| {
+            try self.moveCursor(.{ .row = self.cursor.row, .col = @intCast(col) });
+            if (self.selection == null) {
+                self.selection = .{ .start = old_cursor, .end = self.cursor };
+                main.editor.needs_redraw = true;
+            }
+        }
+    }
+
     pub fn appendChange(self: *Buffer, change: *cha.Change) !void {
         try self.applyChange(change);
         try self.pending_changes.append(try change.clone(self.allocator));
@@ -806,6 +819,19 @@ fn wordEnd(line: []u21, pos: usize) ?usize {
     return null;
 }
 
+fn tokenEnd(line: []u21, pos: usize) ?usize {
+    var col = pos;
+    while (col < line.len - 1) {
+        const ch = line[col];
+        col += 1;
+        const next = line[col];
+        if (isToken(ch) and !isToken(next)) {
+            return col - 1;
+        }
+    }
+    return null;
+}
+
 const Boundary = union(enum) {
     wordStart,
     wordEnd,
@@ -837,4 +863,13 @@ fn isAlphabet(ch: u21) bool {
 fn isWhitespace(ch: u21) bool {
     // TODO: tabs, other
     return ch == ' ';
+}
+
+fn isDigit(ch: u21) bool {
+    return (ch >= 48 and ch <= 57);
+}
+
+/// Token is a string that is usually lexed by a programming language as a single name
+fn isToken(ch: u21) bool {
+    return isAlphabet(ch) or isDigit(ch) or ch == '_' or ch == '-';
 }
