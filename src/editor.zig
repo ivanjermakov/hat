@@ -11,7 +11,6 @@ pub const Editor = struct {
     mode: Mode,
     needs_update_cursor: bool,
     needs_redraw: bool,
-    needs_reparse: bool,
     needs_completion: bool,
     completion_menu: cmp.CompletionMenu,
     allocator: std.mem.Allocator,
@@ -22,7 +21,6 @@ pub const Editor = struct {
             .mode = .normal,
             .needs_update_cursor = false,
             .needs_redraw = false,
-            .needs_reparse = false,
             .needs_completion = false,
             .completion_menu = cmp.CompletionMenu.init(allocator),
             .allocator = allocator,
@@ -48,7 +46,6 @@ pub const Editor = struct {
 
         try self.buffers.append(buffer);
         self.active_buffer = self.buffers.items.len - 1;
-        self.needs_reparse = true;
     }
 
     pub fn activeBuffer(self: *Editor) *buf.Buffer {

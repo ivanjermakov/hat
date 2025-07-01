@@ -1,6 +1,7 @@
 const std = @import("std");
 const buf = @import("buffer.zig");
 const uni = @import("unicode.zig");
+const lsp = @import("lsp.zig");
 
 pub const Change = struct {
     span: buf.Span,
@@ -27,5 +28,15 @@ pub const Change = struct {
             for (new_text) |ch| try std.fmt.format(writer, "{u}", .{ch});
             _ = try writer.write("\"");
         }
+    }
+
+    pub fn toLsp(self: Change, allocator: std.mem.Allocator) !lsp.types.TextDocumentContentChangeEvent {
+        const text = try uni.utf8ToBytes(allocator, self.new_text orelse &.{});
+        return .{
+            .literal_0 = .{
+                .range = self.span.toLsp(),
+                .text = text,
+            },
+        };
     }
 };

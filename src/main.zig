@@ -106,6 +106,7 @@ fn startEditor(allocator: std.mem.Allocator) !void {
     var buffer = editor.activeBuffer();
     var lsp_conn: ?lsp.LspConnection = if (buffer.file_type.lsp) |lsp_conf| try lsp.LspConnection.connect(allocator, &lsp_conf) else null;
     defer if (lsp_conn) |*conn| conn.deinit();
+    if (lsp_conn) |*conn| try conn.didChange();
 
     main_loop: while (true) {
         if (lsp_conn) |*conn| try conn.update();
@@ -258,12 +259,14 @@ fn startEditor(allocator: std.mem.Allocator) !void {
             }
         }
 
-        editor.needs_redraw = editor.needs_redraw or editor.needs_reparse;
-        if (editor.needs_reparse) {
-            editor.needs_reparse = false;
-            try buffer.tsParse();
+        editor.needs_redraw = editor.needs_redraw or buffer.applied_change_count > 0;
+        if (buffer.applied_change_count > 0) {
+            buffer.diagnostics.clearRetainingCapacity();
             try buffer.updateLinePositions();
+            try buffer.tsParse();
             if (lsp_conn) |*conn| try conn.didChange();
+            buffer.applied_change_count = 0;
+            buffer.version += 1;
         }
         if (editor.needs_redraw) {
             editor.needs_redraw = false;

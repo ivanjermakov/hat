@@ -141,15 +141,31 @@ pub const LspConnection = struct {
 
     pub fn didChange(self: *LspConnection) !void {
         const buffer = main.editor.activeBuffer();
-        const changes = [_]lsp.types.TextDocumentContentChangeEvent{
-            .{ .literal_1 = .{ .text = buffer.content_raw.items } },
-        };
-        buffer.diagnostics.clearRetainingCapacity();
-        buffer.version += 1;
-        try self.sendNotification("textDocument/didChange", .{
-            .textDocument = .{ .uri = buffer.uri, .version = @intCast(buffer.version) },
-            .contentChanges = &changes,
-        });
+        log.log(@This(), "did change ver: {}\n", .{buffer.version});
+        if (buffer.version == 0) {
+            const changes = [_]lsp.types.TextDocumentContentChangeEvent{
+                .{ .literal_1 = .{ .text = buffer.content_raw.items } },
+            };
+            try self.sendNotification("textDocument/didChange", .{
+                .textDocument = .{ .uri = buffer.uri, .version = @intCast(buffer.version) },
+                .contentChanges = &changes,
+            });
+        } else {
+            var changes = try std.ArrayList(lsp.types.TextDocumentContentChangeEvent)
+                .initCapacity(self.allocator, buffer.changes.items.len);
+            const first_applied_change_idx = buffer.changes.items.len - buffer.applied_change_count;
+            for (buffer.changes.items[first_applied_change_idx..]) |change| {
+                const event = try change.toLsp(self.allocator);
+                try changes.append(event);
+            }
+            defer for (changes.items) |event| {
+                self.allocator.free(event.literal_0.text);
+            };
+            try self.sendNotification("textDocument/didChange", .{
+                .textDocument = .{ .uri = buffer.uri, .version = @intCast(buffer.version) },
+                .contentChanges = changes.items,
+            });
+        }
     }
 
     pub fn sendCompletionRequest(self: *LspConnection) !void {

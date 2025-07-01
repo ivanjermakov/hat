@@ -69,6 +69,13 @@ pub const Span = struct {
             .end = Cursor.fromLsp(position.end),
         };
     }
+
+    pub fn toLsp(self: Span) lsp.types.Range {
+        return .{
+            .start = self.start.toLsp(),
+            .end = self.end.toLsp(),
+        };
+    }
 };
 
 pub const Buffer = struct {
@@ -95,6 +102,7 @@ pub const Buffer = struct {
     line_positions: std.ArrayList(usize),
     changes: std.ArrayList(cha.Change),
     change_index: usize = 0,
+    applied_change_count: usize = 0,
     allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator, path: []const u8, content_raw: []const u8) !Buffer {
@@ -117,8 +125,10 @@ pub const Buffer = struct {
             .changes = std.ArrayList(cha.Change).init(allocator),
             .allocator = allocator,
         };
-        try buffer.initParser();
         try buffer.updateContent();
+        try buffer.updateLinePositions();
+        try buffer.initParser();
+        try buffer.tsParse();
         return buffer;
     }
 
@@ -384,7 +394,7 @@ pub const Buffer = struct {
         change.cursor = self.cursor;
 
         self.change_index = change_index;
-        main.editor.needs_reparse = true;
+        self.applied_change_count += 1;
     }
 
     pub fn changeInsertText(self: *Buffer, text: []const u21) !void {
@@ -595,7 +605,6 @@ pub const Buffer = struct {
         var next_line = self.content.orderedRemove(row + 1);
         defer next_line.deinit();
         try line.appendSlice(next_line.items);
-        main.editor.needs_reparse = true;
     }
 
     /// Delete every character from cursor (including) to the end of line
@@ -606,7 +615,6 @@ pub const Buffer = struct {
             line.items.len - @as(usize, @intCast(cursor.col)),
             &[_]u21{},
         );
-        main.editor.needs_reparse = true;
     }
 
     /// Delete every character from start of line to cursor (excluding)
@@ -617,7 +625,6 @@ pub const Buffer = struct {
             @intCast(cursor.col),
             &[_]u21{},
         );
-        main.editor.needs_reparse = true;
     }
 
     /// End is exclusive
@@ -627,7 +634,6 @@ pub const Buffer = struct {
             const line = self.content.orderedRemove(start);
             line.deinit();
         }
-        main.editor.needs_reparse = true;
     }
 
     fn insertText(self: *Buffer, text: []const u21) !void {
@@ -645,7 +651,6 @@ pub const Buffer = struct {
                 try self.moveCursor(self.cursor.applyOffset(.{ .col = 1 }));
             }
         }
-        main.editor.needs_reparse = true;
     }
 
     fn insertNewline(self: *Buffer) !void {
