@@ -93,6 +93,7 @@ pub fn main() !void {
 
         try editor.openBuffer(path);
         try startEditor(allocator);
+        defer editor.disconnect() catch {};
     }
 }
 
@@ -104,12 +105,9 @@ fn startEditor(allocator: std.mem.Allocator) !void {
     }
 
     var buffer = editor.activeBuffer();
-    var lsp_conn: ?lsp.LspConnection = if (buffer.file_type.lsp) |lsp_conf| try lsp.LspConnection.connect(allocator, &lsp_conf) else null;
-    defer if (lsp_conn) |*conn| conn.deinit();
-    if (lsp_conn) |*conn| try conn.didChange();
 
     main_loop: while (true) {
-        if (lsp_conn) |*conn| try conn.update();
+        try editor.update();
 
         const needs_handle_mappings = try term.updateInput(allocator);
         if (needs_handle_mappings) {
@@ -232,7 +230,7 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     if (key2.printable != null and key2.printable.?.len == 1) ch2 = key2.printable.?[0];
 
                     if (editor.mode == .normal and ch == ' ' and ch2 == 'd') {
-                        if (lsp_conn) |*conn| try conn.goToDefinition();
+                        try editor.goToDefinition();
                     } else if (normal_or_select and ch == 'g' and ch2 == 'i') {
                         try buffer.moveCursor(.{ .col = buffer.cursor.col });
                     } else if (normal_or_select and ch == 'g' and ch2 == 'k') {
@@ -267,7 +265,12 @@ fn startEditor(allocator: std.mem.Allocator) !void {
             buffer.diagnostics.clearRetainingCapacity();
             try buffer.tsParse();
             try buffer.updateLinePositions();
-            if (lsp_conn) |*conn| try conn.didChange();
+            var lsp_iter = editor.lsp_connections.valueIterator();
+            while (lsp_iter.next()) |conn| {
+                try conn.didChange();
+                // TODO: send to correct server
+                break;
+            }
             for (buffer.pending_changes.items) |*change| change.deinit();
             buffer.pending_changes.clearRetainingCapacity();
             buffer.version += 1;
@@ -281,18 +284,14 @@ fn startEditor(allocator: std.mem.Allocator) !void {
         }
         if (editor.needs_completion) {
             editor.needs_completion = false;
-            if (lsp_conn) |*conn| try conn.sendCompletionRequest();
+            var lsp_iter = editor.lsp_connections.valueIterator();
+            while (lsp_iter.next()) |conn| {
+                try conn.sendCompletionRequest();
+                // TODO: send to correct server
+                break;
+            }
         }
         std.time.sleep(sleep_ns);
-    }
-
-    if (lsp_conn) |*conn| {
-        log.log(@This(), "disconnecting lsp client\n", .{});
-        try conn.disconnect();
-        disconnect_loop: while (true) {
-            if (conn.status == .Closed) break :disconnect_loop;
-            try conn.update();
-        }
     }
 }
 

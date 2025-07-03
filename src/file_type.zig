@@ -9,6 +9,7 @@ const log = @import("log.zig");
 const nvim_ts_path = "$HOME/.local/share/nvim/lazy/nvim-treesitter";
 
 pub const FileTypeConfig = struct {
+    name: []const u8,
     ts: ?TsConfig = null,
     lsp: ?lsp.LspConfig = null,
 };
@@ -52,13 +53,15 @@ pub const TsConfig = struct {
     }
 };
 
-pub const plain: FileTypeConfig = .{ .ts = null, .lsp = null };
+pub const plain: FileTypeConfig = .{ .name = "plain", .ts = null, .lsp = null };
 
 pub const file_type = std.StaticStringMap(FileTypeConfig).initComptime(.{
     .{ ".c", FileTypeConfig{
+        .name = "c",
         .ts = TsConfig.from_nvim("c"),
     } },
     .{ ".ts", FileTypeConfig{
+        .name = "typescript",
         .ts = .{
             .lib_path = TsConfig.lib_path_from_nvim("typescript"),
             .lib_symbol = "tree_sitter_typescript",
@@ -67,6 +70,7 @@ pub const file_type = std.StaticStringMap(FileTypeConfig).initComptime(.{
         .lsp = .{ .cmd = &.{ "typescript-language-server", "--stdio" } },
     } },
     .{ ".zig", FileTypeConfig{
+        .name = "zig",
         .ts = TsConfig.from_nvim("zig"),
         .lsp = .{ .cmd = &.{"zls"} },
     } },

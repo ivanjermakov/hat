@@ -29,6 +29,7 @@ pub const LspConnection = struct {
     messages_unreplied: std.AutoHashMap(i64, LspRequest),
     poll_buf: std.ArrayList(u8),
     poll_header: ?lsp.BaseProtocolHeader,
+    buffers: std.ArrayList(usize),
     allocator: std.mem.Allocator,
 
     pub fn connect(allocator: std.mem.Allocator, config: *const LspConfig) !LspConnection {
@@ -46,6 +47,7 @@ pub const LspConnection = struct {
             .messages_unreplied = std.AutoHashMap(i64, LspRequest).init(allocator),
             .poll_buf = std.ArrayList(u8).init(allocator),
             .poll_header = null,
+            .buffers = std.ArrayList(usize).init(allocator),
             .allocator = allocator,
         };
         try conn.sendRequest("initialize", .{
@@ -117,6 +119,7 @@ pub const LspConnection = struct {
             self.allocator.free(value.message);
         }
         self.messages_unreplied.deinit();
+        self.buffers.deinit();
     }
 
     pub fn goToDefinition(self: *LspConnection) !void {

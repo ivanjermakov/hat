@@ -4,6 +4,7 @@ const buf = @import("buffer.zig");
 const cmp = @import("ui/completion_menu.zig");
 const fzf = @import("ui/fzf.zig");
 const log = @import("log.zig");
+const lsp = @import("lsp.zig");
 
 pub const Editor = struct {
     buffers: std.ArrayList(buf.Buffer),
@@ -13,6 +14,7 @@ pub const Editor = struct {
     needs_redraw: bool,
     needs_completion: bool,
     completion_menu: cmp.CompletionMenu,
+    lsp_connections: std.StringHashMap(lsp.LspConnection),
     allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator) !Editor {
@@ -23,6 +25,7 @@ pub const Editor = struct {
             .needs_redraw = false,
             .needs_completion = false,
             .completion_menu = cmp.CompletionMenu.init(allocator),
+            .lsp_connections = std.StringHashMap(lsp.LspConnection).init(allocator),
             .allocator = allocator,
         };
         return editor;
@@ -46,6 +49,15 @@ pub const Editor = struct {
 
         try self.buffers.append(buffer);
         self.active_buffer = self.buffers.items.len - 1;
+
+        const ftype = buffer.file_type;
+        if (ftype.lsp) |lsp_conf| {
+            if (!self.lsp_connections.contains(ftype.name)) {
+                var conn = try lsp.LspConnection.connect(self.allocator, &lsp_conf);
+                try self.lsp_connections.put(ftype.name, conn);
+                try conn.didChange();
+            }
+        }
     }
 
     pub fn activeBuffer(self: *Editor) *buf.Buffer {
@@ -56,6 +68,11 @@ pub const Editor = struct {
         for (self.buffers.items) |*buffer| buffer.deinit();
         self.buffers.deinit();
         self.completion_menu.deinit();
+        {
+            var val_iter = self.lsp_connections.valueIterator();
+            while (val_iter.next()) |conn| conn.deinit();
+        }
+        self.lsp_connections.deinit();
     }
 
     pub fn pickFile(self: *Editor) !void {
@@ -71,6 +88,33 @@ pub const Editor = struct {
         log.log(@This(), "find result: {}\n", .{find_result});
         try self.openBuffer(find_result.path);
         try self.activeBuffer().moveCursor(find_result.position);
+    }
+
+    pub fn update(self: *Editor) !void {
+        var lsp_iter = self.lsp_connections.valueIterator();
+        while (lsp_iter.next()) |conn| try conn.update();
+    }
+
+    pub fn disconnect(self: *Editor) !void {
+        _ = self;
+        // TODO
+        // if (lsp_conn) |*conn| {
+        //     log.log(@This(), "disconnecting lsp client\n", .{});
+        //     try conn.disconnect();
+        //     disconnect_loop: while (true) {
+        //         if (conn.status == .Closed) break :disconnect_loop;
+        //         try conn.update();
+        //     }
+        // }
+    }
+
+    pub fn goToDefinition(self: *Editor) !void {
+        var lsp_iter = self.lsp_connections.valueIterator();
+        while (lsp_iter.next()) |conn| {
+            try conn.goToDefinition();
+            // TODO: send to correct server
+            break;
+        }
     }
 };
 
