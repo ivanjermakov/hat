@@ -141,7 +141,6 @@ pub const LspConnection = struct {
 
     pub fn didChange(self: *LspConnection) !void {
         const buffer = main.editor.activeBuffer();
-        log.log(@This(), "did change ver: {}\n", .{buffer.version});
         if (buffer.version == 0) {
             const changes = [_]lsp.types.TextDocumentContentChangeEvent{
                 .{ .literal_1 = .{ .text = buffer.content_raw.items } },

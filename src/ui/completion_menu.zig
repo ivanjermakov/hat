@@ -9,6 +9,7 @@ const cha = @import("../change.zig");
 const max_entries = 10;
 
 pub const CompletionItem = struct {
+    item_json: []const u8,
     label: []const u8,
     filter_text: []const u8,
     replace_text: []const u8,
@@ -17,6 +18,7 @@ pub const CompletionItem = struct {
     pub fn fromLsp(allocator: std.mem.Allocator, item: lsp.types.CompletionItem) !CompletionItem {
         const text_edit = lsp.extractTextEdit(item) orelse return error.NoTextEdit;
         return .{
+            .item_json = try std.json.stringifyAlloc(allocator, item, .{}),
             .label = try allocator.dupe(u8, item.label),
             .filter_text = try allocator.dupe(u8, if (item.filterText) |ft| ft else item.label),
             .replace_text = try allocator.dupe(u8, text_edit.newText),
@@ -25,6 +27,7 @@ pub const CompletionItem = struct {
     }
 
     pub fn deinit(self: *CompletionItem) void {
+        self.allocator.free(self.item_json);
         self.allocator.free(self.label);
         self.allocator.free(self.filter_text);
         self.allocator.free(self.replace_text);
