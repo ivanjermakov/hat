@@ -50,8 +50,10 @@ pub const Editor = struct {
         try self.buffers.append(buffer);
         self.active_buffer = self.buffers.items.len - 1;
 
-        const ftype = buffer.file_type;
-        if (ftype.lsp) |lsp_conf| {
+        const lsp_configs = try lsp.findLspsByFileType(self.allocator, buffer.file_type.name);
+        defer self.allocator.free(lsp_configs);
+        for (lsp_configs) |lsp_conf| {
+            const ftype = buffer.file_type;
             if (!self.lsp_connections.contains(ftype.name)) {
                 var conn = try lsp.LspConnection.connect(self.allocator, &lsp_conf);
                 try self.lsp_connections.put(ftype.name, conn);

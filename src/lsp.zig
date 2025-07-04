@@ -9,8 +9,36 @@ const lsp = @import("lsp");
 pub const types = lsp.types;
 
 pub const LspConfig = struct {
+    name: []const u8,
     cmd: []const []const u8,
+    file_types: []const []const u8,
 };
+
+pub const lsp_config = [_]LspConfig{
+    LspConfig{
+        .name = "typescript-language-server",
+        .cmd = &.{ "typescript-language-server", "--stdio" },
+        .file_types = &.{"typescript"},
+    },
+    LspConfig{
+        .name = "zls",
+        .cmd = &.{"zls"},
+        .file_types = &.{"zig"},
+    },
+};
+
+pub fn findLspsByFileType(allocator: std.mem.Allocator, file_type: []const u8) ![]LspConfig {
+    var res = std.ArrayList(LspConfig).init(allocator);
+    for (lsp_config) |config| {
+        for (config.file_types) |ft| {
+            if (std.mem.eql(u8, file_type, ft)) {
+                try res.append(config);
+                break;
+            }
+        }
+    }
+    return try res.toOwnedSlice();
+}
 
 pub const LspRequest = struct {
     method: []const u8,
