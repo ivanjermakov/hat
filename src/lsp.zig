@@ -89,6 +89,7 @@ pub const LspConnection = struct {
                     .completion = .{
                         .completionItem = .{
                             .insertReplaceSupport = true,
+                            .documentationFormat = &.{ .plaintext, .markdown },
                         },
                     },
                 },
@@ -207,7 +208,7 @@ pub const LspConnection = struct {
         });
     }
 
-    fn poll(self: *LspConnection) !?[][]u8 {
+    fn poll(self: *LspConnection) !?[]const []const u8 {
         if (main.log_enabled) b: {
             const err = fs.readNonblock(self.allocator, self.child.stderr.?) catch break :b;
             if (err) |e| {
@@ -262,7 +263,7 @@ pub const LspConnection = struct {
         params: (lsp.types.getRequestMetadata(method).?.Params orelse ?void),
     ) !void {
         const request: lsp.TypedJsonRPCRequest(@TypeOf(params)) = .{
-            .id = nextMessageId(),
+            .id = nextRequestId(),
             .method = method,
             .params = params,
         };
@@ -385,10 +386,10 @@ pub const LspConnection = struct {
     }
 };
 
-var message_id: i64 = 0;
-fn nextMessageId() lsp.JsonRPCMessage.ID {
-    message_id += 1;
-    return .{ .number = message_id };
+var request_id: i64 = 0;
+fn nextRequestId() lsp.JsonRPCMessage.ID {
+    request_id += 1;
+    return .{ .number = request_id };
 }
 
 pub fn extractTextEdit(item: lsp.types.CompletionItem) ?lsp.types.TextEdit {

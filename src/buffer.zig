@@ -877,7 +877,7 @@ fn tokenEnd(line: []u21, pos: usize) ?usize {
     return null;
 }
 
-const Boundary = union(enum) {
+const Boundary = enum {
     wordStart,
     wordEnd,
 

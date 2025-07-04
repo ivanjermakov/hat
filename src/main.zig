@@ -127,9 +127,9 @@ fn startEditor(allocator: std.mem.Allocator) !void {
 
                 // cmp_menu
                 if (cmp_menu_active and code == .up) {
-                    editor.completion_menu.prevItem();
+                    try editor.completion_menu.prevItem();
                 } else if (cmp_menu_active and code == .down) {
-                    editor.completion_menu.nextItem();
+                    try editor.completion_menu.nextItem();
                 } else if (cmp_menu_active and ch == '\n') {
                     try editor.completion_menu.accept();
 

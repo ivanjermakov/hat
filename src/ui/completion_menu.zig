@@ -120,7 +120,7 @@ pub const CompletionMenu = struct {
         self.display_items.deinit();
     }
 
-    pub fn nextItem(self: *CompletionMenu) void {
+    pub fn nextItem(self: *CompletionMenu) !void {
         if (self.active_item == self.display_items.items.len - 1) {
             self.active_item = 0;
         } else {
@@ -129,7 +129,7 @@ pub const CompletionMenu = struct {
         main.editor.needs_redraw = true;
     }
 
-    pub fn prevItem(self: *CompletionMenu) void {
+    pub fn prevItem(self: *CompletionMenu) !void {
         if (self.active_item == 0) {
             self.active_item = self.display_items.items.len - 1;
         } else {
@@ -151,5 +151,9 @@ pub const CompletionMenu = struct {
         defer self.allocator.free(new_text);
         var change = try cha.Change.initReplace(self.allocator, span, old_text, new_text);
         try buffer.appendChange(&change);
+    }
+
+    fn activeItem(self: *CompletionMenu) *CompletionItem {
+        return &self.completion_items.items[self.display_items.items[self.active_item]];
     }
 };
