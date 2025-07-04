@@ -116,15 +116,6 @@ pub const Editor = struct {
         //     }
         // }
     }
-
-    pub fn goToDefinition(self: *Editor) !void {
-        var lsp_iter = self.lsp_connections.valueIterator();
-        while (lsp_iter.next()) |conn| {
-            try conn.goToDefinition();
-            // TODO: send to correct server
-            break;
-        }
-    }
 };
 
 pub const Mode = enum {

@@ -103,7 +103,7 @@ pub const Buffer = struct {
     history: std.ArrayList(std.ArrayList(cha.Change)),
     history_index: ?usize = null,
     pending_changes: std.ArrayList(cha.Change),
-    lsp_connections: std.ArrayList(*const lsp.LspConnection),
+    lsp_connections: std.ArrayList(*lsp.LspConnection),
     allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator, path: []const u8, content_raw: []const u8) !Buffer {
@@ -125,7 +125,7 @@ pub const Buffer = struct {
             .line_positions = std.ArrayList(usize).init(allocator),
             .history = std.ArrayList(std.ArrayList(cha.Change)).init(allocator),
             .pending_changes = std.ArrayList(cha.Change).init(allocator),
-            .lsp_connections = std.ArrayList(*const lsp.LspConnection).init(allocator),
+            .lsp_connections = std.ArrayList(*lsp.LspConnection).init(allocator),
             .allocator = allocator,
         };
         try buffer.updateContent();
@@ -624,6 +624,12 @@ pub const Buffer = struct {
             }
         }
         return res.toOwnedSlice();
+    }
+
+    pub fn goToDefinition(self: *Buffer) !void {
+        for (self.lsp_connections.items) |conn| {
+            try conn.goToDefinition();
+        }
     }
 
     fn applyChange(self: *Buffer, change: *cha.Change) !void {
