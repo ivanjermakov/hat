@@ -82,7 +82,7 @@ pub fn main() !void {
         );
         return;
     } else {
-        term = try ter.Terminal.init(std_out.writer().any(), try ter.terminalSize());
+        term = try ter.Terminal.init(allocator, std_out.writer().any(), try ter.terminalSize());
         defer term.deinit();
 
         editor = try edi.Editor.init(allocator);
@@ -300,10 +300,12 @@ comptime {
 }
 
 pub fn testSetup() !void {
+    const allocator = std.testing.allocator;
     log_enabled = true;
-    editor = try edi.Editor.init(std.testing.allocator);
+    editor = try edi.Editor.init(allocator);
     term = ter.Terminal{
         .writer = .{ .unbuffered_writer = std.io.null_writer.any() },
         .dimensions = .{ .width = 50, .height = 30 },
+        .allocator = allocator,
     };
 }

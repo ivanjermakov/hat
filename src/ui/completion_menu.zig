@@ -13,15 +13,24 @@ pub const CompletionItem = struct {
     label: []const u8,
     filter_text: []const u8,
     replace_text: []const u8,
+    detail: ?[]const u8,
+    documentation: ?[]const u8,
     allocator: std.mem.Allocator,
 
     pub fn fromLsp(allocator: std.mem.Allocator, item: lsp.types.CompletionItem) !CompletionItem {
         const text_edit = lsp.extractTextEdit(item) orelse return error.NoTextEdit;
+        const documentation = if (item.documentation) |doc| switch (doc) {
+            .string => |s| try allocator.dupe(u8, s),
+            .MarkupContent => |c| try allocator.dupe(u8, c.value),
+        } else null;
+
         return .{
             .item_json = try std.json.stringifyAlloc(allocator, item, .{}),
             .label = try allocator.dupe(u8, item.label),
             .filter_text = try allocator.dupe(u8, if (item.filterText) |ft| ft else item.label),
             .replace_text = try allocator.dupe(u8, text_edit.newText),
+            .detail = if (item.detail) |detail| try allocator.dupe(u8, detail) else null,
+            .documentation = documentation,
             .allocator = allocator,
         };
     }
@@ -31,6 +40,8 @@ pub const CompletionItem = struct {
         self.allocator.free(self.label);
         self.allocator.free(self.filter_text);
         self.allocator.free(self.replace_text);
+        if (self.detail) |d| self.allocator.free(d);
+        if (self.documentation) |d| self.allocator.free(d);
     }
 };
 
@@ -153,7 +164,7 @@ pub const CompletionMenu = struct {
         try buffer.appendChange(&change);
     }
 
-    fn activeItem(self: *CompletionMenu) *CompletionItem {
+    pub fn activeItem(self: *CompletionMenu) *CompletionItem {
         return &self.completion_items.items[self.display_items.items[self.active_item]];
     }
 };

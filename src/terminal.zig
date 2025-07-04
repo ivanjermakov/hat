@@ -33,8 +33,9 @@ pub const cursor_type = union {
 pub const Terminal = struct {
     writer: std.io.BufferedWriter(8192, std.io.AnyWriter),
     dimensions: TerminalDimensions,
+    allocator: std.mem.Allocator,
 
-    pub fn init(std_out_writer: std.io.AnyWriter, dimensions: TerminalDimensions) !Terminal {
+    pub fn init(allocator: std.mem.Allocator, std_out_writer: std.io.AnyWriter, dimensions: TerminalDimensions) !Terminal {
         _ = c.setlocale(c.LC_ALL, "");
 
         var tty: c.struct_termios = undefined;
@@ -45,6 +46,7 @@ pub const Terminal = struct {
         var term = Terminal{
             .writer = .{ .unbuffered_writer = std_out_writer },
             .dimensions = dimensions,
+            .allocator = allocator,
         };
 
         try term.switchBuf(true);
@@ -162,7 +164,7 @@ pub const Terminal = struct {
                 }
             }
 
-            for (0..line.len+1) |i| {
+            for (0..line.len + 1) |i| {
                 const ch = if (i == line.len) ' ' else line[i];
                 attrs_stream.reset();
                 const buffer_col = @as(i32, @intCast(term_col)) + buffer.offset.col;
@@ -232,38 +234,77 @@ pub const Terminal = struct {
             .applyOffset(buffer.offset.negate())
             .applyOffset(.{ .row = 1 });
 
-        try self.resetAttributes();
-
         var longest_item: usize = 0;
         for (cmp_menu.display_items.items) |idx| {
             const cmp_item = cmp_menu.completion_items.items[idx];
             if (cmp_item.label.len > longest_item) longest_item = cmp_item.label.len;
         }
-        const menu_width = @min(max_width, longest_item);
+        const menu_width = @min(max_width, longest_item + 1);
 
-        for (0..cmp_menu.display_items.items.len) |menu_row| {
-            const idx = cmp_menu.display_items.items[menu_row];
-            const cmp_item = cmp_menu.completion_items.items[idx];
-            try self.moveCursor(.{
-                .row = menu_pos.row + @as(i32, @intCast(menu_row)),
-                .col = menu_pos.col,
-            });
-            if (menu_row == cmp_menu.active_item) {
-                try co.attributes.write(co.attributes.completion_menu_active, self.writer.writer());
-            } else {
-                try co.attributes.write(co.attributes.completion_menu, self.writer.writer());
+        {
+            try self.resetAttributes();
+
+            for (0..cmp_menu.display_items.items.len) |menu_row| {
+                const idx = cmp_menu.display_items.items[menu_row];
+                const cmp_item = cmp_menu.completion_items.items[idx];
+                try self.moveCursor(.{
+                    .row = menu_pos.row + @as(i32, @intCast(menu_row)),
+                    .col = menu_pos.col,
+                });
+                if (menu_row == cmp_menu.active_item) {
+                    try co.attributes.write(co.attributes.completion_menu_active, self.writer.writer());
+                } else {
+                    try co.attributes.write(co.attributes.completion_menu, self.writer.writer());
+                }
+                try self.write(cmp_item.label[0..@min(cmp_item.label.len, menu_width)]);
+
+                const padding_len: i32 = menu_width - @as(i32, @intCast(cmp_item.label.len));
+                if (padding_len > 0) {
+                    for (0..@intCast(padding_len)) |_| {
+                        try self.write(" ");
+                    }
+                }
             }
-            try self.write(cmp_item.label[0..@min(cmp_item.label.len, menu_width)]);
+            try self.resetAttributes();
+        }
 
-            const padding_len: i32 = menu_width - @as(i32, @intCast(cmp_item.label.len));
-            if (padding_len > 0) {
-                for (0..@intCast(padding_len)) |_| {
+        {
+            const cmp_item = cmp_menu.activeItem();
+            if (cmp_item.detail == null and cmp_item.documentation == null) return;
+            var doc_lines = std.ArrayList([]const u8).init(self.allocator);
+            defer doc_lines.deinit();
+            if (cmp_item.detail) |detail| try doc_lines.append(detail);
+            if (cmp_item.documentation) |documentation| {
+                var doc_iter = std.mem.splitScalar(u8, documentation, '\n');
+                while (doc_iter.next()) |line| {
+                    try doc_lines.append(line);
+                }
+            }
+
+            const max_doc_width = 90;
+            var longest_line: usize = 0;
+            for (doc_lines.items) |line| {
+                if (line.len > longest_line) longest_line = line.len;
+            }
+            const doc_width = @min(max_doc_width, longest_line);
+
+            try co.attributes.write(co.attributes.documentation_menu, self.writer.writer());
+            const doc_pos = menu_pos.applyOffset(.{ .col = menu_width });
+            for (0..doc_lines.items.len) |i| {
+                const doc_line = doc_lines.items[i];
+                try self.moveCursor(.{
+                    .row = doc_pos.row + @as(i32, @intCast(i)),
+                    .col = doc_pos.col,
+                });
+                const available_len = @min(self.dimensions.width - @as(usize, @intCast(doc_pos.col)), doc_width);
+                const visible_len = @min(available_len, doc_line.len);
+                try self.write(doc_line[0..visible_len]);
+                for (0..available_len - visible_len) |_| {
                     try self.write(" ");
                 }
             }
+            try self.resetAttributes();
         }
-
-        try self.resetAttributes();
     }
 };
 
