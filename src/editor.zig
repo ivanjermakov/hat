@@ -7,7 +7,7 @@ const log = @import("log.zig");
 const lsp = @import("lsp.zig");
 
 pub const Editor = struct {
-    buffers: std.ArrayList(buf.Buffer),
+    buffers: std.ArrayList(*buf.Buffer),
     active_buffer: usize = 0,
     mode: Mode,
     needs_update_cursor: bool,
@@ -19,7 +19,7 @@ pub const Editor = struct {
 
     pub fn init(allocator: std.mem.Allocator) !Editor {
         const editor = Editor{
-            .buffers = std.ArrayList(buf.Buffer).init(allocator),
+            .buffers = std.ArrayList(*buf.Buffer).init(allocator),
             .mode = .normal,
             .needs_update_cursor = false,
             .needs_redraw = false,
@@ -45,7 +45,8 @@ pub const Editor = struct {
         const file = try std.fs.cwd().openFile(path, .{ .mode = .read_write });
         const file_content = try file.readToEndAlloc(self.allocator, std.math.maxInt(usize));
         defer self.allocator.free(file_content);
-        const buffer = try buf.Buffer.init(self.allocator, path, file_content);
+        var buffer = try self.allocator.create(buf.Buffer);
+        buffer.* = try buf.Buffer.init(self.allocator, path, file_content);
 
         try self.buffers.append(buffer);
         self.active_buffer = self.buffers.items.len - 1;
@@ -53,21 +54,27 @@ pub const Editor = struct {
         const lsp_configs = try lsp.findLspsByFileType(self.allocator, buffer.file_type.name);
         defer self.allocator.free(lsp_configs);
         for (lsp_configs) |lsp_conf| {
-            const ftype = buffer.file_type;
-            if (!self.lsp_connections.contains(ftype.name)) {
-                var conn = try lsp.LspConnection.connect(self.allocator, &lsp_conf);
-                try self.lsp_connections.put(ftype.name, conn);
-                try conn.didChange();
+            const ftype = buffer.file_type.name;
+            if (!self.lsp_connections.contains(ftype)) {
+                const conn = try lsp.LspConnection.connect(self.allocator, lsp_conf);
+                try self.lsp_connections.put(ftype, conn);
             }
+            const conn = self.lsp_connections.getPtr(ftype).?;
+            try buffer.lsp_connections.append(conn);
+            log.log(@This(), "attached buffer {s} to lsp {s}\n", .{ path, conn.config.name });
+            try conn.didChange(buffer);
         }
     }
 
     pub fn activeBuffer(self: *Editor) *buf.Buffer {
-        return &self.buffers.items[self.active_buffer];
+        return self.buffers.items[self.active_buffer];
     }
 
     pub fn deinit(self: *Editor) void {
-        for (self.buffers.items) |*buffer| buffer.deinit();
+        for (self.buffers.items) |buffer| {
+            buffer.deinit();
+            self.allocator.destroy(buffer);
+        }
         self.buffers.deinit();
         self.completion_menu.deinit();
         {

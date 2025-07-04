@@ -52,6 +52,7 @@ pub const LspConnectionStatus = enum {
 };
 
 pub const LspConnection = struct {
+    config: LspConfig,
     status: LspConnectionStatus,
     child: std.process.Child,
     messages_unreplied: std.AutoHashMap(i64, LspRequest),
@@ -60,7 +61,7 @@ pub const LspConnection = struct {
     buffers: std.ArrayList(usize),
     allocator: std.mem.Allocator,
 
-    pub fn connect(allocator: std.mem.Allocator, config: *const LspConfig) !LspConnection {
+    pub fn connect(allocator: std.mem.Allocator, config: LspConfig) !LspConnection {
         var child = std.process.Child.init(config.cmd, allocator);
         child.stdin_behavior = .Pipe;
         child.stderr_behavior = .Pipe;
@@ -70,6 +71,7 @@ pub const LspConnection = struct {
         try child.waitForSpawn();
 
         var conn = LspConnection{
+            .config = config,
             .status = .Connected,
             .child = child,
             .messages_unreplied = std.AutoHashMap(i64, LspRequest).init(allocator),
@@ -170,8 +172,7 @@ pub const LspConnection = struct {
         });
     }
 
-    pub fn didChange(self: *LspConnection) !void {
-        const buffer = main.editor.activeBuffer();
+    pub fn didChange(self: *LspConnection, buffer: *buf.Buffer) !void {
         if (buffer.version == 0) {
             const changes = [_]lsp.types.TextDocumentContentChangeEvent{
                 .{ .literal_1 = .{ .text = buffer.content_raw.items } },

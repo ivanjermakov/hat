@@ -267,7 +267,7 @@ fn startEditor(allocator: std.mem.Allocator) !void {
             try buffer.updateLinePositions();
             var lsp_iter = editor.lsp_connections.valueIterator();
             while (lsp_iter.next()) |conn| {
-                try conn.didChange();
+                try conn.didChange(editor.activeBuffer());
                 // TODO: send to correct server
                 break;
             }
