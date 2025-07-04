@@ -105,16 +105,30 @@ pub const Editor = struct {
     }
 
     pub fn disconnect(self: *Editor) !void {
-        _ = self;
-        // TODO
-        // if (lsp_conn) |*conn| {
-        //     log.log(@This(), "disconnecting lsp client\n", .{});
-        //     try conn.disconnect();
-        //     disconnect_loop: while (true) {
-        //         if (conn.status == .Closed) break :disconnect_loop;
-        //         try conn.update();
-        //     }
-        // }
+        while (self.lsp_connections.count() > 0) {
+            var iter = self.lsp_connections.iterator();
+            while (iter.next()) |entry| {
+                const conn = entry.value_ptr;
+                switch (conn.status) {
+                    .Connected => {
+                        log.log(@This(), "disconnecting lsp client\n", .{});
+                        try conn.disconnect();
+                    },
+                    .Disconnecting => {
+                        const term = std.posix.waitpid(conn.child.id, std.posix.W.NOHANG);
+                        if (conn.child.id == term.pid) {
+                            log.log(@This(), "lsp server terminated with code: {}\n", .{std.posix.W.EXITSTATUS(term.status)});
+                            conn.status = .Closed;
+                        }
+                    },
+                    .Closed => {
+                        conn.deinit();
+                        _ = self.lsp_connections.remove(entry.key_ptr.*);
+                    },
+                }
+            }
+            std.Thread.sleep(main.sleep_ns);
+        }
     }
 };
 

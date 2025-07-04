@@ -104,7 +104,6 @@ pub const CompletionMenu = struct {
     }
 
     pub fn reset(self: *CompletionMenu) void {
-        log.log(@This(), "menu reset\n", .{});
         for (self.completion_items.items) |*item| {
             item.deinit();
         }

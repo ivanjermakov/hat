@@ -208,14 +208,6 @@ pub const LspConnection = struct {
     }
 
     fn poll(self: *LspConnection) !?[][]u8 {
-        if (self.status == .Disconnecting) {
-            const term = std.posix.waitpid(self.child.id, std.posix.W.NOHANG);
-            if (self.child.id == term.pid) {
-                log.log(@This(), "lsp server terminated with code: {}\n", .{std.posix.W.EXITSTATUS(term.status)});
-                self.status = .Closed;
-            }
-        }
-
         if (main.log_enabled) b: {
             const err = fs.readNonblock(self.allocator, self.child.stderr.?) catch break :b;
             if (err) |e| {
@@ -300,12 +292,7 @@ pub const LspConnection = struct {
     }
 
     fn handleInitializeResponse(self: *LspConnection, arena: std.mem.Allocator, resp: lsp.JsonRPCMessage.Response) !void {
-        const resp_typed = try std.json.parseFromValue(
-            lsp.types.InitializeResult,
-            arena,
-            resp.result_or_error.result.?,
-            .{},
-        );
+        const resp_typed = try std.json.parseFromValue(lsp.types.InitializeResult, arena, resp.result_or_error.result.?, .{});
         log.log(@This(), "got init response: {}\n", .{resp_typed});
         try self.sendNotification("initialized", .{});
 
