@@ -8,7 +8,7 @@ const lsp = @import("lsp.zig");
 
 pub const Editor = struct {
     buffers: std.ArrayList(*buf.Buffer),
-    active_buffer: usize = 0,
+    active_buffer: *buf.Buffer = undefined,
     mode: Mode,
     needs_update_cursor: bool,
     needs_redraw: bool,
@@ -37,7 +37,7 @@ pub const Editor = struct {
             // TODO: resolve paths
             if (std.mem.eql(u8, buffer.path, path)) {
                 log.log(@This(), "opening existing buffer {s}\n", .{path});
-                self.active_buffer = buffer_idx;
+                self.active_buffer = buffer;
                 return;
             }
         }
@@ -49,7 +49,7 @@ pub const Editor = struct {
         buffer.* = try buf.Buffer.init(self.allocator, path, file_content);
 
         try self.buffers.append(buffer);
-        self.active_buffer = self.buffers.items.len - 1;
+        self.active_buffer = buffer;
 
         const lsp_configs = try lsp.findLspsByFileType(self.allocator, buffer.file_type.name);
         defer self.allocator.free(lsp_configs);
@@ -64,10 +64,6 @@ pub const Editor = struct {
             log.log(@This(), "attached buffer {s} to lsp {s}\n", .{ path, conn.config.name });
             try conn.didChange(buffer);
         }
-    }
-
-    pub fn activeBuffer(self: *Editor) *buf.Buffer {
-        return self.buffers.items[self.active_buffer];
     }
 
     pub fn deinit(self: *Editor) void {
@@ -96,7 +92,7 @@ pub const Editor = struct {
         defer self.allocator.free(find_result.path);
         log.log(@This(), "find result: {}\n", .{find_result});
         try self.openBuffer(find_result.path);
-        try self.activeBuffer().moveCursor(find_result.position);
+        try self.active_buffer.moveCursor(find_result.position);
     }
 
     pub fn update(self: *Editor) !void {

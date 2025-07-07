@@ -154,7 +154,7 @@ pub const LspConnection = struct {
     }
 
     pub fn goToDefinition(self: *LspConnection) !void {
-        const buffer = main.editor.activeBuffer();
+        const buffer = main.editor.active_buffer;
         try self.sendRequest("textDocument/definition", .{
             .textDocument = .{ .uri = buffer.uri },
             .position = buffer.cursor.toLsp(),
@@ -162,7 +162,7 @@ pub const LspConnection = struct {
     }
 
     pub fn didOpen(self: *LspConnection) !void {
-        const buffer = main.editor.activeBuffer();
+        const buffer = main.editor.active_buffer;
         try self.sendNotification("textDocument/didOpen", .{
             .textDocument = .{
                 .uri = buffer.uri,
@@ -201,7 +201,7 @@ pub const LspConnection = struct {
     }
 
     pub fn sendCompletionRequest(self: *LspConnection) !void {
-        const buffer = main.editor.activeBuffer();
+        const buffer = main.editor.active_buffer;
         try self.sendRequest("textDocument/completion", .{
             .textDocument = .{ .uri = buffer.uri },
             .position = buffer.cursor.toLsp(),
@@ -325,7 +325,7 @@ pub const LspConnection = struct {
             },
         };
         if (location) |loc| {
-            const buffer = main.editor.activeBuffer();
+            const buffer = main.editor.active_buffer;
             if (std.mem.eql(u8, loc.uri, buffer.uri)) {
                 log.log(@This(), "jump to {}\n", .{loc.range.start});
                 const new_cursor = buf.Cursor.fromLsp(loc.range.start);
@@ -378,7 +378,7 @@ pub const LspConnection = struct {
                 .{},
             );
             log.log(@This(), "got {} diagnostics\n", .{params_typed.value.diagnostics.len});
-            const buffer = main.editor.activeBuffer();
+            const buffer = main.editor.active_buffer;
             buffer.diagnostics.clearRetainingCapacity();
             try buffer.diagnostics.appendSlice(params_typed.value.diagnostics);
             main.editor.needs_redraw = true;

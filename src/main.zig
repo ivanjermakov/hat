@@ -104,7 +104,7 @@ fn startEditor(allocator: std.mem.Allocator) !void {
         key_queue.deinit();
     }
 
-    var buffer = editor.activeBuffer();
+    var buffer = editor.active_buffer;
 
     main_loop: while (true) {
         try editor.update();
@@ -186,10 +186,10 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     try buffer.redo();
                 } else if (editor.mode == .normal and ch == 'n' and key.activeModifier(.control)) {
                     try editor.pickFile();
-                    buffer = editor.activeBuffer();
+                    buffer = editor.active_buffer;
                 } else if (editor.mode == .normal and ch == 'f' and key.activeModifier(.control)) {
                     try editor.findInFiles();
-                    buffer = editor.activeBuffer();
+                    buffer = editor.active_buffer;
 
                     // insert mode
                 } else if (editor.mode == .insert and code == .delete) {
@@ -267,7 +267,7 @@ fn startEditor(allocator: std.mem.Allocator) !void {
             try buffer.updateLinePositions();
             var lsp_iter = editor.lsp_connections.valueIterator();
             while (lsp_iter.next()) |conn| {
-                try conn.didChange(editor.activeBuffer());
+                try conn.didChange(editor.active_buffer);
                 // TODO: send to correct server
                 break;
             }

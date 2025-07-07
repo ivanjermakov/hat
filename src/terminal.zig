@@ -62,7 +62,7 @@ pub const Terminal = struct {
     }
 
     pub fn draw(self: *Terminal) !void {
-        const buffer = main.editor.activeBuffer();
+        const buffer = main.editor.active_buffer;
         try self.drawBuffer(buffer);
 
         const cmp_menu = &main.editor.completion_menu;
@@ -74,7 +74,7 @@ pub const Terminal = struct {
     }
 
     pub fn updateCursor(self: *Terminal) !void {
-        const buffer = main.editor.activeBuffer();
+        const buffer = main.editor.active_buffer;
         try self.moveCursor(buffer.cursor.applyOffset(buffer.offset.negate()));
         switch (main.editor.mode) {
             .normal => _ = try self.write(cursor_type.steady_block),
@@ -225,7 +225,7 @@ pub const Terminal = struct {
         if (main.editor.mode != .insert) return;
         if (cmp_menu.display_items.items.len == 0) return;
 
-        const buffer = main.editor.activeBuffer();
+        const buffer = main.editor.active_buffer;
         const replace_range = cmp_menu.replace_range.?;
         const menu_pos = (buf.Cursor{
             .row = @intCast(replace_range.start.line),
