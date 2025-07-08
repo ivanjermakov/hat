@@ -12,6 +12,8 @@ fn linkLibs(b: *std.Build, compile: *std.Build.Step.Compile) void {
 }
 
 pub fn build(b: *std.Build) void {
+    b.reference_trace = 10;
+
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
@@ -26,7 +28,6 @@ pub fn build(b: *std.Build) void {
 
     const run = b.addRunArtifact(exe);
     run.step.dependOn(b.getInstallStep());
-    run.addArg("-freference-trace=10");
     if (b.args) |args| {
         run.addArgs(args);
     }

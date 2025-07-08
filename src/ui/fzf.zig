@@ -11,7 +11,7 @@ pub fn pickFile(allocator: std.mem.Allocator) ![]const u8 {
     var cmd = std.ArrayList([]const u8).init(allocator);
     try cmd.appendSlice(fzf_command);
     try cmd.append("--preview");
-    try cmd.append("hat --printer --term-height=$FZF_PREVIEW_LINES --highlight-line=3 {}");
+    try cmd.append("hat --printer {}");
     defer cmd.deinit();
     const out = try ext.runExternalWait(allocator, cmd.items, files);
     defer allocator.free(out);
@@ -45,6 +45,34 @@ pub fn findInFiles(allocator: std.mem.Allocator) !FindInFilesResult {
             .col = try std.fmt.parseInt(i32, iter.next().?, 10) - 1,
         },
     };
+}
+
+pub fn pickBuffer(allocator: std.mem.Allocator, buffers: []const *buf.Buffer) ![]const u8 {
+    var bufs = std.ArrayList(u8).init(allocator);
+    for (buffers) |buffer| {
+        const s = try std.fmt.allocPrint(
+            allocator,
+            "{s}:{}:{}:\n",
+            .{ buffer.path, buffer.cursor.row + 1, buffer.cursor.col + 1 },
+        );
+        defer allocator.free(s);
+        try bufs.appendSlice(s);
+    }
+    const bufs_str = try bufs.toOwnedSlice();
+    defer allocator.free(bufs_str);
+
+    var cmd = std.ArrayList([]const u8).init(allocator);
+    defer cmd.deinit();
+    try cmd.appendSlice(fzf_command);
+    try cmd.append("--preview");
+    try cmd.append("hat --printer --term-height=$FZF_PREVIEW_LINES --highlight-line={2} {1}");
+    try cmd.appendSlice(&.{ "--delimiter", ":" });
+
+    const out = try ext.runExternalWait(allocator, cmd.items, bufs_str);
+    defer allocator.free(out);
+    if (out.len == 0) return error.EmptyOut;
+    var iter = std.mem.splitScalar(u8, out, ':');
+    return try allocator.dupe(u8, iter.next().?);
 }
 
 const fzf_command: []const []const u8 = &.{

@@ -145,6 +145,17 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                 } else if (code == .escape) {
                     try buffer.enterMode(.normal);
 
+                    // normal mode with modifiers
+                } else if (editor.mode == .normal and ch == 'n' and key.activeModifier(.control)) {
+                    try editor.pickFile();
+                    buffer = editor.active_buffer;
+                } else if (editor.mode == .normal and ch == 'f' and key.activeModifier(.control)) {
+                    try editor.findInFiles();
+                    buffer = editor.active_buffer;
+                } else if (editor.mode == .normal and ch == 'e' and key.activeModifier(.control)) {
+                    try editor.pickBuffer();
+                    buffer = editor.active_buffer;
+
                     // normal or select mode
                 } else if (normal_or_select and ch == 'q') {
                     break :main_loop;
@@ -184,12 +195,6 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     try buffer.undo();
                 } else if (editor.mode == .normal and ch == 'U') {
                     try buffer.redo();
-                } else if (editor.mode == .normal and ch == 'n' and key.activeModifier(.control)) {
-                    try editor.pickFile();
-                    buffer = editor.active_buffer;
-                } else if (editor.mode == .normal and ch == 'f' and key.activeModifier(.control)) {
-                    try editor.findInFiles();
-                    buffer = editor.active_buffer;
 
                     // insert mode
                 } else if (editor.mode == .insert and code == .delete) {

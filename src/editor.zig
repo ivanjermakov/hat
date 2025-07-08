@@ -9,7 +9,7 @@ const lsp = @import("lsp.zig");
 pub const Dirty = struct {
     draw: bool = false,
     cursor: bool = false,
-    completion: bool = false
+    completion: bool = false,
 };
 
 pub const Editor = struct {
@@ -95,6 +95,13 @@ pub const Editor = struct {
         log.log(@This(), "find result: {}\n", .{find_result});
         try self.openBuffer(find_result.path);
         try self.active_buffer.moveCursor(find_result.position);
+    }
+
+    pub fn pickBuffer(self: *Editor) !void {
+        const buf_path = fzf.pickBuffer(self.allocator, self.buffers.items) catch return;
+        defer self.allocator.free(buf_path);
+        log.log(@This(), "picked buffer: {s}\n", .{buf_path});
+        try self.openBuffer(buf_path);
     }
 
     pub fn update(self: *Editor) !void {
