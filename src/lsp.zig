@@ -381,7 +381,7 @@ pub const LspConnection = struct {
             const buffer = main.editor.active_buffer;
             buffer.diagnostics.clearRetainingCapacity();
             try buffer.diagnostics.appendSlice(params_typed.value.diagnostics);
-            main.editor.needs_redraw = true;
+            main.editor.dirty.draw = true;
         }
     }
 };

@@ -254,7 +254,7 @@ pub const Buffer = struct {
                     selection.start = selection.end;
                     selection.end = tmp;
                 }
-                main.editor.needs_redraw = true;
+                main.editor.dirty.draw = true;
             },
             .select_line => {
                 var selection = &self.selection.?;
@@ -270,14 +270,14 @@ pub const Buffer = struct {
                     const last_line = self.content.items[@intCast(selection.end.row)].items;
                     selection.end.col = @intCast(last_line.len);
                 }
-                main.editor.needs_redraw = true;
+                main.editor.dirty.draw = true;
             },
             else => {
                 try self.clearSelection();
             },
         }
 
-        main.editor.needs_update_cursor = true;
+        main.editor.dirty.cursor = true;
     }
 
     test "moveCursor" {
@@ -322,7 +322,7 @@ pub const Buffer = struct {
         }
         log.log(@This(), "mode: {}->{}\n", .{ main.editor.mode, mode });
         main.editor.mode = mode;
-        main.editor.needs_update_cursor = true;
+        main.editor.dirty.cursor = true;
     }
 
     /// TODO: search for next word in subsequent lines
@@ -334,7 +334,7 @@ pub const Buffer = struct {
             try self.moveCursor(.{ .row = self.cursor.row, .col = @intCast(col) });
             if (self.selection == null) {
                 self.selection = .{ .start = old_cursor, .end = self.cursor };
-                main.editor.needs_redraw = true;
+                main.editor.dirty.draw = true;
             }
         }
     }
@@ -381,7 +381,7 @@ pub const Buffer = struct {
         try self.moveCursor(.{ .row = self.cursor.row, .col = @intCast(col) });
         if (self.selection == null) {
             self.selection = .{ .start = old_cursor, .end = self.cursor };
-            main.editor.needs_redraw = true;
+            main.editor.dirty.draw = true;
         }
     }
 
@@ -394,7 +394,7 @@ pub const Buffer = struct {
             try self.moveCursor(.{ .row = self.cursor.row, .col = @intCast(col) });
             if (self.selection == null) {
                 self.selection = .{ .start = old_cursor, .end = self.cursor };
-                main.editor.needs_redraw = true;
+                main.editor.dirty.draw = true;
             }
         }
     }
@@ -407,7 +407,7 @@ pub const Buffer = struct {
             try self.moveCursor(.{ .row = self.cursor.row, .col = @intCast(col) });
             if (self.selection == null) {
                 self.selection = .{ .start = old_cursor, .end = self.cursor };
-                main.editor.needs_redraw = true;
+                main.editor.dirty.draw = true;
             }
         }
     }
@@ -561,7 +561,7 @@ pub const Buffer = struct {
 
     pub fn clearSelection(self: *Buffer) !void {
         self.selection = null;
-        main.editor.needs_redraw = true;
+        main.editor.dirty.draw = true;
     }
 
     pub fn updateLinePositions(self: *Buffer) !void {
@@ -743,7 +743,7 @@ pub const Buffer = struct {
 
     fn selectChar(self: *Buffer) !void {
         self.selection = .{ .start = self.cursor, .end = self.cursor };
-        main.editor.needs_redraw = true;
+        main.editor.dirty.draw = true;
     }
 
     fn selectLine(self: *Buffer) !void {
@@ -753,7 +753,7 @@ pub const Buffer = struct {
             .start = .{ .row = row, .col = 0 },
             .end = .{ .row = row, .col = @intCast(line.len) },
         };
-        main.editor.needs_redraw = true;
+        main.editor.dirty.draw = true;
     }
 
     fn updateRaw(self: *Buffer) !void {
@@ -802,19 +802,19 @@ pub const Buffer = struct {
         const dims = main.term.dimensions;
         if (term_cursor.row < 0 and new_buf_cursor.row >= 0) {
             self.offset.row += term_cursor.row;
-            main.editor.needs_redraw = true;
+            main.editor.dirty.draw = true;
         } else if (term_cursor.row >= dims.height and new_buf_cursor.row < self.content.items.len) {
             self.offset.row += 1 + term_cursor.row - @as(i32, @intCast(dims.height));
-            main.editor.needs_redraw = true;
+            main.editor.dirty.draw = true;
         } else if (term_cursor.col < 0 and new_buf_cursor.col >= 0) {
             self.offset.col += term_cursor.col;
-            main.editor.needs_redraw = true;
+            main.editor.dirty.draw = true;
         } else if (term_cursor.col >= dims.width and new_buf_cursor.row >= 0 and new_buf_cursor.row < self.content.items.len) {
             const line = &self.content.items[@intCast(new_buf_cursor.row)];
             const line_len = line.items.len;
             if (new_buf_cursor.col <= line_len) {
                 self.offset.col += 1 + term_cursor.col - @as(i32, @intCast(dims.width));
-                main.editor.needs_redraw = true;
+                main.editor.dirty.draw = true;
             }
         }
     }

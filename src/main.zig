@@ -220,7 +220,7 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     const insert_text = try printable.toOwnedSlice();
                     defer allocator.free(insert_text);
                     try buffer.changeInsertText(insert_text);
-                    editor.needs_completion = true;
+                    editor.dirty.completion = true;
 
                     // multiple-key
                 } else if (multiple_key) {
@@ -260,7 +260,7 @@ fn startEditor(allocator: std.mem.Allocator) !void {
             }
         }
 
-        editor.needs_redraw = editor.needs_redraw or buffer.pending_changes.items.len > 0;
+        editor.dirty.draw = editor.dirty.draw or buffer.pending_changes.items.len > 0;
         if (buffer.pending_changes.items.len > 0) {
             buffer.diagnostics.clearRetainingCapacity();
             try buffer.tsParse();
@@ -272,15 +272,15 @@ fn startEditor(allocator: std.mem.Allocator) !void {
             buffer.pending_changes.clearRetainingCapacity();
             buffer.version += 1;
         }
-        if (editor.needs_redraw) {
-            editor.needs_redraw = false;
+        if (editor.dirty.draw) {
+            editor.dirty.draw = false;
             try term.draw();
-        } else if (editor.needs_update_cursor) {
-            editor.needs_update_cursor = false;
+        } else if (editor.dirty.cursor) {
+            editor.dirty.cursor = false;
             try term.updateCursor();
         }
-        if (editor.needs_completion) {
-            editor.needs_completion = false;
+        if (editor.dirty.completion) {
+            editor.dirty.completion = false;
             for (buffer.lsp_connections.items) |conn| {
                 try conn.sendCompletionRequest();
             }

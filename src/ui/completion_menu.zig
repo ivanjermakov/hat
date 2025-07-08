@@ -111,7 +111,7 @@ pub const CompletionMenu = struct {
                 std.debug.print("\n", .{});
             }
         }
-        main.editor.needs_redraw = true;
+        main.editor.dirty.draw = true;
     }
 
     pub fn reset(self: *CompletionMenu) void {
@@ -122,7 +122,7 @@ pub const CompletionMenu = struct {
         self.display_items.clearRetainingCapacity();
         self.active_item = 0;
 
-        main.editor.needs_redraw = true;
+        main.editor.dirty.draw = true;
     }
 
     pub fn deinit(self: *CompletionMenu) void {
@@ -137,7 +137,7 @@ pub const CompletionMenu = struct {
         } else {
             self.active_item += 1;
         }
-        main.editor.needs_redraw = true;
+        main.editor.dirty.draw = true;
     }
 
     pub fn prevItem(self: *CompletionMenu) !void {
@@ -146,7 +146,7 @@ pub const CompletionMenu = struct {
         } else {
             self.active_item -= 1;
         }
-        main.editor.needs_redraw = true;
+        main.editor.dirty.draw = true;
     }
 
     pub fn accept(self: *CompletionMenu) !void {

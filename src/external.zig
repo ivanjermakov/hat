@@ -27,7 +27,7 @@ pub fn runExternalWait(allocator: std.mem.Allocator, cmd: []const []const u8, in
     const code = (try child.wait()).Exited;
     log.log(@This(), "external command exit code: {}\n", .{code});
     try main.term.switchBuf(true);
-    main.editor.needs_redraw = true;
+    main.editor.dirty.draw = true;
 
     return res;
 }

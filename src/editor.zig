@@ -6,13 +6,17 @@ const fzf = @import("ui/fzf.zig");
 const log = @import("log.zig");
 const lsp = @import("lsp.zig");
 
+pub const Dirty = struct {
+    draw: bool = false,
+    cursor: bool = false,
+    completion: bool = false
+};
+
 pub const Editor = struct {
     buffers: std.ArrayList(*buf.Buffer),
     active_buffer: *buf.Buffer = undefined,
     mode: Mode,
-    needs_update_cursor: bool,
-    needs_redraw: bool,
-    needs_completion: bool,
+    dirty: Dirty,
     completion_menu: cmp.CompletionMenu,
     lsp_connections: std.StringHashMap(lsp.LspConnection),
     allocator: std.mem.Allocator,
@@ -21,9 +25,7 @@ pub const Editor = struct {
         const editor = Editor{
             .buffers = std.ArrayList(*buf.Buffer).init(allocator),
             .mode = .normal,
-            .needs_update_cursor = false,
-            .needs_redraw = false,
-            .needs_completion = false,
+            .dirty = .{},
             .completion_menu = cmp.CompletionMenu.init(allocator),
             .lsp_connections = std.StringHashMap(lsp.LspConnection).init(allocator),
             .allocator = allocator,
