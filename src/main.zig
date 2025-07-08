@@ -265,11 +265,8 @@ fn startEditor(allocator: std.mem.Allocator) !void {
             buffer.diagnostics.clearRetainingCapacity();
             try buffer.tsParse();
             try buffer.updateLinePositions();
-            var lsp_iter = editor.lsp_connections.valueIterator();
-            while (lsp_iter.next()) |conn| {
+            for (buffer.lsp_connections.items) |conn| {
                 try conn.didChange(editor.active_buffer);
-                // TODO: send to correct server
-                break;
             }
             for (buffer.pending_changes.items) |*change| change.deinit();
             buffer.pending_changes.clearRetainingCapacity();
@@ -284,11 +281,8 @@ fn startEditor(allocator: std.mem.Allocator) !void {
         }
         if (editor.needs_completion) {
             editor.needs_completion = false;
-            var lsp_iter = editor.lsp_connections.valueIterator();
-            while (lsp_iter.next()) |conn| {
+            for (buffer.lsp_connections.items) |conn| {
                 try conn.sendCompletionRequest();
-                // TODO: send to correct server
-                break;
             }
         }
         std.time.sleep(sleep_ns);

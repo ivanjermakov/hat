@@ -26,6 +26,7 @@ pub fn build(b: *std.Build) void {
 
     const run = b.addRunArtifact(exe);
     run.step.dependOn(b.getInstallStep());
+    run.addArg("-freference-trace=10");
     if (b.args) |args| {
         run.addArgs(args);
     }
