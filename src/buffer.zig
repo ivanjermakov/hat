@@ -136,6 +136,8 @@ pub const Buffer = struct {
     pub fn reparse(self: *Buffer) !void {
         try self.updateRaw();
         if (self.ts_state) |*ts_state| try ts_state.reparse(self.content_raw.items);
+        try self.updateLinePositions();
+        try self.updateIndents();
     }
 
     pub fn updateContent(self: *Buffer) !void {
@@ -545,6 +547,11 @@ pub const Buffer = struct {
             // new line
             byte += 1;
         }
+    }
+
+    pub fn updateIndents(self: *Buffer) !void {
+        _ = self;
+        return error.Todo;
     }
 
     pub fn undo(self: *Buffer) !void {

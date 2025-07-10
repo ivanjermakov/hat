@@ -45,7 +45,7 @@ pub const TsConfig = struct {
     }
 
     pub fn loadIndentQuery(self: *const TsConfig, allocator: std.mem.Allocator) ![]const u8 {
-        const query_path = try env.expand(allocator, self.highlight_query, std.posix.getenv);
+        const query_path = try env.expand(allocator, self.indent_query, std.posix.getenv);
         defer allocator.free(query_path);
         return try std.fs.cwd().readFileAlloc(allocator, query_path, std.math.maxInt(usize));
     }
@@ -59,7 +59,7 @@ pub const TsConfig = struct {
     }
 
     pub fn indent_query_from_nvim(comptime name: []const u8) []const u8 {
-        return nvim_ts_path ++ "/queries/" ++ name ++ "/indent.scm";
+        return nvim_ts_path ++ "/queries/" ++ name ++ "/indents.scm";
     }
 };
 

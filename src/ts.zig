@@ -1,77 +1,82 @@
 const std = @import("std");
 const col = @import("color.zig");
 const ft = @import("file_type.zig");
+const log = @import("log.zig");
 const ts_c = @cImport({
     @cInclude("tree_sitter/api.h");
 });
 
 pub const ts = ts_c;
 
-pub const ParseResult = struct {
-    query: ?*ts.TSQuery = null,
-    spans: std.ArrayList(SpanAttrsTuple),
-    allocator: std.mem.Allocator,
+pub fn ParseResult(comptime SpanType: type) type {
+    return struct {
+        const Self = @This();
 
-    pub fn init(allocator: std.mem.Allocator, language: *ts.struct_TSLanguage, query_str: []const u8) !ParseResult {
-        var err: ts.TSQueryError = undefined;
-        const query = ts.ts_query_new(language, query_str.ptr, @intCast(query_str.len), null, &err);
-        if (err > 0) return error.Query;
+        query: ?*ts.TSQuery = null,
+        spans: std.ArrayList(SpanType),
+        allocator: std.mem.Allocator,
 
-        return .{
-            .query = query,
-            .spans = std.ArrayList(SpanAttrsTuple).init(allocator),
-            .allocator = allocator,
-        };
-    }
+        pub fn init(allocator: std.mem.Allocator, language: *ts.struct_TSLanguage, query_str: []const u8) !ParseResult(SpanType) {
+            var err: ts.TSQueryError = undefined;
+            const query = ts.ts_query_new(language, query_str.ptr, @intCast(query_str.len), null, &err);
+            if (err > 0) return error.Query;
 
-    pub fn deinit(self: *ParseResult) void {
-        if (self.query) |query| ts.ts_query_delete(query);
-        self.spans.deinit();
-    }
+            return .{
+                .query = query,
+                .spans = std.ArrayList(SpanType).init(allocator),
+                .allocator = allocator,
+            };
+        }
 
-    pub fn makeSpans(self: *ParseResult, tree: *ts.TSTree) !void {
-        self.spans.clearRetainingCapacity();
+        pub fn deinit(self: *Self) void {
+            if (self.query) |query| ts.ts_query_delete(query);
+            self.spans.deinit();
+        }
 
-        const cursor: *ts.TSQueryCursor = ts.ts_query_cursor_new().?;
-        defer ts.ts_query_cursor_delete(cursor);
-        const root_node = ts.ts_tree_root_node(tree);
-        ts.ts_query_cursor_exec(cursor, self.query.?, root_node);
+        pub fn makeSpans(self: *Self, tree: *ts.TSTree) !void {
+            self.spans.clearRetainingCapacity();
 
-        var match: ts.TSQueryMatch = undefined;
-        while (ts.ts_query_cursor_next_match(cursor, &match)) {
-            for (match.captures[0..match.capture_count]) |capture| {
-                var capture_name_len: u32 = undefined;
-                const capture_name = ts.ts_query_capture_name_for_id(self.query.?, capture.index, &capture_name_len);
-                const node_type = capture_name[0..capture_name_len];
-                const span: Span = .{
-                    .start_byte = ts.ts_node_start_byte(capture.node),
-                    .end_byte = ts.ts_node_end_byte(capture.node),
-                };
-                try self.spans.append(SpanAttrsTuple.init(span, node_type));
+            const cursor: *ts.TSQueryCursor = ts.ts_query_cursor_new().?;
+            defer ts.ts_query_cursor_delete(cursor);
+            const root_node = ts.ts_tree_root_node(tree);
+            ts.ts_query_cursor_exec(cursor, self.query.?, root_node);
+
+            var match: ts.TSQueryMatch = undefined;
+            while (ts.ts_query_cursor_next_match(cursor, &match)) {
+                for (match.captures[0..match.capture_count]) |capture| {
+                    var capture_name_len: u32 = undefined;
+                    const capture_name = ts.ts_query_capture_name_for_id(self.query.?, capture.index, &capture_name_len);
+                    const node_type = capture_name[0..capture_name_len];
+                    const span: Span = .{
+                        .start_byte = ts.ts_node_start_byte(capture.node),
+                        .end_byte = ts.ts_node_end_byte(capture.node),
+                    };
+                    try self.spans.append(SpanType.init(span, node_type));
+                }
             }
         }
-    }
-};
+    };
+}
 
 pub const State = struct {
     parser: ?*ts.TSParser = null,
     tree: ?*ts.TSTree = null,
-    highlight: ParseResult,
-    indent: ParseResult,
+    highlight: ParseResult(SpanAttrsTuple),
+    indent: ParseResult(SpanNameTuple),
     allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator, ts_conf: ft.TsConfig) !State {
         const language = try ts_conf.loadLanguage(allocator);
         const highlight_query = try ts_conf.loadHighlightQuery(allocator);
         defer allocator.free(highlight_query);
-        const indent_query = try ts_conf.loadHighlightQuery(allocator);
+        const indent_query = try ts_conf.loadIndentQuery(allocator);
         defer allocator.free(indent_query);
 
         const self = State{
             .parser = ts.ts_parser_new(),
             .allocator = allocator,
-            .highlight = try ParseResult.init(allocator, language(), highlight_query),
-            .indent = try ParseResult.init(allocator, language(), indent_query),
+            .highlight = try ParseResult(SpanAttrsTuple).init(allocator, language(), highlight_query),
+            .indent = try ParseResult(SpanNameTuple).init(allocator, language(), indent_query),
         };
         _ = ts.ts_parser_set_language(self.parser, language());
         return self;
@@ -92,6 +97,11 @@ pub const State = struct {
         //     log.log(@This(), "tree: {s}\n", .{std.mem.span(ts.ts_node_string(node))});
         // }
         try self.highlight.makeSpans(self.tree.?);
+        try self.indent.makeSpans(self.tree.?);
+        log.log(@This(), "spans:\n", .{});
+        for (self.indent.spans.items) |span| {
+            std.debug.print("\t{},{} - {s}\n", .{span.span.start_byte, span.span.end_byte, span.name});
+        }
     }
 
     pub fn deinit(self: *State) void {
@@ -147,3 +157,12 @@ pub const syntax_highlight = std.StaticStringMap([]const col.Attr).initComptime(
     .{ "number", col.attributes.number },
     .{ "comment", col.attributes.comment },
 });
+
+pub const SpanNameTuple = struct {
+    span: Span,
+    name: []const u8,
+
+    pub fn init(span: Span, capture_name: []const u8) SpanNameTuple {
+        return .{ .span = span, .name = capture_name };
+    }
+};

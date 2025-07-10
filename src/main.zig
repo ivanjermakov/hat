@@ -74,7 +74,6 @@ pub fn main() !void {
         var buffer = try buf.Buffer.init(allocator, path, file_content);
         defer buffer.deinit();
         try buffer.reparse();
-        try buffer.updateLinePositions();
         try ter.printBuffer(
             &buffer,
             std_out.writer().any(),
@@ -269,7 +268,6 @@ fn startEditor(allocator: std.mem.Allocator) !void {
         if (buffer.pending_changes.items.len > 0) {
             buffer.diagnostics.clearRetainingCapacity();
             try buffer.reparse();
-            try buffer.updateLinePositions();
             for (buffer.lsp_connections.items) |conn| {
                 try conn.didChange(editor.active_buffer);
             }
