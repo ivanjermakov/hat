@@ -134,6 +134,7 @@ pub const Terminal = struct {
     }
 
     fn drawBuffer(self: *Terminal, buffer: *buf.Buffer) !void {
+        const highlight_spans = buffer.ts_state.?.highlight.spans.items;
         var attrs_buf = std.mem.zeroes([128]u8);
         var attrs_stream = std.io.fixedBufferStream(&attrs_buf);
         var attrs: []const u8 = undefined;
@@ -170,8 +171,8 @@ pub const Terminal = struct {
                 const buffer_col = @as(i32, @intCast(term_col)) + buffer.offset.col;
 
                 if (term_col >= self.dimensions.width) break;
-                const ch_attrs: []const co.Attr = b: while (span_index < buffer.ts_state.spans.items.len) {
-                    const span = buffer.ts_state.spans.items[span_index];
+                const ch_attrs: []const co.Attr = b: while (span_index < highlight_spans.len) {
+                    const span = highlight_spans[span_index];
                     if (span.span.start_byte > byte) break :b co.attributes.text;
                     if (byte >= span.span.start_byte and byte < span.span.end_byte) {
                         break :b span.attrs;
@@ -350,6 +351,7 @@ pub fn printBuffer(buffer: *buf.Buffer, writer: std.io.AnyWriter, highlight: ?Hi
         end_row = start_row + @as(i32, @intCast(hi.term_height));
     }
 
+    const highlight_spans = buffer.ts_state.?.highlight.spans.items;
     var span_index: usize = 0;
     var row: i32 = start_row;
     while (row < end_row) {
@@ -367,8 +369,8 @@ pub fn printBuffer(buffer: *buf.Buffer, writer: std.io.AnyWriter, highlight: ?Hi
 
         for (line) |ch| {
             attrs_stream.reset();
-            const ch_attrs: []const co.Attr = b: while (span_index < buffer.ts_state.spans.items.len) {
-                const span = buffer.ts_state.spans.items[span_index];
+            const ch_attrs: []const co.Attr = b: while (span_index < highlight_spans.len) {
+                const span = highlight_spans[span_index];
                 if (span.span.start_byte > byte) break :b co.attributes.text;
                 if (byte >= span.span.start_byte and byte < span.span.end_byte) {
                     break :b span.attrs;

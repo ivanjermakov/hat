@@ -87,7 +87,7 @@ pub const Buffer = struct {
     /// Array list of array lists of utf8 codepoints
     content: std.ArrayList(std.ArrayList(u21)),
     content_raw: std.ArrayList(u8),
-    ts_state: ts.State,
+    ts_state: ?ts.State = null,
     /// End is inclusive
     selection: ?Span = null,
     diagnostics: std.ArrayList(lsp.types.Diagnostic),
@@ -117,10 +117,6 @@ pub const Buffer = struct {
             .uri = uri,
             .content = std.ArrayList(std.ArrayList(u21)).init(allocator),
             .content_raw = raw,
-            .ts_state = .{
-                .spans = std.ArrayList(ts.SpanAttrsTuple).init(allocator),
-                .allocator = allocator,
-            },
             .diagnostics = std.ArrayList(lsp.types.Diagnostic).init(allocator),
             .line_positions = std.ArrayList(usize).init(allocator),
             .history = std.ArrayList(std.ArrayList(cha.Change)).init(allocator),
@@ -131,7 +127,7 @@ pub const Buffer = struct {
         try self.updateContent();
         try self.updateLinePositions();
         if (self.file_type.ts) |ts_conf| {
-            try self.ts_state.initParser(ts_conf);
+            self.ts_state = try ts.State.init(allocator, ts_conf);
         }
         try self.reparse();
         return self;
@@ -139,7 +135,7 @@ pub const Buffer = struct {
 
     pub fn reparse(self: *Buffer) !void {
         try self.updateRaw();
-        try self.ts_state.reparse(self.content_raw.items);
+        if (self.ts_state) |*ts_state| try ts_state.reparse(self.content_raw.items);
     }
 
     pub fn updateContent(self: *Buffer) !void {
@@ -166,7 +162,7 @@ pub const Buffer = struct {
         self.allocator.free(self.uri);
         self.allocator.free(self.path);
 
-        self.ts_state.deinit();
+        if (self.ts_state) |*ts_state| ts_state.deinit();
 
         for (self.content.items) |line| line.deinit();
         self.content.deinit();

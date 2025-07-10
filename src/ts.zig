@@ -7,22 +7,69 @@ const ts_c = @cImport({
 
 pub const ts = ts_c;
 
-pub const State = struct {
-    spans: std.ArrayList(SpanAttrsTuple),
-    parser: ?*ts.TSParser = null,
+pub const ParseResult = struct {
     query: ?*ts.TSQuery = null,
-    tree: ?*ts.TSTree = null,
+    spans: std.ArrayList(SpanAttrsTuple),
     allocator: std.mem.Allocator,
 
-    pub fn initParser(self: *State, ts_conf: ft.TsConfig) !void {
-        const language = try ts_conf.loadLanguage(self.allocator);
-        self.parser = ts.ts_parser_new();
-        _ = ts.ts_parser_set_language(self.parser, language());
-        const query_str = try ts_conf.loadHighlightQuery(self.allocator);
-        defer self.allocator.free(query_str);
+    pub fn init(allocator: std.mem.Allocator, ts_conf: ft.TsConfig, language: *ts.struct_TSLanguage) !ParseResult {
+        const query_str = try ts_conf.loadHighlightQuery(allocator);
+        defer allocator.free(query_str);
         var err: ts.TSQueryError = undefined;
-        self.query = ts.ts_query_new(language(), query_str.ptr, @intCast(query_str.len), null, &err);
+        const query = ts.ts_query_new(language, query_str.ptr, @intCast(query_str.len), null, &err);
         if (err > 0) return error.Query;
+
+        return .{
+            .query = query,
+            .spans = std.ArrayList(SpanAttrsTuple).init(allocator),
+            .allocator = allocator,
+        };
+    }
+
+    pub fn deinit(self: *ParseResult) void {
+        if (self.query) |query| ts.ts_query_delete(query);
+        self.spans.deinit();
+    }
+
+    pub fn makeSpans(self: *ParseResult, tree: *ts.TSTree) !void {
+        self.spans.clearRetainingCapacity();
+
+        const cursor: *ts.TSQueryCursor = ts.ts_query_cursor_new().?;
+        defer ts.ts_query_cursor_delete(cursor);
+        const root_node = ts.ts_tree_root_node(tree);
+        ts.ts_query_cursor_exec(cursor, self.query.?, root_node);
+
+        var match: ts.TSQueryMatch = undefined;
+        while (ts.ts_query_cursor_next_match(cursor, &match)) {
+            for (match.captures[0..match.capture_count]) |capture| {
+                var capture_name_len: u32 = undefined;
+                const capture_name = ts.ts_query_capture_name_for_id(self.query.?, capture.index, &capture_name_len);
+                const node_type = capture_name[0..capture_name_len];
+                const span: Span = .{
+                    .start_byte = ts.ts_node_start_byte(capture.node),
+                    .end_byte = ts.ts_node_end_byte(capture.node),
+                };
+                try self.spans.append(SpanAttrsTuple.init(span, node_type));
+            }
+        }
+    }
+};
+
+pub const State = struct {
+    parser: ?*ts.TSParser = null,
+    tree: ?*ts.TSTree = null,
+    highlight: ParseResult,
+    allocator: std.mem.Allocator,
+
+    pub fn init(allocator: std.mem.Allocator, ts_conf: ft.TsConfig) !State {
+        const language = try ts_conf.loadLanguage(allocator);
+        const self = State{
+            .parser = ts.ts_parser_new(),
+            .allocator = allocator,
+            .highlight = try ParseResult.init(allocator, ts_conf, language()),
+        };
+        _ = ts.ts_parser_set_language(self.parser, language());
+        return self;
     }
 
     pub fn reparse(self: *State, content: []const u8) !void {
@@ -39,38 +86,13 @@ pub const State = struct {
         //     const node = ts.ts_tree_root_node(self.tree);
         //     log.log(@This(), "tree: {s}\n", .{std.mem.span(ts.ts_node_string(node))});
         // }
-        try self.makeSpans();
+        try self.highlight.makeSpans(self.tree.?);
     }
 
     pub fn deinit(self: *State) void {
         if (self.parser) |p| ts.ts_parser_delete(p);
         if (self.tree) |t| ts.ts_tree_delete(t);
-        if (self.query) |query| ts.ts_query_delete(query);
-        self.spans.deinit();
-    }
-
-    fn makeSpans(self: *State) !void {
-        if (self.tree == null) return;
-        self.spans.clearRetainingCapacity();
-
-        const cursor: *ts.TSQueryCursor = ts.ts_query_cursor_new().?;
-        defer ts.ts_query_cursor_delete(cursor);
-        const root_node = ts.ts_tree_root_node(self.tree);
-        ts.ts_query_cursor_exec(cursor, self.query.?, root_node);
-
-        var match: ts.TSQueryMatch = undefined;
-        while (ts.ts_query_cursor_next_match(cursor, &match)) {
-            for (match.captures[0..match.capture_count]) |capture| {
-                var capture_name_len: u32 = undefined;
-                const capture_name = ts.ts_query_capture_name_for_id(self.query.?, capture.index, &capture_name_len);
-                const node_type = capture_name[0..capture_name_len];
-                const span: Span = .{
-                    .start_byte = ts.ts_node_start_byte(capture.node),
-                    .end_byte = ts.ts_node_end_byte(capture.node),
-                };
-                try self.spans.append(SpanAttrsTuple.init(span, node_type));
-            }
-        }
+        self.highlight.deinit();
     }
 };
 
