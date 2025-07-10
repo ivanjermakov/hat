@@ -51,7 +51,8 @@ pub fn ParseResult(comptime SpanType: type) type {
                         .start_byte = ts.ts_node_start_byte(capture.node),
                         .end_byte = ts.ts_node_end_byte(capture.node),
                     };
-                    try self.spans.append(SpanType.init(span, node_type));
+                    const tuple = SpanType.init(span, node_type);
+                    if (tuple) |t| try self.spans.append(t);
                 }
             }
         }
@@ -98,10 +99,6 @@ pub const State = struct {
         // }
         try self.highlight.makeSpans(self.tree.?);
         try self.indent.makeSpans(self.tree.?);
-        log.log(@This(), "spans:\n", .{});
-        for (self.indent.spans.items) |span| {
-            std.debug.print("\t{},{} - {s}\n", .{span.span.start_byte, span.span.end_byte, span.name});
-        }
     }
 
     pub fn deinit(self: *State) void {
@@ -115,6 +112,10 @@ pub const State = struct {
 pub const Span = struct {
     start_byte: usize,
     end_byte: usize,
+
+    pub fn len(self: Span) usize {
+        return self.end_byte - self.start_byte;
+    }
 };
 
 pub const SpanAttrsTuple = struct {
@@ -123,7 +124,7 @@ pub const SpanAttrsTuple = struct {
 
     /// Capture name is a dot-separated list of ts node types, forming hierarchy, e.g. `identifier.type`
     /// @see https://tree-sitter.github.io/tree-sitter/using-parsers/queries/2-operators.html#capturing-nodes
-    pub fn init(span: Span, capture_name: []const u8) SpanAttrsTuple {
+    pub fn init(span: Span, capture_name: []const u8) ?SpanAttrsTuple {
         return .{
             .span = span,
             .attrs = if (findAttrs(capture_name)) |as| as else col.attributes.text,
@@ -162,7 +163,8 @@ pub const SpanNameTuple = struct {
     span: Span,
     name: []const u8,
 
-    pub fn init(span: Span, capture_name: []const u8) SpanNameTuple {
+    pub fn init(span: Span, capture_name: []const u8) ?SpanNameTuple {
+        if (!std.mem.eql(u8, capture_name, "indent.begin")) return null;
         return .{ .span = span, .name = capture_name };
     }
 };

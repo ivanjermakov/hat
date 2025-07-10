@@ -97,6 +97,8 @@ pub const Buffer = struct {
     /// (0, 0) means Buffer.cursor is the same as window cursor
     offset: Cursor = .{},
     line_positions: std.ArrayList(usize),
+    /// Indent depth for each line
+    indents: std.ArrayList(usize),
     history: std.ArrayList(std.ArrayList(cha.Change)),
     history_index: ?usize = null,
     pending_changes: std.ArrayList(cha.Change),
@@ -119,6 +121,7 @@ pub const Buffer = struct {
             .content_raw = raw,
             .diagnostics = std.ArrayList(lsp.types.Diagnostic).init(allocator),
             .line_positions = std.ArrayList(usize).init(allocator),
+            .indents = std.ArrayList(usize).init(allocator),
             .history = std.ArrayList(std.ArrayList(cha.Change)).init(allocator),
             .pending_changes = std.ArrayList(cha.Change).init(allocator),
             .lsp_connections = std.ArrayList(*lsp.LspConnection).init(allocator),
@@ -172,6 +175,7 @@ pub const Buffer = struct {
 
         self.diagnostics.deinit();
         self.line_positions.deinit();
+        self.indents.deinit();
 
         for (self.history.items) |*i| {
             for (i.items) |*c| c.deinit();
@@ -547,11 +551,46 @@ pub const Buffer = struct {
             // new line
             byte += 1;
         }
+        // indicate last line length
+        try self.line_positions.append(byte);
     }
 
     pub fn updateIndents(self: *Buffer) !void {
-        _ = self;
-        return error.Todo;
+        const spans = if (self.ts_state) |ts_state| ts_state.indent.spans.items else return;
+        self.indents.clearRetainingCapacity();
+
+        var indent_bytes = std.AutoHashMap(usize, void).init(self.allocator);
+        defer indent_bytes.deinit();
+        var dedent_bytes = std.AutoHashMap(usize, void).init(self.allocator);
+        defer dedent_bytes.deinit();
+        for (spans) |span| {
+            try indent_bytes.put(span.span.start_byte, {});
+            try dedent_bytes.put(span.span.end_byte - 1, {});
+        }
+
+        var indent: usize = 0;
+        var indent_next: usize = 0;
+        for (0..self.line_positions.items.len - 1) |row| {
+            indent = indent_next;
+            const line_byte_start = self.line_positions.items[row];
+            const line_byte_end = self.line_positions.items[row + 1];
+            var line_indents: usize = 0;
+            var line_dedents: usize = 0;
+            for (line_byte_start..line_byte_end) |byte| {
+                if (indent_bytes.contains(byte)) line_indents += 1;
+                if (dedent_bytes.contains(byte)) line_dedents += 1;
+            }
+            // indent is applied starting from next line, dedent is applied immediately
+            switch (std.math.order(line_indents, line_dedents)) {
+                .gt => indent_next += 1,
+                .lt => {
+                    indent -= 1;
+                    indent_next -= 1;
+                },
+                else => {},
+            }
+            try self.indents.append(indent);
+        }
     }
 
     pub fn undo(self: *Buffer) !void {
