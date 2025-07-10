@@ -57,17 +57,21 @@ pub const State = struct {
     parser: ?*ts.TSParser = null,
     tree: ?*ts.TSTree = null,
     highlight: ParseResult,
+    indent: ParseResult,
     allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator, ts_conf: ft.TsConfig) !State {
         const language = try ts_conf.loadLanguage(allocator);
         const highlight_query = try ts_conf.loadHighlightQuery(allocator);
         defer allocator.free(highlight_query);
+        const indent_query = try ts_conf.loadHighlightQuery(allocator);
+        defer allocator.free(indent_query);
 
         const self = State{
             .parser = ts.ts_parser_new(),
             .allocator = allocator,
             .highlight = try ParseResult.init(allocator, language(), highlight_query),
+            .indent = try ParseResult.init(allocator, language(), indent_query),
         };
         _ = ts.ts_parser_set_language(self.parser, language());
         return self;
@@ -94,6 +98,7 @@ pub const State = struct {
         if (self.parser) |p| ts.ts_parser_delete(p);
         if (self.tree) |t| ts.ts_tree_delete(t);
         self.highlight.deinit();
+        self.indent.deinit();
     }
 };
 

@@ -16,12 +16,14 @@ pub const TsConfig = struct {
     lib_path: []const u8,
     lib_symbol: []const u8,
     highlight_query: []const u8,
+    indent_query: []const u8,
 
     pub fn from_nvim(comptime name: []const u8) TsConfig {
         return .{
             .lib_path = lib_path_from_nvim(name),
             .lib_symbol = "tree_sitter_" ++ name,
             .highlight_query = highlight_query_from_nvim(name),
+            .indent_query = indent_query_from_nvim(name),
         };
     }
 
@@ -42,12 +44,22 @@ pub const TsConfig = struct {
         return try std.fs.cwd().readFileAlloc(allocator, query_path, std.math.maxInt(usize));
     }
 
+    pub fn loadIndentQuery(self: *const TsConfig, allocator: std.mem.Allocator) ![]const u8 {
+        const query_path = try env.expand(allocator, self.highlight_query, std.posix.getenv);
+        defer allocator.free(query_path);
+        return try std.fs.cwd().readFileAlloc(allocator, query_path, std.math.maxInt(usize));
+    }
+
     pub fn lib_path_from_nvim(comptime name: []const u8) []const u8 {
         return nvim_ts_path ++ "/parser/" ++ name ++ ".so";
     }
 
     pub fn highlight_query_from_nvim(comptime name: []const u8) []const u8 {
         return nvim_ts_path ++ "/queries/" ++ name ++ "/highlights.scm";
+    }
+
+    pub fn indent_query_from_nvim(comptime name: []const u8) []const u8 {
+        return nvim_ts_path ++ "/queries/" ++ name ++ "/indent.scm";
     }
 };
 
@@ -64,6 +76,7 @@ pub const file_type = std.StaticStringMap(FileTypeConfig).initComptime(.{
             .lib_path = TsConfig.lib_path_from_nvim("typescript"),
             .lib_symbol = "tree_sitter_typescript",
             .highlight_query = TsConfig.highlight_query_from_nvim("ecma"),
+            .indent_query = TsConfig.highlight_query_from_nvim("ecma"),
         },
     } },
     .{ ".zig", FileTypeConfig{
