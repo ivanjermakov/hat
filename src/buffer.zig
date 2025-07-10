@@ -87,7 +87,7 @@ pub const Buffer = struct {
     /// Array list of array lists of utf8 codepoints
     content: std.ArrayList(std.ArrayList(u21)),
     content_raw: std.ArrayList(u8),
-    ts_state: ts.TsState,
+    ts_state: ts.State,
     /// End is inclusive
     selection: ?Span = null,
     diagnostics: std.ArrayList(lsp.types.Diagnostic),

@@ -5,14 +5,16 @@ const ts_c = @cImport({
     @cInclude("tree_sitter/api.h");
 });
 
-pub const TsState = struct {
+pub const ts = ts_c;
+
+pub const State = struct {
     spans: std.ArrayList(SpanAttrsTuple),
     parser: ?*ts.TSParser = null,
     query: ?*ts.TSQuery = null,
     tree: ?*ts.TSTree = null,
     allocator: std.mem.Allocator,
 
-    pub fn initParser(self: *TsState, ts_conf: ft.TsConfig) !void {
+    pub fn initParser(self: *State, ts_conf: ft.TsConfig) !void {
         const language = try ts_conf.loadLanguage(self.allocator);
         self.parser = ts.ts_parser_new();
         _ = ts.ts_parser_set_language(self.parser, language());
@@ -23,7 +25,7 @@ pub const TsState = struct {
         if (err > 0) return error.Query;
     }
 
-    pub fn reparse(self: *TsState, content: []const u8) !void {
+    pub fn reparse(self: *State, content: []const u8) !void {
         if (self.parser == null) return;
 
         if (self.tree) |old_tree| ts.ts_tree_delete(old_tree);
@@ -40,14 +42,14 @@ pub const TsState = struct {
         try self.makeSpans();
     }
 
-    pub fn deinit(self: *TsState) void {
+    pub fn deinit(self: *State) void {
         if (self.parser) |p| ts.ts_parser_delete(p);
         if (self.tree) |t| ts.ts_tree_delete(t);
         if (self.query) |query| ts.ts_query_delete(query);
         self.spans.deinit();
     }
 
-    fn makeSpans(self: *TsState) !void {
+    fn makeSpans(self: *State) !void {
         if (self.tree == null) return;
         self.spans.clearRetainingCapacity();
 
@@ -110,8 +112,6 @@ pub const SpanAttrsTuple = struct {
         return null;
     }
 };
-
-pub const ts = ts_c;
 
 pub const syntax_highlight = std.StaticStringMap([]const col.Attr).initComptime(.{
     .{ "keyword", col.attributes.keyword },
