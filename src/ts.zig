@@ -12,9 +12,7 @@ pub const ParseResult = struct {
     spans: std.ArrayList(SpanAttrsTuple),
     allocator: std.mem.Allocator,
 
-    pub fn init(allocator: std.mem.Allocator, ts_conf: ft.TsConfig, language: *ts.struct_TSLanguage) !ParseResult {
-        const query_str = try ts_conf.loadHighlightQuery(allocator);
-        defer allocator.free(query_str);
+    pub fn init(allocator: std.mem.Allocator, language: *ts.struct_TSLanguage, query_str: []const u8) !ParseResult {
         var err: ts.TSQueryError = undefined;
         const query = ts.ts_query_new(language, query_str.ptr, @intCast(query_str.len), null, &err);
         if (err > 0) return error.Query;
@@ -63,10 +61,13 @@ pub const State = struct {
 
     pub fn init(allocator: std.mem.Allocator, ts_conf: ft.TsConfig) !State {
         const language = try ts_conf.loadLanguage(allocator);
+        const highlight_query = try ts_conf.loadHighlightQuery(allocator);
+        defer allocator.free(highlight_query);
+
         const self = State{
             .parser = ts.ts_parser_new(),
             .allocator = allocator,
-            .highlight = try ParseResult.init(allocator, ts_conf, language()),
+            .highlight = try ParseResult.init(allocator, language(), highlight_query),
         };
         _ = ts.ts_parser_set_language(self.parser, language());
         return self;
