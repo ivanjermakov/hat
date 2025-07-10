@@ -535,6 +535,7 @@ pub const Buffer = struct {
     }
 
     pub fn changeLineAlignIndent(self: *Buffer, row: i32) !void {
+        const old_cursor = self.cursor;
         const line = self.content.items[@intCast(row)].items;
         const correct_indent: usize = self.indents.items[@intCast(row)];
         const correct_indent_spaces = correct_indent * self.file_type.indent_spaces;
@@ -551,6 +552,7 @@ pub const Buffer = struct {
         defer self.allocator.free(old_text);
         var change = try cha.Change.initReplace(self.allocator, span, old_text, new_text);
         try self.appendChange(&change);
+        try self.moveCursor(old_cursor);
     }
 
     pub fn clearSelection(self: *Buffer) !void {
