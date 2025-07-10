@@ -194,6 +194,8 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     try buffer.undo();
                 } else if (editor.mode == .normal and ch == 'U') {
                     try buffer.redo();
+                } else if (editor.mode == .normal and ch == '=') {
+                    try buffer.changeLineAlignIndent(buffer.cursor.row);
 
                     // insert mode
                 } else if (editor.mode == .insert and code == .delete) {

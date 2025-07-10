@@ -534,6 +534,25 @@ pub const Buffer = struct {
         try self.moveCursor(pos);
     }
 
+    pub fn changeLineAlignIndent(self: *Buffer, row: i32) !void {
+        const line = self.content.items[@intCast(row)].items;
+        const correct_indent: usize = self.indents.items[@intCast(row)];
+        const correct_indent_spaces = correct_indent * self.file_type.indent_spaces;
+        const current_indent_spaces: usize = lineIndentSpaces(line);
+        if (correct_indent_spaces == current_indent_spaces) return;
+        const span = Span{
+            .start = .{ .row = row, .col = 0 },
+            .end = .{ .row = row, .col = @intCast(current_indent_spaces) },
+        };
+        const new_text = try self.allocator.alloc(u21, correct_indent_spaces);
+        defer self.allocator.free(new_text);
+        @memset(new_text, ' ');
+        const old_text = try self.textAt(self.allocator, span);
+        defer self.allocator.free(old_text);
+        var change = try cha.Change.initReplace(self.allocator, span, old_text, new_text);
+        try self.appendChange(&change);
+    }
+
     pub fn clearSelection(self: *Buffer) !void {
         self.selection = null;
         main.editor.dirty.draw = true;
@@ -908,4 +927,13 @@ fn isDigit(ch: u21) bool {
 /// Token is a string that is usually lexed by a programming language as a single name
 fn isToken(ch: u21) bool {
     return isAlphabet(ch) or isDigit(ch) or ch == '_' or ch == '-';
+}
+
+fn lineIndentSpaces(line: []const u21) usize {
+    var leading_spaces: usize = 0;
+    for (line) |ch| {
+        if (ch != ' ') break;
+        leading_spaces += 1;
+    }
+    return leading_spaces;
 }

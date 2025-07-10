@@ -52,6 +52,7 @@ pub const Editor = struct {
 
         try self.buffers.append(buffer);
         self.active_buffer = buffer;
+        main.editor.dirty.draw = true;
 
         const lsp_configs = try lsp.findLspsByFileType(self.allocator, buffer.file_type.name);
         defer self.allocator.free(lsp_configs);
