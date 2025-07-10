@@ -69,6 +69,16 @@ pub const Editor = struct {
         }
     }
 
+    pub fn openScratch(self: *Editor, content: ?[]const u8) !void {
+        const buffer = try self.allocator.create(buf.Buffer);
+        buffer.* = try buf.Buffer.init(self.allocator, null, content orelse "");
+        log.log(@This(), "opening scratch {s}\n", .{buffer.path});
+
+        try self.buffers.append(buffer);
+        self.active_buffer = buffer;
+        main.editor.dirty.draw = true;
+    }
+
     pub fn deinit(self: *Editor) void {
         for (self.buffers.items) |buffer| {
             buffer.deinit();

@@ -106,18 +106,24 @@ pub const Buffer = struct {
     /// Changes that yet to become a part of Buffer.history
     uncommitted_changes: std.ArrayList(cha.Change),
     lsp_connections: std.ArrayList(*lsp.LspConnection),
+    scratch: bool = false,
     allocator: std.mem.Allocator,
 
-    pub fn init(allocator: std.mem.Allocator, path: []const u8, content_raw: []const u8) !Buffer {
+    pub fn init(allocator: std.mem.Allocator, path: ?[]const u8, content_raw: []const u8) !Buffer {
         var raw = std.ArrayList(u8).init(allocator);
         try raw.appendSlice(content_raw);
 
-        const file_ext = std.fs.path.extension(path);
+        const scratch = path == null;
+        const file_ext = if (path) |p| std.fs.path.extension(p) else "";
         const file_type = ft.file_type.get(file_ext) orelse ft.plain;
+        const buf_path = if (path) |p|
+            try allocator.dupe(u8, p)
+        else
+            try std.fmt.allocPrint(allocator, "scratch{d:0>2}", .{nextScratchId()});
 
-        const uri = try std.fmt.allocPrint(allocator, "file://{s}", .{path});
+        const uri = try std.fmt.allocPrint(allocator, "file://{s}", .{buf_path});
         var self = Buffer{
-            .path = try allocator.dupe(u8, path),
+            .path = buf_path,
             .file_type = file_type,
             .uri = uri,
             .content = std.ArrayList(std.ArrayList(u21)).init(allocator),
@@ -129,6 +135,7 @@ pub const Buffer = struct {
             .pending_changes = std.ArrayList(cha.Change).init(allocator),
             .uncommitted_changes = std.ArrayList(cha.Change).init(allocator),
             .lsp_connections = std.ArrayList(*lsp.LspConnection).init(allocator),
+            .scratch = scratch,
             .allocator = allocator,
         };
         try self.updateContent();
@@ -206,7 +213,7 @@ pub const Buffer = struct {
             term_cursor.col >= 0 and term_cursor.col < dims.width;
         if (!in_term) return;
 
-        if (new_buf_cursor.row > self.content.items.len - 1) return;
+        if (new_buf_cursor.row + 1 > self.content.items.len) return;
         const line = &self.content.items[@intCast(new_buf_cursor.row)];
         const max_col = line.items.len;
         const col: i32 = @intCast(@min(new_buf_cursor.col, max_col));
@@ -956,4 +963,10 @@ fn lineIndentSpaces(line: []const u21) usize {
         leading_spaces += 1;
     }
     return leading_spaces;
+}
+
+var scratch_id: usize = 0;
+fn nextScratchId() usize {
+    scratch_id += 1;
+    return scratch_id;
 }
