@@ -134,7 +134,6 @@ pub const Terminal = struct {
     }
 
     fn drawBuffer(self: *Terminal, buffer: *buf.Buffer) !void {
-        const highlight_spans = buffer.ts_state.?.highlight.spans.items;
         var attrs_buf = std.mem.zeroes([128]u8);
         var attrs_stream = std.io.fixedBufferStream(&attrs_buf);
         var attrs: []const u8 = undefined;
@@ -171,17 +170,20 @@ pub const Terminal = struct {
                 const buffer_col = @as(i32, @intCast(term_col)) + buffer.offset.col;
 
                 if (term_col >= self.dimensions.width) break;
-                const ch_attrs: []const co.Attr = b: while (span_index < highlight_spans.len) {
-                    const span = highlight_spans[span_index];
-                    if (span.span.start_byte > byte) break :b co.attributes.text;
-                    if (byte >= span.span.start_byte and byte < span.span.end_byte) {
-                        break :b span.attrs;
-                    }
-                    span_index += 1;
-                } else {
-                    break :b co.attributes.text;
-                };
-                try co.attributes.write(ch_attrs, attrs_stream.writer());
+                if (buffer.ts_state) |ts_state| {
+                    const highlight_spans = ts_state.highlight.spans.items;
+                    const ch_attrs: []const co.Attr = b: while (span_index < highlight_spans.len) {
+                        const span = highlight_spans[span_index];
+                        if (span.span.start_byte > byte) break :b co.attributes.text;
+                        if (byte >= span.span.start_byte and byte < span.span.end_byte) {
+                            break :b span.attrs;
+                        }
+                        span_index += 1;
+                    } else {
+                        break :b co.attributes.text;
+                    };
+                    try co.attributes.write(ch_attrs, attrs_stream.writer());
+                }
 
                 if (buffer.selection) |selection| {
                     if (selection.inRangeInclusive(.{ .row = buffer_row, .col = buffer_col })) {
