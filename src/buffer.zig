@@ -101,7 +101,10 @@ pub const Buffer = struct {
     indents: std.ArrayList(usize),
     history: std.ArrayList(std.ArrayList(cha.Change)),
     history_index: ?usize = null,
+    /// Changes that needs to be sent to LSP clients
     pending_changes: std.ArrayList(cha.Change),
+    /// Changes that yet to become a part of Buffer.history
+    uncommitted_changes: std.ArrayList(cha.Change),
     lsp_connections: std.ArrayList(*lsp.LspConnection),
     allocator: std.mem.Allocator,
 
@@ -124,6 +127,7 @@ pub const Buffer = struct {
             .indents = std.ArrayList(usize).init(allocator),
             .history = std.ArrayList(std.ArrayList(cha.Change)).init(allocator),
             .pending_changes = std.ArrayList(cha.Change).init(allocator),
+            .uncommitted_changes = std.ArrayList(cha.Change).init(allocator),
             .lsp_connections = std.ArrayList(*lsp.LspConnection).init(allocator),
             .allocator = allocator,
         };
@@ -185,6 +189,7 @@ pub const Buffer = struct {
 
         for (self.pending_changes.items) |*c| c.deinit();
         self.pending_changes.deinit();
+        self.uncommitted_changes.deinit();
 
         self.lsp_connections.deinit();
     }
@@ -273,14 +278,7 @@ pub const Buffer = struct {
     pub fn enterMode(self: *Buffer, mode: edi.Mode) !void {
         if (main.editor.mode == mode) return;
         switch (main.editor.mode) {
-            .insert => {
-                const last_idx = self.history.items.len - 1;
-                if (self.history.items[last_idx].items.len == 0) {
-                    log.log(@This(), "no changes in insert mode, popping history\n", .{});
-                    self.history.items[last_idx].deinit();
-                    _ = self.history.orderedRemove(last_idx);
-                }
-            },
+            .insert => try self.commitChanges(),
             else => {},
         }
         switch (mode) {
@@ -290,10 +288,7 @@ pub const Buffer = struct {
             },
             .select => try self.selectChar(),
             .select_line => try self.selectLine(),
-            .insert => {
-                try self.clearSelection();
-                try self.history.append(std.ArrayList(cha.Change).init(self.allocator));
-            },
+            .insert => try self.clearSelection(),
         }
         log.log(@This(), "mode: {}->{}\n", .{ main.editor.mode, mode });
         main.editor.mode = mode;
@@ -389,23 +384,26 @@ pub const Buffer = struct {
 
     pub fn appendChange(self: *Buffer, change: *cha.Change) !void {
         try self.applyChange(change);
+        try self.uncommitted_changes.append(change.*);
         try self.pending_changes.append(try change.clone(self.allocator));
+    }
 
-        if (main.editor.mode == .insert) {
-            var last_hist = &self.history.items[self.history.items.len - 1];
-            try last_hist.append(change.*);
-            log.log(@This(), "appended\n", .{});
-        } else {
-            // history overwrite
-            if ((self.history_index orelse 0) + 1 != self.history.items.len) {
-                const i = self.history_index orelse 0;
-                for (self.history.items[i..]) |*ch| ch.deinit();
-                try self.history.replaceRange(i, self.history.items.len - i, &.{});
-            }
-            var new_hist = try std.ArrayList(cha.Change).initCapacity(self.allocator, 1);
-            try new_hist.append(change.*);
-            try self.history.append(new_hist);
+    pub fn commitChanges(self: *Buffer) !void {
+        if (self.uncommitted_changes.items.len == 0) {
+            log.log(@This(), "no changes to commit\n", .{});
+            return;
         }
+        log.log(@This(), "commit {} changes\n", .{self.uncommitted_changes.items.len});
+        // history overwrite
+        if ((self.history_index orelse 0) + 1 != self.history.items.len) {
+            const i = self.history_index orelse 0;
+            for (self.history.items[i..]) |*ch| ch.deinit();
+            try self.history.replaceRange(i, self.history.items.len - i, &.{});
+        }
+        var new_hist = try std.ArrayList(cha.Change).initCapacity(self.allocator, 1);
+        try new_hist.appendSlice(self.uncommitted_changes.items);
+        self.uncommitted_changes.clearRetainingCapacity();
+        try self.history.append(new_hist);
         self.history_index = self.history.items.len - 1;
     }
 
@@ -456,6 +454,7 @@ pub const Buffer = struct {
         defer self.allocator.free(utf_text);
         var change = try cha.Change.initDelete(self.allocator, span, utf_text);
         try self.appendChange(&change);
+        try self.commitChanges();
     }
 
     pub fn changeSelectionDelete(self: *Buffer) !void {
@@ -473,6 +472,7 @@ pub const Buffer = struct {
             defer self.allocator.free(utf_text);
             var change = try cha.Change.initDelete(self.allocator, span, utf_text);
             try self.appendChange(&change);
+            try self.commitChanges();
         }
     }
 
@@ -486,6 +486,7 @@ pub const Buffer = struct {
         try buffer.enterMode(.select);
         try buffer.changeSelectionDelete();
 
+        try buffer.commitChanges();
         try buffer.updateRaw();
         try testing.expectEqualStrings("ac", buffer.content_raw.items);
     }
@@ -502,6 +503,7 @@ pub const Buffer = struct {
         try buffer.moveCursor(.{ .row = 0, .col = 3 });
         try buffer.changeSelectionDelete();
 
+        try buffer.commitChanges();
         try buffer.updateRaw();
         try testing.expectEqualStrings("adef", buffer.content_raw.items);
     }
@@ -522,6 +524,7 @@ pub const Buffer = struct {
         try testing.expectEqual(Cursor{ .row = 2, .col = 2 }, buffer.selection.?.end);
         try buffer.changeSelectionDelete();
 
+        try buffer.commitChanges();
         try buffer.updateRaw();
         try testing.expectEqualStrings("ajk", buffer.content_raw.items);
     }
@@ -532,6 +535,7 @@ pub const Buffer = struct {
         var change = try cha.Change.initInsert(self.allocator, span, &.{'\n'});
         try self.appendChange(&change);
         try self.moveCursor(pos);
+        try self.commitChanges();
     }
 
     pub fn changeLineAlignIndent(self: *Buffer, row: i32) !void {
@@ -553,6 +557,7 @@ pub const Buffer = struct {
         var change = try cha.Change.initReplace(self.allocator, span, old_text, new_text);
         try self.appendChange(&change);
         try self.moveCursor(old_cursor);
+        try self.commitChanges();
     }
 
     pub fn clearSelection(self: *Buffer) !void {
@@ -620,6 +625,7 @@ pub const Buffer = struct {
             const hist_to_undo = self.history.items[h_idx].items;
             var change_iter = std.mem.reverseIterator(hist_to_undo);
             while (change_iter.next()) |change_to_undo| {
+                log.log(@This(), "undo change: {}\n", .{change_to_undo});
                 var inv_change = try change_to_undo.invert();
                 try self.applyChange(&inv_change);
                 try self.pending_changes.append(inv_change);
@@ -670,7 +676,6 @@ pub const Buffer = struct {
 
     fn applyChange(self: *Buffer, change: *cha.Change) !void {
         const span = change.old_span;
-        log.log(@This(), "applying change: {}\n", .{change});
 
         if (change.old_text) |old_text| {
             const text_at = try self.textAt(self.allocator, span);
@@ -685,6 +690,7 @@ pub const Buffer = struct {
         self.cursor = span.start;
         if (change.new_text) |new_text| try self.insertText(new_text);
         change.new_span = .{ .start = span.start, .end = self.cursor };
+        log.log(@This(), "applied change: {}\n", .{change});
     }
 
     fn deleteSpan(self: *Buffer, span: Span) !void {
