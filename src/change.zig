@@ -40,26 +40,26 @@ pub const Change = struct {
         if (self.new_text) |t| self.allocator.free(t);
     }
 
-    // pub fn format(
-    //     self: *const Change,
-    //     comptime fmt: []const u8,
-    //     options: std.fmt.FormatOptions,
-    //     writer: anytype,
-    // ) !void {
-    //     _ = fmt;
-    //     _ = options;
-    //     try std.fmt.format(writer, "{},{}-{},{}", .{
-    //         self.old_span.start.row,
-    //         self.old_span.start.col,
-    //         self.old_span.end.row,
-    //         self.old_span.end.col,
-    //     });
-    //     if (self.new_text) |new_text| {
-    //         _ = try writer.write(" \"");
-    //         for (new_text) |ch| try std.fmt.format(writer, "{u}", .{ch});
-    //         _ = try writer.write("\"");
-    //     }
-    // }
+    pub fn format(
+        self: *const Change,
+        comptime fmt: []const u8,
+        options: std.fmt.FormatOptions,
+        writer: anytype,
+    ) !void {
+        _ = fmt;
+        _ = options;
+        try std.fmt.format(writer, "{},{}-{},{}", .{
+            self.old_span.start.row,
+            self.old_span.start.col,
+            self.old_span.end.row,
+            self.old_span.end.col,
+        });
+        if (self.new_text) |new_text| {
+            _ = try writer.write(" \"");
+            for (new_text) |ch| try std.fmt.format(writer, "{u}", .{ch});
+            _ = try writer.write("\"");
+        }
+    }
 
     pub fn invert(self: *const Change) !Change {
         return .{

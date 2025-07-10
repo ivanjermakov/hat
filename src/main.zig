@@ -176,6 +176,9 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     try buffer.moveToTokenEnd();
                 } else if (normal_or_select and ch == 'd') {
                     try buffer.changeSelectionDelete();
+                } else if (normal_or_select and ch == '=') {
+                    try buffer.changeAlignIndent();
+                    try buffer.enterMode(.normal);
 
                     // normal mode
                 } else if (editor.mode == .normal and ch == 's') {
@@ -194,8 +197,6 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     try buffer.undo();
                 } else if (editor.mode == .normal and ch == 'U') {
                     try buffer.redo();
-                } else if (editor.mode == .normal and ch == '=') {
-                    try buffer.changeLineAlignIndent(buffer.cursor.row);
 
                     // insert mode
                 } else if (editor.mode == .insert and code == .delete) {

@@ -538,25 +538,16 @@ pub const Buffer = struct {
         try self.commitChanges();
     }
 
-    pub fn changeLineAlignIndent(self: *Buffer, row: i32) !void {
-        const old_cursor = self.cursor;
-        const line = self.content.items[@intCast(row)].items;
-        const correct_indent: usize = self.indents.items[@intCast(row)];
-        const correct_indent_spaces = correct_indent * self.file_type.indent_spaces;
-        const current_indent_spaces: usize = lineIndentSpaces(line);
-        if (correct_indent_spaces == current_indent_spaces) return;
-        const span = Span{
-            .start = .{ .row = row, .col = 0 },
-            .end = .{ .row = row, .col = @intCast(current_indent_spaces) },
-        };
-        const new_text = try self.allocator.alloc(u21, correct_indent_spaces);
-        defer self.allocator.free(new_text);
-        @memset(new_text, ' ');
-        const old_text = try self.textAt(self.allocator, span);
-        defer self.allocator.free(old_text);
-        var change = try cha.Change.initReplace(self.allocator, span, old_text, new_text);
-        try self.appendChange(&change);
-        try self.moveCursor(old_cursor);
+    pub fn changeAlignIndent(self: *Buffer) !void {
+        if (self.selection) |selection| {
+            const start: usize = @intCast(selection.start.row);
+            const end: usize = @intCast(selection.end.row + 1);
+            for (start..end) |row| {
+                try self.lineAlignIndent(@intCast(row));
+            }
+        } else {
+            try self.lineAlignIndent(self.cursor.row);
+        }
         try self.commitChanges();
     }
 
@@ -796,6 +787,27 @@ pub const Buffer = struct {
             .end = .{ .row = row, .col = @intCast(line.len) },
         };
         main.editor.dirty.draw = true;
+    }
+
+    fn lineAlignIndent(self: *Buffer, row: i32) !void {
+        const old_cursor = self.cursor;
+        const line = self.content.items[@intCast(row)].items;
+        const correct_indent: usize = self.indents.items[@intCast(row)];
+        const correct_indent_spaces = correct_indent * self.file_type.indent_spaces;
+        const current_indent_spaces: usize = lineIndentSpaces(line);
+        if (correct_indent_spaces == current_indent_spaces) return;
+        const span = Span{
+            .start = .{ .row = row, .col = 0 },
+            .end = .{ .row = row, .col = @intCast(current_indent_spaces) },
+        };
+        const new_text = try self.allocator.alloc(u21, correct_indent_spaces);
+        defer self.allocator.free(new_text);
+        @memset(new_text, ' ');
+        const old_text = try self.textAt(self.allocator, span);
+        defer self.allocator.free(old_text);
+        var change = try cha.Change.initReplace(self.allocator, span, old_text, new_text);
+        try self.appendChange(&change);
+        try self.moveCursor(old_cursor);
     }
 
     fn updateRaw(self: *Buffer) !void {
