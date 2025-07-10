@@ -170,8 +170,8 @@ pub const Terminal = struct {
                 const buffer_col = @as(i32, @intCast(term_col)) + buffer.offset.col;
 
                 if (term_col >= self.dimensions.width) break;
-                const ch_attrs: []const co.Attr = b: while (span_index < buffer.spans.items.len) {
-                    const span = buffer.spans.items[span_index];
+                const ch_attrs: []const co.Attr = b: while (span_index < buffer.ts_state.spans.items.len) {
+                    const span = buffer.ts_state.spans.items[span_index];
                     if (span.span.start_byte > byte) break :b co.attributes.text;
                     if (byte >= span.span.start_byte and byte < span.span.end_byte) {
                         break :b span.attrs;
@@ -367,8 +367,8 @@ pub fn printBuffer(buffer: *buf.Buffer, writer: std.io.AnyWriter, highlight: ?Hi
 
         for (line) |ch| {
             attrs_stream.reset();
-            const ch_attrs: []const co.Attr = b: while (span_index < buffer.spans.items.len) {
-                const span = buffer.spans.items[span_index];
+            const ch_attrs: []const co.Attr = b: while (span_index < buffer.ts_state.spans.items.len) {
+                const span = buffer.ts_state.spans.items[span_index];
                 if (span.span.start_byte > byte) break :b co.attributes.text;
                 if (byte >= span.span.start_byte and byte < span.span.end_byte) {
                     break :b span.attrs;

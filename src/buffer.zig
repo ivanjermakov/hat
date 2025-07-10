@@ -87,10 +87,7 @@ pub const Buffer = struct {
     /// Array list of array lists of utf8 codepoints
     content: std.ArrayList(std.ArrayList(u21)),
     content_raw: std.ArrayList(u8),
-    spans: std.ArrayList(ts.SpanAttrsTuple),
-    parser: ?*ts.ts.TSParser = null,
-    query: ?*ts.ts.TSQuery = null,
-    tree: ?*ts.ts.TSTree = null,
+    ts_state: ts.TsState,
     /// End is inclusive
     selection: ?Span = null,
     diagnostics: std.ArrayList(lsp.types.Diagnostic),
@@ -114,13 +111,16 @@ pub const Buffer = struct {
         const file_type = ft.file_type.get(file_ext) orelse ft.plain;
 
         const uri = try std.fmt.allocPrint(allocator, "file://{s}", .{path});
-        var buffer = Buffer{
+        var self = Buffer{
             .path = try allocator.dupe(u8, path),
             .file_type = file_type,
             .uri = uri,
             .content = std.ArrayList(std.ArrayList(u21)).init(allocator),
             .content_raw = raw,
-            .spans = std.ArrayList(ts.SpanAttrsTuple).init(allocator),
+            .ts_state = .{
+                .spans = std.ArrayList(ts.SpanAttrsTuple).init(allocator),
+                .allocator = allocator,
+            },
             .diagnostics = std.ArrayList(lsp.types.Diagnostic).init(allocator),
             .line_positions = std.ArrayList(usize).init(allocator),
             .history = std.ArrayList(std.ArrayList(cha.Change)).init(allocator),
@@ -128,42 +128,18 @@ pub const Buffer = struct {
             .lsp_connections = std.ArrayList(*lsp.LspConnection).init(allocator),
             .allocator = allocator,
         };
-        try buffer.updateContent();
-        try buffer.updateLinePositions();
-        try buffer.initParser();
-        try buffer.tsParse();
-        return buffer;
-    }
-
-    fn initParser(self: *Buffer) !void {
+        try self.updateContent();
+        try self.updateLinePositions();
         if (self.file_type.ts) |ts_conf| {
-            const language = try ts_conf.loadLanguage(self.allocator);
-            self.parser = ts.ts.ts_parser_new();
-            _ = ts.ts.ts_parser_set_language(self.parser, language());
-            const query_str = try self.file_type.ts.?.loadHighlightQuery(self.allocator);
-            defer self.allocator.free(query_str);
-            var err: ts.ts.TSQueryError = undefined;
-            self.query = ts.ts.ts_query_new(language(), query_str.ptr, @intCast(query_str.len), null, &err);
-            if (err > 0) return error.Query;
+            try self.ts_state.initParser(ts_conf);
         }
+        try self.reparse();
+        return self;
     }
 
-    pub fn tsParse(self: *Buffer) !void {
+    pub fn reparse(self: *Buffer) !void {
         try self.updateRaw();
-        if (self.parser == null) return;
-
-        if (self.tree) |old_tree| ts.ts.ts_tree_delete(old_tree);
-        self.tree = ts.ts.ts_parser_parse_string(
-            self.parser,
-            null,
-            @ptrCast(self.content_raw.items),
-            @intCast(self.content_raw.items.len),
-        );
-        // if (main.log_enabled) {
-        //     const node = ts.ts.ts_tree_root_node(self.tree);
-        //     log.log(@This(), "tree: {s}\n", .{std.mem.span(ts.ts.ts_node_string(node))});
-        // }
-        try self.makeSpans();
+        try self.ts_state.reparse(self.content_raw.items);
     }
 
     pub fn updateContent(self: *Buffer) !void {
@@ -190,15 +166,12 @@ pub const Buffer = struct {
         self.allocator.free(self.uri);
         self.allocator.free(self.path);
 
-        if (self.parser) |p| ts.ts.ts_parser_delete(p);
-        if (self.tree) |t| ts.ts.ts_tree_delete(t);
-        if (self.query) |query| ts.ts.ts_query_delete(query);
+        self.ts_state.deinit();
 
         for (self.content.items) |line| line.deinit();
         self.content.deinit();
         self.content_raw.deinit();
 
-        self.spans.deinit();
         self.diagnostics.deinit();
         self.line_positions.deinit();
 
@@ -769,30 +742,6 @@ pub const Buffer = struct {
             }
             if (i != self.content.items.len - 1) {
                 try self.content_raw.append('\n');
-            }
-        }
-    }
-
-    fn makeSpans(self: *Buffer) !void {
-        if (self.tree == null) return;
-        self.spans.clearRetainingCapacity();
-
-        const cursor: *ts.ts.TSQueryCursor = ts.ts.ts_query_cursor_new().?;
-        defer ts.ts.ts_query_cursor_delete(cursor);
-        const root_node = ts.ts.ts_tree_root_node(self.tree);
-        ts.ts.ts_query_cursor_exec(cursor, self.query.?, root_node);
-
-        var match: ts.ts.TSQueryMatch = undefined;
-        while (ts.ts.ts_query_cursor_next_match(cursor, &match)) {
-            for (match.captures[0..match.capture_count]) |capture| {
-                var capture_name_len: u32 = undefined;
-                const capture_name = ts.ts.ts_query_capture_name_for_id(self.query.?, capture.index, &capture_name_len);
-                const node_type = capture_name[0..capture_name_len];
-                const span: ts.Span = .{
-                    .start_byte = ts.ts.ts_node_start_byte(capture.node),
-                    .end_byte = ts.ts.ts_node_end_byte(capture.node),
-                };
-                try self.spans.append(ts.SpanAttrsTuple.init(span, node_type));
             }
         }
     }

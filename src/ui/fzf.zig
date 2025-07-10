@@ -52,7 +52,7 @@ pub fn pickBuffer(allocator: std.mem.Allocator, buffers: []const *buf.Buffer) ![
     for (buffers) |buffer| {
         const s = try std.fmt.allocPrint(
             allocator,
-            "{s}:{}:{}:\n",
+            "{s}:{}:{}\n",
             .{ buffer.path, buffer.cursor.row + 1, buffer.cursor.col + 1 },
         );
         defer allocator.free(s);
