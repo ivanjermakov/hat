@@ -3,7 +3,6 @@ const main = @import("main.zig");
 const log = @import("log.zig");
 
 pub fn runExternalWait(allocator: std.mem.Allocator, cmd: []const []const u8, input: ?[]const u8) ![]const u8 {
-    try main.term.switchBuf(false);
     if (main.log_enabled) {
         log.log(@This(), "running external command:", .{});
         for (cmd) |c| std.debug.print(" \"{s}\"", .{c});
@@ -23,10 +22,10 @@ pub fn runExternalWait(allocator: std.mem.Allocator, cmd: []const []const u8, in
     }
 
     const res = child.stdout.?.readToEndAlloc(allocator, std.math.maxInt(usize));
+    try main.term.switchBuf(true);
 
     const code = (try child.wait()).Exited;
     log.log(@This(), "external command exit code: {}\n", .{code});
-    try main.term.switchBuf(true);
     main.editor.dirty.draw = true;
 
     return res;

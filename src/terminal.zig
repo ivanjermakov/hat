@@ -112,6 +112,7 @@ pub const Terminal = struct {
 
     pub fn switchBuf(self: *Terminal, alternative: bool) !void {
         try self.write(if (alternative) "\x1b[?1049h" else "\x1b[?1049l");
+        try self.flush();
     }
 
     fn resetAttributes(self: *Terminal) !void {
