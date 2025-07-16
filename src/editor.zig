@@ -14,6 +14,8 @@ pub const Dirty = struct {
 };
 
 pub const Editor = struct {
+    /// List of buffers
+    /// Must be always sorted recent-first
     buffers: std.ArrayList(*buf.Buffer),
     active_buffer: *buf.Buffer = undefined,
     mode: Mode,
@@ -43,7 +45,11 @@ pub const Editor = struct {
             // TODO: resolve paths
             if (std.mem.eql(u8, buffer.path, path)) {
                 log.log(@This(), "opening existing buffer {s}\n", .{path});
+                // reinsert to maintain recent-first order
+                _ = self.buffers.orderedRemove(buffer_idx);
+                try self.buffers.insert(0, buffer);
                 self.active_buffer = buffer;
+                main.editor.dirty.draw = true;
                 return;
             }
         }
@@ -54,7 +60,7 @@ pub const Editor = struct {
         var buffer = try self.allocator.create(buf.Buffer);
         buffer.* = try buf.Buffer.init(self.allocator, path, file_content);
 
-        try self.buffers.append(buffer);
+        try self.buffers.insert(0, buffer);
         self.active_buffer = buffer;
         main.editor.dirty.draw = true;
 
@@ -167,6 +173,19 @@ pub const Editor = struct {
         if (self.message_read_idx == self.messages.items.len) return;
         self.message_read_idx += 1;
         self.dirty.draw = true;
+    }
+
+    pub fn closeBuffer(self: *Editor, force: bool) !void {
+        // TODO
+        _ = force;
+        const closing_buf = self.active_buffer;
+        log.log(@This(), "closing buffer: {s}\n", .{closing_buf.path});
+        defer self.allocator.destroy(closing_buf);
+        defer closing_buf.deinit();
+        std.debug.assert(closing_buf == self.buffers.items[0]);
+        _ = self.buffers.orderedRemove(0);
+        if (self.buffers.items.len == 0) return;
+        try self.openBuffer(self.buffers.items[0].path);
     }
 };
 

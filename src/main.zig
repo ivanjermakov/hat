@@ -161,7 +161,9 @@ fn startEditor(allocator: std.mem.Allocator) !void {
 
                     // normal or select mode
                 } else if (normal_or_select and ch == 'q') {
-                    break :main_loop;
+                    try editor.closeBuffer(false);
+                    buffer = editor.active_buffer;
+                    if (editor.buffers.items.len == 0) break :main_loop;
                 } else if (normal_or_select and ch == 'i') {
                     try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = -1 }));
                 } else if (normal_or_select and ch == 'k') {
