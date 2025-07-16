@@ -36,6 +36,17 @@ pub const Terminal = struct {
     allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator, std_out_writer: std.io.AnyWriter, dimensions: TerminalDimensions) !Terminal {
+        var self = Terminal{
+            .writer = .{ .unbuffered_writer = std_out_writer },
+            .dimensions = dimensions,
+            .allocator = allocator,
+        };
+        try self.setup();
+
+        return self;
+    }
+
+    pub fn setup(self: *Terminal) !void {
         _ = c.setlocale(c.LC_ALL, "");
 
         var tty: c.struct_termios = undefined;
@@ -43,15 +54,7 @@ pub const Terminal = struct {
         tty.c_lflag &= @bitCast(~(c.ICANON | c.ECHO));
         _ = c.tcsetattr(main.tty_in.handle, c.TCSANOW, &tty);
 
-        var term = Terminal{
-            .writer = .{ .unbuffered_writer = std_out_writer },
-            .dimensions = dimensions,
-            .allocator = allocator,
-        };
-
-        try term.switchBuf(true);
-
-        return term;
+        try self.switchBuf(true);
     }
 
     pub fn deinit(self: *Terminal) void {

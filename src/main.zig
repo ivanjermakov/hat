@@ -12,6 +12,7 @@ const log = @import("log.zig");
 const uni = @import("unicode.zig");
 const fzf = @import("ui/fzf.zig");
 const env = @import("env.zig");
+const sig = @import("signal.zig");
 
 pub const Args = struct {
     path: ?[]u8 = null,
@@ -40,6 +41,8 @@ pub fn main() !void {
     const allocator = if (builtin.mode == .Debug) debug_allocator.allocator() else std.heap.c_allocator;
 
     tty_in = try std.fs.cwd().openFile("/dev/tty", .{});
+
+    sig.registerAll();
 
     var cmd_args = std.process.args();
     _ = cmd_args.skip();

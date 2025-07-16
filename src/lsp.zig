@@ -63,6 +63,8 @@ pub const LspConnection = struct {
 
     pub fn connect(allocator: std.mem.Allocator, config: LspConfig) !LspConnection {
         var child = std.process.Child.init(config.cmd, allocator);
+        // make child process resistant to terminal signals
+        child.pgid = 0;
         child.stdin_behavior = .Pipe;
         child.stderr_behavior = .Pipe;
         child.stdout_behavior = .Pipe;
