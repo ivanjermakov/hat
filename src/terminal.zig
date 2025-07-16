@@ -71,6 +71,8 @@ pub const Terminal = struct {
         const cmp_menu = &main.editor.completion_menu;
         try self.drawCompletionMenu(cmp_menu);
 
+        try self.drawMessage();
+
         try self.moveCursor(buffer.cursor.applyOffset(buffer.offset.negate()));
 
         try self.flush();
@@ -311,6 +313,15 @@ pub const Terminal = struct {
             }
             try self.resetAttributes();
         }
+    }
+
+    fn drawMessage(self: *Terminal) !void {
+        if (main.editor.message_read_idx == main.editor.messages.items.len) return;
+        const message = main.editor.messages.items[main.editor.message_read_idx];
+        try self.moveCursor(.{ .row = @intCast(self.dimensions.height - 1) });
+        try co.attributes.write(co.attributes.message, self.writer.writer());
+        try self.write(message);
+        try self.resetAttributes();
     }
 };
 

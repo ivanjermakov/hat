@@ -5,6 +5,7 @@ const cmp = @import("ui/completion_menu.zig");
 const fzf = @import("ui/fzf.zig");
 const log = @import("log.zig");
 const lsp = @import("lsp.zig");
+const uni = @import("unicode.zig");
 
 pub const Dirty = struct {
     draw: bool = false,
@@ -19,6 +20,8 @@ pub const Editor = struct {
     dirty: Dirty,
     completion_menu: cmp.CompletionMenu,
     lsp_connections: std.StringHashMap(lsp.LspConnection),
+    messages: std.ArrayList([]const u8),
+    message_read_idx: usize = 0,
     allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator) !Editor {
@@ -28,6 +31,7 @@ pub const Editor = struct {
             .dirty = .{},
             .completion_menu = cmp.CompletionMenu.init(allocator),
             .lsp_connections = std.StringHashMap(lsp.LspConnection).init(allocator),
+            .messages = std.ArrayList([]const u8).init(allocator),
             .allocator = allocator,
         };
         return editor;
@@ -85,12 +89,19 @@ pub const Editor = struct {
             self.allocator.destroy(buffer);
         }
         self.buffers.deinit();
+
         self.completion_menu.deinit();
+
         {
             var val_iter = self.lsp_connections.valueIterator();
             while (val_iter.next()) |conn| conn.deinit();
         }
         self.lsp_connections.deinit();
+
+        for (self.messages.items) |message| {
+            self.allocator.free(message);
+        }
+        self.messages.deinit();
     }
 
     pub fn pickFile(self: *Editor) !void {
@@ -145,6 +156,17 @@ pub const Editor = struct {
             }
             std.Thread.sleep(main.sleep_ns);
         }
+    }
+
+    pub fn sendMessage(self: *Editor, msg: []const u8) !void {
+        log.log(@This(), "message: {s}\n", .{msg});
+        try self.messages.append(try self.allocator.dupe(u8, msg));
+    }
+
+    pub fn dismissMessage(self: *Editor) !void {
+        if (self.message_read_idx == self.messages.items.len) return;
+        self.message_read_idx += 1;
+        self.dirty.draw = true;
     }
 };
 

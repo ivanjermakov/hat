@@ -146,6 +146,7 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     try buffer.moveCursor(buffer.cursor.applyOffset(.{ .col = 1 }));
                 } else if (code == .escape) {
                     try buffer.enterMode(.normal);
+                    try editor.dismissMessage();
 
                     // normal mode with modifiers
                 } else if (editor.mode == .normal and ch == 'n' and key.activeModifier(.control)) {
