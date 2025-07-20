@@ -18,6 +18,11 @@ pub const Dimensions = struct {
     height: usize,
 };
 
+pub const Area = struct {
+    pos: buf.Cursor,
+    dims: Dimensions,
+};
+
 /// See section about "CSI Ps SP q" at
 /// https://invisible-island.net/xterm/ctlseqs/ctlseqs.html#h3-Functions-using-CSI-_-ordered-by-the-final-character_s_
 pub const cursor_type = union {
@@ -29,6 +34,8 @@ pub const cursor_type = union {
     pub const blinking_bar = "\x1b[5 q";
     pub const steady_bar = "\x1b[6 q";
 };
+
+const line_num_width = 3;
 
 pub const Terminal = struct {
     writer: std.io.BufferedWriter(8192, std.io.AnyWriter),
@@ -66,21 +73,27 @@ pub const Terminal = struct {
 
     pub fn draw(self: *Terminal) !void {
         const buffer = main.editor.active_buffer;
-        try self.drawBuffer(buffer);
+        const buf_area = Area{
+            .pos = .{ .row = 0, .col = line_num_width },
+            .dims = .{ .height = self.dimensions.height, .width = self.dimensions.width - line_num_width },
+        };
+        try self.drawBuffer(buffer, buf_area);
 
         const cmp_menu = &main.editor.completion_menu;
         try self.drawCompletionMenu(cmp_menu);
 
         try self.drawMessage();
 
-        try self.moveCursor(buffer.cursor.applyOffset(buffer.offset.negate()));
-
+        try self.updateCursor();
         try self.flush();
     }
 
     pub fn updateCursor(self: *Terminal) !void {
         const buffer = main.editor.active_buffer;
-        try self.moveCursor(buffer.cursor.applyOffset(buffer.offset.negate()));
+        try self.moveCursor(buffer.cursor
+            .applyOffset(buffer.offset.negate())
+            .applyOffset(.{ .col = line_num_width }));
+
         switch (main.editor.mode) {
             .normal => _ = try self.write(cursor_type.steady_block),
             .select, .select_line => _ = try self.write(cursor_type.steady_underline),
@@ -139,7 +152,7 @@ pub const Terminal = struct {
         try std.fmt.format(self.writer.writer(), str, args);
     }
 
-    fn drawBuffer(self: *Terminal, buffer: *buf.Buffer) !void {
+    fn drawBuffer(self: *Terminal, buffer: *buf.Buffer, area: Area) !void {
         var attrs_buf = std.mem.zeroes([128]u8);
         var attrs_stream = std.io.fixedBufferStream(&attrs_buf);
         var attrs: []const u8 = undefined;
@@ -148,7 +161,7 @@ pub const Terminal = struct {
 
         try self.clear();
         var span_index: usize = 0;
-        for (0..self.dimensions.height) |term_row| {
+        for (@intCast(area.pos.row)..@as(usize, @intCast(area.pos.row)) + area.dims.height) |term_row| {
             const buffer_row = @as(i32, @intCast(term_row)) + buffer.offset.row;
             if (buffer_row < 0) continue;
             if (buffer_row >= buffer.content.items.len) break;
@@ -157,7 +170,7 @@ pub const Terminal = struct {
             var term_col: i32 = 0;
 
             var line = buffer.content.items[@intCast(buffer_row)].items;
-            try self.moveCursor(.{ .row = @intCast(term_row), .col = 0 });
+            try self.moveCursor(.{ .row = @intCast(term_row), .col = area.pos.col });
 
             if (buffer.offset.col > 0) {
                 if (buffer.offset.col >= line.len) continue;
@@ -175,7 +188,7 @@ pub const Terminal = struct {
                 attrs_stream.reset();
                 const buffer_col = @as(i32, @intCast(term_col)) + buffer.offset.col;
 
-                if (term_col >= self.dimensions.width) break;
+                if (term_col >= area.pos.col + @as(i32, @intCast(area.dims.width))) break;
                 if (buffer.ts_state) |ts_state| {
                     const highlight_spans = ts_state.highlight.spans.items;
                     const ch_attrs: []const co.Attr = b: while (span_index < highlight_spans.len) {
