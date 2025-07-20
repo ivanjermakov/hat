@@ -177,9 +177,11 @@ pub const Editor = struct {
     }
 
     pub fn closeBuffer(self: *Editor, force: bool) !void {
-        // TODO
-        _ = force;
         const closing_buf = self.active_buffer;
+        if (!force and closing_buf.file_history_index != closing_buf.history_index) {
+            try self.sendMessage("buffer has unsaved changes");
+            return;
+        }
         log.log(@This(), "closing buffer: {s}\n", .{closing_buf.path});
         defer self.allocator.destroy(closing_buf);
         defer closing_buf.deinit();
