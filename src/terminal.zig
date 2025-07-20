@@ -368,7 +368,6 @@ pub fn printBuffer(buffer: *buf.Buffer, writer: std.io.AnyWriter, highlight: ?Hi
         end_row = start_row + @as(i32, @intCast(hi.term_height));
     }
 
-    const highlight_spans = buffer.ts_state.?.highlight.spans.items;
     var span_index: usize = 0;
     var row: i32 = start_row;
     while (row < end_row) {
@@ -386,17 +385,20 @@ pub fn printBuffer(buffer: *buf.Buffer, writer: std.io.AnyWriter, highlight: ?Hi
 
         for (line) |ch| {
             attrs_stream.reset();
-            const ch_attrs: []const co.Attr = b: while (span_index < highlight_spans.len) {
-                const span = highlight_spans[span_index];
-                if (span.span.start_byte > byte) break :b co.attributes.text;
-                if (byte >= span.span.start_byte and byte < span.span.end_byte) {
-                    break :b span.attrs;
-                }
-                span_index += 1;
-            } else {
-                break :b co.attributes.text;
-            };
-            try co.attributes.write(ch_attrs, attrs_stream.writer());
+            if (buffer.ts_state) |ts_state| {
+                const highlight_spans = ts_state.highlight.spans.items;
+                const ch_attrs: []const co.Attr = b: while (span_index < highlight_spans.len) {
+                    const span = highlight_spans[span_index];
+                    if (span.span.start_byte > byte) break :b co.attributes.text;
+                    if (byte >= span.span.start_byte and byte < span.span.end_byte) {
+                        break :b span.attrs;
+                    }
+                    span_index += 1;
+                } else {
+                    break :b co.attributes.text;
+                };
+                try co.attributes.write(ch_attrs, attrs_stream.writer());
+            }
 
             if (highlight != null and row == highlight.?.highlight_line) {
                 try co.attributes.write(co.attributes.selection, attrs_stream.writer());
