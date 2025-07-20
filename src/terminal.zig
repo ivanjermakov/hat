@@ -13,7 +13,7 @@ const inp = @import("input.zig");
 const cmp = @import("ui/completion_menu.zig");
 const uni = @import("unicode.zig");
 
-pub const TerminalDimensions = struct {
+pub const Dimensions = struct {
     width: usize,
     height: usize,
 };
@@ -32,10 +32,10 @@ pub const cursor_type = union {
 
 pub const Terminal = struct {
     writer: std.io.BufferedWriter(8192, std.io.AnyWriter),
-    dimensions: TerminalDimensions,
+    dimensions: Dimensions,
     allocator: std.mem.Allocator,
 
-    pub fn init(allocator: std.mem.Allocator, std_out_writer: std.io.AnyWriter, dimensions: TerminalDimensions) !Terminal {
+    pub fn init(allocator: std.mem.Allocator, std_out_writer: std.io.AnyWriter, dimensions: Dimensions) !Terminal {
         var self = Terminal{
             .writer = .{ .unbuffered_writer = std_out_writer },
             .dimensions = dimensions,
@@ -326,7 +326,7 @@ pub const Terminal = struct {
     }
 };
 
-pub fn terminalSize() !TerminalDimensions {
+pub fn terminalSize() !Dimensions {
     var w: std.c.winsize = undefined;
     if (std.c.ioctl(main.std_out.handle, std.c.T.IOCGWINSZ, &w) == -1) {
         return error.TermSize;
