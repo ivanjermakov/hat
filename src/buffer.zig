@@ -8,6 +8,7 @@ const ts = @import("ts.zig");
 const log = @import("log.zig");
 const lsp = @import("lsp.zig");
 const cha = @import("change.zig");
+const uni = @import("unicode.zig");
 
 pub const Cursor = struct {
     row: i32 = 0,
@@ -101,6 +102,9 @@ pub const Buffer = struct {
     indents: std.ArrayList(usize),
     history: std.ArrayList(std.ArrayList(cha.Change)),
     history_index: ?usize = null,
+    /// History index of the last file save
+    /// Used to decide whether buffer has unsaved changes
+    file_history_index: ?usize = null,
     /// Changes that needs to be sent to LSP clients
     pending_changes: std.ArrayList(cha.Change),
     /// Changes that yet to become a part of Buffer.history
@@ -199,6 +203,24 @@ pub const Buffer = struct {
         self.uncommitted_changes.deinit();
 
         self.lsp_connections.deinit();
+    }
+
+    pub fn write(self: *Buffer) !void {
+        try self.updateRaw();
+
+        const file = try std.fs.cwd().createFile(self.path, .{ .truncate = true });
+        defer file.close();
+        try file.writeAll(self.content_raw.items);
+
+        self.file_history_index = self.history_index;
+
+        const msg = try std.fmt.allocPrint(
+            self.allocator,
+            "{s} {}B written",
+            .{ self.path, self.content_raw.items.len },
+        );
+        defer self.allocator.free(msg);
+        try main.editor.sendMessage(msg);
     }
 
     pub fn moveCursor(self: *Buffer, new_buf_cursor: Cursor) !void {

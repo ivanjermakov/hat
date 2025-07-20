@@ -167,6 +167,7 @@ pub const Editor = struct {
     pub fn sendMessage(self: *Editor, msg: []const u8) !void {
         log.log(@This(), "message: {s}\n", .{msg});
         try self.messages.append(try self.allocator.dupe(u8, msg));
+        self.dirty.draw = true;
     }
 
     pub fn dismissMessage(self: *Editor) !void {

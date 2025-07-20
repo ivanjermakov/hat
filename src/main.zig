@@ -242,7 +242,9 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     var ch2: ?u8 = null;
                     if (key2.printable != null and key2.printable.?.len == 1) ch2 = key2.printable.?[0];
 
-                    if (editor.mode == .normal and ch == ' ' and ch2 == 'd') {
+                    if (editor.mode == .normal and ch == ' ' and ch2 == 'w') {
+                        try buffer.write();
+                    } else if (editor.mode == .normal and ch == ' ' and ch2 == 'd') {
                         try buffer.goToDefinition();
                     } else if (normal_or_select and ch == 'g' and ch2 == 'i') {
                         try buffer.moveCursor(.{ .col = buffer.cursor.col });
