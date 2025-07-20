@@ -5,6 +5,7 @@ const main = @import("main.zig");
 pub fn registerAll() void {
     register(sig_handle.tstp);
     register(sig_handle.cont);
+    register(sig_handle.int);
 }
 
 fn register(sig: SigHandle) void {
@@ -36,7 +37,7 @@ const sig_handle = .{
 fn handleSigInt(sig: c_int) callconv(.C) void {
     _ = sig;
     log.log(@This(), "handling SIGINT\n", .{});
-    std.posix.exit(0);
+    main.editor.sendMessage("press q to close buffer") catch {};
 }
 
 fn handleSigTstp(sig: c_int) callconv(.C) void {
