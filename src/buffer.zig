@@ -9,6 +9,7 @@ const log = @import("log.zig");
 const lsp = @import("lsp.zig");
 const cha = @import("change.zig");
 const uni = @import("unicode.zig");
+const ter = @import("terminal.zig");
 
 pub const Cursor = struct {
     row: i32 = 0,
@@ -858,7 +859,11 @@ pub const Buffer = struct {
 
     fn scrollForCursor(self: *Buffer, new_buf_cursor: Cursor) void {
         const term_cursor = new_buf_cursor.applyOffset(self.offset.negate());
-        const dims = main.term.dimensions;
+        // TODO: scrolling without coupling with term
+        const dims = ter.Dimensions{
+            .height = main.term.dimensions.height,
+            .width = main.term.dimensions.width - ter.number_line_width,
+        };
         if (term_cursor.row < 0 and new_buf_cursor.row >= 0) {
             self.offset.row += term_cursor.row;
             main.editor.dirty.draw = true;

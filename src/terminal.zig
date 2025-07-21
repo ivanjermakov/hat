@@ -35,7 +35,7 @@ pub const cursor_type = union {
     pub const steady_bar = "\x1b[6 q";
 };
 
-const number_line_width = 5;
+pub const number_line_width = 5;
 
 pub const Terminal = struct {
     writer: std.io.BufferedWriter(8192, std.io.AnyWriter),
