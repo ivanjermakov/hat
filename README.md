@@ -34,6 +34,7 @@ its final state should be described by its feature set from the beginning
     * [x] Unlimited undo/redo
     * [x] Select and select line modes
     * [ ] Select block mode
+    * [ ] System clipboard copy & paste
 - [x] [Tree-sitter](https://tree-sitter.github.io/tree-sitter/) syntax awareness
     * [x] Syntax highlighting (24 bit color)
     * [ ] Syntax tree actions

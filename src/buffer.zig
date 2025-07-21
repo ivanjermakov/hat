@@ -10,6 +10,7 @@ const lsp = @import("lsp.zig");
 const cha = @import("change.zig");
 const uni = @import("unicode.zig");
 const ter = @import("terminal.zig");
+const clp = @import("clipboard.zig");
 
 pub const Cursor = struct {
     row: i32 = 0,
@@ -77,6 +78,16 @@ pub const Span = struct {
             .start = self.start.toLsp(),
             .end = self.end.toLsp(),
         };
+    }
+
+    pub fn toExclusiveEnd(self: Span, last_line_len: usize) Span {
+        var span = self;
+        if (self.end.col == last_line_len) {
+            span.end = .{ .row = self.end.row + 1, .col = 0 };
+        } else {
+            span.end = span.end.applyOffset(.{ .col = 1 });
+        }
+        return span;
     }
 };
 
@@ -489,14 +500,8 @@ pub const Buffer = struct {
 
     pub fn changeSelectionDelete(self: *Buffer) !void {
         if (self.selection) |selection| {
-            var span = selection;
             const last_line = self.content.items[@intCast(selection.end.row)].items;
-            if (selection.end.col == last_line.len) {
-                span.end = .{ .row = selection.end.row + 1, .col = 0 };
-            } else {
-                span.end = span.end.applyOffset(.{ .col = 1 });
-            }
-
+            const span = selection.toExclusiveEnd(last_line.len);
             try self.enterMode(.normal);
             const utf_text = try self.textAt(self.allocator, span);
             defer self.allocator.free(utf_text);
@@ -692,6 +697,18 @@ pub const Buffer = struct {
     pub fn goToDefinition(self: *Buffer) !void {
         for (self.lsp_connections.items) |conn| {
             try conn.goToDefinition();
+        }
+    }
+
+    pub fn copySelectionToClipboard(self: *Buffer) !void {
+        if (self.selection) |selection| {
+            const last_line = self.content.items[@intCast(selection.end.row)].items;
+            const text = try self.textAt(self.allocator, selection.toExclusiveEnd(last_line.len));
+            defer self.allocator.free(text);
+            const text_uni = try uni.utf8ToBytes(self.allocator, text);
+            defer self.allocator.free(text_uni);
+            try clp.write(self.allocator, text_uni);
+            try self.enterMode(.normal);
         }
     }
 

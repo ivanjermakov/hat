@@ -186,6 +186,8 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                 } else if (normal_or_select and ch == '=') {
                     try buffer.changeAlignIndent();
                     try buffer.enterMode(.normal);
+                } else if (normal_or_select and ch == 'y') {
+                    try buffer.copySelectionToClipboard();
 
                     // normal mode
                 } else if (editor.mode == .normal and ch == 's') {
