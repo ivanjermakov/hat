@@ -226,7 +226,7 @@ pub const Terminal = struct {
                 attrs_stream.reset();
                 const buffer_col = @as(i32, @intCast(term_col)) + buffer.offset.col;
 
-                if (term_col >= area.pos.col + @as(i32, @intCast(area.dims.width))) break;
+                if (term_col >= @as(i32, @intCast(area.dims.width))) break;
                 if (buffer.ts_state) |ts_state| {
                     const highlight_spans = ts_state.highlight.spans.items;
                     const ch_attrs: []const co.Attr = b: while (span_index < highlight_spans.len) {
