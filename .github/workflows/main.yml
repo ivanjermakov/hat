@@ -19,7 +19,7 @@ jobs:
 
       - uses: mlugg/setup-zig@v2
         with:
-          version: master
+          version: 0.15.0-dev.643+dc6ffc28b
 
       - name: zig build test
         run: zig build test --summary all
