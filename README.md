@@ -10,6 +10,8 @@ Hat is a [suckless](https://suckless.org/) modal text editor for modern terminal
 
 ## Philosophy
 
+- Based on [suckless](https://suckless.org/philosophy/) and
+[unix](https://en.wikipedia.org/wiki/Unix_philosophy) philosophies
 - Software should do not more and not less than what users need
     * Every feature is implemented in the most simple and straightforward form:
     keep it simple, fast, and clear
@@ -24,8 +26,6 @@ its final state should be described by its feature set from the beginning
 - Software is extended either by users directly or by applying
 [source code patches](https://en.wikipedia.org/wiki/Patch_(computing)#Source_code_patching), distributed as diff files
     * It is encouraged to share your extensions with others who can find it useful
-    * Based on [suckless](https://suckless.org/philosophy/) and
-    [unix](https://en.wikipedia.org/wiki/Unix_philosophy) philosophies
 
 ## Features
 
@@ -34,7 +34,7 @@ its final state should be described by its feature set from the beginning
     * [x] Unlimited undo/redo
     * [x] Select and select line modes
     * [ ] Select block mode
-    * [ ] System clipboard copy & paste
+    * [x] System clipboard copy & paste (using `xclip`)
 - [x] [Tree-sitter](https://tree-sitter.github.io/tree-sitter/) syntax awareness
     * [x] Syntax highlighting (24 bit color)
     * [ ] Syntax tree actions

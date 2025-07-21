@@ -3,7 +3,7 @@ const log = @import("log.zig");
 
 pub fn write(allocator: std.mem.Allocator, text: []const u8) !void {
     log.log(@This(), "copy to clipboard\n", .{});
-    var child = std.process.Child.init(&.{"xclip", "-selection", "clipboard"}, allocator);
+    var child = std.process.Child.init(&.{ "xclip", "-selection", "clipboard" }, allocator);
     child.stdin_behavior = .Pipe;
 
     try child.spawn();
@@ -14,4 +14,19 @@ pub fn write(allocator: std.mem.Allocator, text: []const u8) !void {
     child.stdin = null;
     const code = (try child.wait()).Exited;
     if (code != 0) return error.Xclip;
+}
+
+pub fn read(allocator: std.mem.Allocator) ![]const u8 {
+    log.log(@This(), "read from clipboard\n", .{});
+    var child = std.process.Child.init(&.{ "xclip", "-selection", "clipboard", "-o" }, allocator);
+    child.stdout_behavior = .Pipe;
+
+    try child.spawn();
+    try child.waitForSpawn();
+
+    const res = child.stdout.?.readToEndAlloc(allocator, std.math.maxInt(usize));
+    const code = (try child.wait()).Exited;
+    if (code != 0) return error.Xclip;
+
+    return res;
 }

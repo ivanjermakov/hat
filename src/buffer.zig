@@ -712,6 +712,18 @@ pub const Buffer = struct {
         }
     }
 
+    pub fn changeInsertFromClipboard(self: *Buffer) !void {
+        if (main.editor.mode == .select or main.editor.mode == .select_line) {
+            return error.Todo;
+        }
+        const text = try clp.read(self.allocator);
+        defer self.allocator.free(text);
+        const text_uni = try uni.utf8FromBytes(self.allocator, text);
+        defer self.allocator.free(text_uni);
+        try self.changeInsertText(text_uni);
+        try self.commitChanges();
+    }
+
     fn applyChange(self: *Buffer, change: *cha.Change) !void {
         const span = change.old_span;
 

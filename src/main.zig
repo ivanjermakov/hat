@@ -188,6 +188,8 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     try buffer.enterMode(.normal);
                 } else if (normal_or_select and ch == 'y') {
                     try buffer.copySelectionToClipboard();
+                } else if (normal_or_select and ch == 'p') {
+                    try buffer.changeInsertFromClipboard();
 
                     // normal mode
                 } else if (editor.mode == .normal and ch == 's') {
