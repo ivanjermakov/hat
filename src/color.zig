@@ -65,7 +65,7 @@ pub const attributes = enum {
     pub const completion_menu_active = &[_]Attr{.{ .bg = color.gray4 }};
     pub const documentation_menu = &[_]Attr{.{ .bg = color.gray2 }};
     pub const message = &[_]Attr{.{ .bg = color.gray2 }};
-    pub const number_line = &[_]Attr{.{ .fg = color.gray5 }};
+    pub const number_line = &[_]Attr{.{ .fg = color.gray4 }};
 
     pub fn write(attrs: []const Attr, writer: anytype) !void {
         for (attrs) |attr| {
