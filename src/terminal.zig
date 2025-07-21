@@ -35,7 +35,7 @@ pub const cursor_type = union {
     pub const steady_bar = "\x1b[6 q";
 };
 
-const line_num_width = 3;
+const number_line_width = 4;
 
 pub const Terminal = struct {
     writer: std.io.BufferedWriter(8192, std.io.AnyWriter),
@@ -72,10 +72,18 @@ pub const Terminal = struct {
     }
 
     pub fn draw(self: *Terminal) !void {
+        try self.clear();
         const buffer = main.editor.active_buffer;
+
+        const num_line_area = Area{
+            .pos = .{},
+            .dims = .{ .height = self.dimensions.height, .width = number_line_width },
+        };
+        try self.drawNumberLine(buffer, num_line_area);
+
         const buf_area = Area{
-            .pos = .{ .row = 0, .col = line_num_width },
-            .dims = .{ .height = self.dimensions.height, .width = self.dimensions.width - line_num_width },
+            .pos = .{ .row = 0, .col = number_line_width },
+            .dims = .{ .height = self.dimensions.height, .width = self.dimensions.width - number_line_width },
         };
         try self.drawBuffer(buffer, buf_area);
 
@@ -92,7 +100,7 @@ pub const Terminal = struct {
         const buffer = main.editor.active_buffer;
         try self.moveCursor(buffer.cursor
             .applyOffset(buffer.offset.negate())
-            .applyOffset(.{ .col = line_num_width }));
+            .applyOffset(.{ .col = number_line_width }));
 
         switch (main.editor.mode) {
             .normal => _ = try self.write(cursor_type.steady_block),
@@ -152,6 +160,37 @@ pub const Terminal = struct {
         try std.fmt.format(self.writer.writer(), str, args);
     }
 
+    fn drawNumberLine(self: *Terminal, buffer: *buf.Buffer, area: Area) !void {
+        try co.attributes.write(co.attributes.number_line, self.writer.writer());
+        defer self.resetAttributes() catch {};
+        const cursor_row = buffer.cursor.row;
+        for (@intCast(area.pos.row)..@as(usize, @intCast(area.pos.row)) + area.dims.height) |term_row| {
+            const buffer_row = @as(i32, @intCast(term_row)) + buffer.offset.row;
+            try self.moveCursor(.{ .row = @intCast(term_row), .col = area.pos.col });
+            if (buffer_row < 0 or buffer_row >= buffer.content.items.len) {
+                // TODO: option to show "~"
+            } else {
+                // TODO: option to use non-relative line numbers
+                var display_num: usize = 0;
+                var alignment: std.fmt.Alignment = .right;
+                const line_num: i32 = cursor_row - buffer_row;
+                if (line_num == 0) {
+                    display_num = @intCast(cursor_row + 1);
+                    alignment = .center;
+                } else {
+                    display_num = @abs(line_num);
+                }
+                try std.fmt.formatInt(
+                    display_num,
+                    10,
+                    .lower,
+                    .{ .width = number_line_width - 1, .alignment = alignment },
+                    self.writer.writer(),
+                );
+            }
+        }
+    }
+
     fn drawBuffer(self: *Terminal, buffer: *buf.Buffer, area: Area) !void {
         var attrs_buf = std.mem.zeroes([128]u8);
         var attrs_stream = std.io.fixedBufferStream(&attrs_buf);
@@ -159,7 +198,6 @@ pub const Terminal = struct {
         var last_attrs_buf = std.mem.zeroes([128]u8);
         var last_attrs: ?[]const u8 = null;
 
-        try self.clear();
         var span_index: usize = 0;
         for (@intCast(area.pos.row)..@as(usize, @intCast(area.pos.row)) + area.dims.height) |term_row| {
             const buffer_row = @as(i32, @intCast(term_row)) + buffer.offset.row;
