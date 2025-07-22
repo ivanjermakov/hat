@@ -175,6 +175,14 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     try buffer.moveCursor(buffer.cursor.applyOffset(.{ .col = -1 }));
                 } else if (normal_or_select and ch == 'l') {
                     try buffer.moveCursor(buffer.cursor.applyOffset(.{ .col = 1 }));
+                } else if (normal_or_select and ch == 'I') {
+                    for (0..@divFloor(term.dimensions.height, 2)) |_| {
+                        try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = -1 }));
+                    }
+                } else if (normal_or_select and ch == 'K') {
+                    for (0..@divFloor(term.dimensions.height, 2)) |_| {
+                        try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = 1 }));
+                    }
                 } else if (normal_or_select and ch == 'w') {
                     try buffer.moveToNextWord();
                 } else if (normal_or_select and ch == 'W') {
