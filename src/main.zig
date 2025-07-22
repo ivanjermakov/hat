@@ -152,13 +152,10 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     // normal mode with modifiers
                 } else if (editor.mode == .normal and ch == 'n' and key.activeModifier(.control)) {
                     try editor.pickFile();
-                    buffer = editor.active_buffer;
                 } else if (editor.mode == .normal and ch == 'f' and key.activeModifier(.control)) {
                     try editor.findInFiles();
-                    buffer = editor.active_buffer;
                 } else if (editor.mode == .normal and ch == 'e' and key.activeModifier(.control)) {
                     try editor.pickBuffer();
-                    buffer = editor.active_buffer;
                 } else if (editor.mode == .normal and ch == 'd' and key.activeModifier(.control)) {
                     try buffer.showHover();
 
@@ -166,7 +163,6 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                 } else if (normal_or_select and (ch == 'q' or ch == 'Q')) {
                     const force = ch == 'Q';
                     try editor.closeBuffer(force);
-                    buffer = editor.active_buffer;
                     if (editor.buffers.items.len == 0) break :main_loop;
                 } else if (normal_or_select and ch == 'i') {
                     try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = -1 }));
@@ -205,6 +201,10 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     try buffer.changeInsertFromClipboard();
                 } else if (normal_or_select and ch == 'z') {
                     try buffer.centerCursor();
+                } else if (normal_or_select and code == .tab) {
+                    if (editor.buffers.items.len > 1) {
+                        try editor.openBuffer(editor.buffers.items[1].path);
+                    }
 
                     // normal mode
                 } else if (editor.mode == .normal and ch == 's') {
