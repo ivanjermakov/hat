@@ -75,12 +75,6 @@ pub const Terminal = struct {
         try self.clear();
         const buffer = main.editor.active_buffer;
 
-        const num_line_area = Area{
-            .pos = .{},
-            .dims = .{ .height = self.dimensions.height, .width = number_line_width },
-        };
-        try self.drawNumberLine(buffer, num_line_area);
-
         const buf_area = Area{
             .pos = .{ .row = 0, .col = number_line_width },
             .dims = .{ .height = self.dimensions.height, .width = self.dimensions.width - number_line_width },
@@ -100,6 +94,13 @@ pub const Terminal = struct {
 
     pub fn updateCursor(self: *Terminal) !void {
         const buffer = main.editor.active_buffer;
+
+        const num_line_area = Area{
+            .pos = .{},
+            .dims = .{ .height = self.dimensions.height, .width = number_line_width },
+        };
+        try self.drawNumberLine(buffer, num_line_area);
+
         try self.moveCursor(buffer.cursor
             .applyOffset(buffer.offset.negate())
             .applyOffset(.{ .col = number_line_width }));
