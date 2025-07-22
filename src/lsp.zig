@@ -403,12 +403,13 @@ pub const LspConnection = struct {
                 .{},
             );
             log.log(@This(), "got {} diagnostics\n", .{params_typed.value.diagnostics.len});
-            const buffer = main.editor.active_buffer;
-            // TODO: append to correct file
-            if (!std.mem.eql(u8, buffer.uri, params_typed.value.uri)) return;
-            buffer.diagnostics.clearRetainingCapacity();
-            try buffer.diagnostics.appendSlice(params_typed.value.diagnostics);
-            main.editor.dirty.draw = true;
+            if (main.editor.findBufferByUri(params_typed.value.uri)) |target| {
+                target.diagnostics.clearRetainingCapacity();
+                try target.diagnostics.appendSlice(params_typed.value.diagnostics);
+                if (target == main.editor.active_buffer) {
+                    main.editor.dirty.draw = true;
+                }
+            }
         }
     }
 };

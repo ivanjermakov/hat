@@ -87,6 +87,15 @@ pub const Editor = struct {
         return null;
     }
 
+    pub fn findBufferByUri(self: *Editor, uri: []const u8) ?*buf.Buffer {
+        for (self.buffers.items) |buffer| {
+            if (std.mem.eql(u8, buffer.uri, uri)) {
+                return buffer;
+            }
+        }
+        return null;
+    }
+
     pub fn openScratch(self: *Editor, content: ?[]const u8) !void {
         const buffer = try self.allocator.create(buf.Buffer);
         buffer.* = try buf.Buffer.init(self.allocator, null, content orelse "");
