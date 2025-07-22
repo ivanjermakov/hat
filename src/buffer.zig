@@ -945,6 +945,7 @@ pub const Buffer = struct {
 };
 
 fn nextWordStart(line: []u21, pos: usize) ?usize {
+    if (line.len == 0) return null;
     var col = pos;
     while (col < line.len - 1) {
         const ch = line[col];
@@ -959,6 +960,7 @@ fn nextWordStart(line: []u21, pos: usize) ?usize {
 }
 
 fn wordEnd(line: []u21, pos: usize) ?usize {
+    if (line.len == 0) return null;
     var col = pos;
     while (col < line.len - 1) {
         const ch = line[col];
@@ -972,6 +974,7 @@ fn wordEnd(line: []u21, pos: usize) ?usize {
 }
 
 fn tokenEnd(line: []u21, pos: usize) ?usize {
+    if (line.len == 0) return null;
     var col = pos;
     while (col < line.len - 1) {
         const ch = line[col];
