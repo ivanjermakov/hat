@@ -42,6 +42,8 @@ the beginning
     * [x] Diagnostics
     * [x] Completions w/ documentation
     * [x] Hover
+    * [ ] Rename
+    * [ ] Document highlight
     * [ ] Find symbol
 - [x] Multi buffer
     * [x] Buffer management
