@@ -120,9 +120,9 @@ pub const Buffer = struct {
     /// History index of the last file save
     /// Used to decide whether buffer has unsaved changes
     file_history_index: ?usize = null,
-    /// Changes that needs to be sent to LSP clients
+    /// Changes needed to be sent to LSP clients
     pending_changes: std.ArrayList(cha.Change),
-    /// Changes that yet to become a part of Buffer.history
+    /// Changes yet to become a part of Buffer.history
     uncommitted_changes: std.ArrayList(cha.Change),
     lsp_connections: std.ArrayList(*lsp.LspConnection),
     scratch: bool = false,
@@ -140,9 +140,9 @@ pub const Buffer = struct {
         const file_ext = std.fs.path.extension(buf_path);
         const file_type = ft.file_type.get(file_ext) orelse ft.plain;
 
-        const abs_path = try std.fs.realpathAlloc(allocator, buf_path);
-        defer allocator.free(abs_path);
-        const uri = try std.fmt.allocPrint(allocator, "file://{s}", .{abs_path});
+        const abs_path = std.fs.realpathAlloc(allocator, buf_path) catch null;
+        defer if (abs_path) |a| allocator.free(a);
+        const uri = try std.fmt.allocPrint(allocator, "file://{s}", .{abs_path orelse buf_path});
         var self = Buffer{
             .path = buf_path,
             .file_type = file_type,
