@@ -13,15 +13,14 @@ Hat is a [suckless](https://suckless.org/) modal text editor for modern terminal
 - Based on [suckless](https://suckless.org/philosophy/) and
 [unix](https://en.wikipedia.org/wiki/Unix_philosophy) philosophies
 - Software should do not more and not less than what users need
-    * Every feature is implemented in the most simple and straightforward form:
-    keep it simple, fast, and clear
+    * Every feature is implemented in the most simple and straightforward form: keep it simple, fast, and clear
 - Software is made for users capable of reading and customizing its source code
     * Source code can be read by users in one evening
     * External configuration is not necessary and discouraged
-    * Documentation is not necessary
+    * User manual documentation is not necessary, _hacking_ documentation is encouraged (via [HACKING.md](HACKING.md))
 - Software is meant to be distributed as source code, compiled by users
-- Software is not meant to be developed forever and
-its final state should be described by its feature set from the beginning
+- Software is not meant to be developed forever and its final state should be described by its feature set from
+the beginning
     * Once every feature is implemented, software can be considered complete
 - Software is extended either by users directly or by applying
 [source code patches](https://en.wikipedia.org/wiki/Patch_(computing)#Source_code_patching), distributed as diff files
@@ -29,7 +28,6 @@ its final state should be described by its feature set from the beginning
 
 ## Features
 
-- [x] Unicode support
 - [x] Modal text editing
     * [x] Unlimited undo/redo
     * [x] Select and select line modes
@@ -41,10 +39,11 @@ its final state should be described by its feature set from the beginning
 - [x] [LSP](https://microsoft.github.io/language-server-protocol/) support
     * [x] Diagnostics
     * [x] Completions w/ documentation
-    * [ ] Hover
+    * [x] Hover
     * [ ] Find symbol
 - [x] Multi buffer
     * [x] Buffer management
     * [x] Find in files
-    * [x] Scratch buffers
+- [x] Scratch buffers
+- [x] Unicode support
 - [x] `--printer` mode
