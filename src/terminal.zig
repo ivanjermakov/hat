@@ -356,7 +356,16 @@ pub const Terminal = struct {
             try doc_lines.append(line);
         }
         const buffer = main.editor.active_buffer;
-        const doc_pos = buffer.cursor.applyOffset(.{ .row = 1 });
+        const max_doc_width = 90;
+        var longest_line: usize = 0;
+        for (doc_lines.items) |line| {
+            if (line.len > longest_line) longest_line = line.len;
+        }
+        var doc_pos = buf.Cursor{ .row = buffer.cursor.row + 1, .col = buffer.cursor.col };
+        const doc_width = @min(max_doc_width, longest_line);
+        if (doc_pos.col + doc_width > self.dimensions.width) {
+            doc_pos.col = @max(0, @as(i32, @intCast(self.dimensions.width)) - doc_width);
+        }
         try self.drawDocumentation(doc_lines.items, doc_pos);
     }
 
