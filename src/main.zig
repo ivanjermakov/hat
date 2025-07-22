@@ -110,6 +110,7 @@ fn startEditor(allocator: std.mem.Allocator) !void {
 
     main_loop: while (true) {
         try editor.update();
+        buffer = editor.active_buffer;
 
         const needs_handle_mappings = try term.updateInput(allocator);
         if (needs_handle_mappings) {
