@@ -127,6 +127,7 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                 const cmp_menu_active = editor.mode == .insert and
                     editor.completion_menu.display_items.items.len > 0;
 
+                log.log(@This(), "deb {}\n", .{ch == 'q' and key.activeModifier(.control)});
                 // cmp_menu
                 if (cmp_menu_active and code == .up) {
                     try editor.completion_menu.prevItem();
@@ -158,6 +159,8 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                 } else if (editor.mode == .normal and ch == 'e' and key.activeModifier(.control)) {
                     try editor.pickBuffer();
                     buffer = editor.active_buffer;
+                } else if (editor.mode == .normal and ch == 'q' and key.activeModifier(.control)) {
+                    try buffer.showDocumentation();
 
                     // normal or select mode
                 } else if (normal_or_select and (ch == 'q' or ch == 'Q')) {

@@ -41,6 +41,7 @@ its final state should be described by its feature set from the beginning
 - [x] [LSP](https://microsoft.github.io/language-server-protocol/) support
     * [x] Diagnostics
     * [x] Completions w/ documentation
+    * [ ] Hover
     * [ ] Find symbol
 - [x] Multi buffer
     * [x] Buffer management

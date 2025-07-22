@@ -83,7 +83,7 @@ pub const LspConnection = struct {
             .allocator = allocator,
         };
         try conn.sendRequest("initialize", .{
-            .capabilities = .{
+            .capabilities = lsp.types.ClientCapabilities{
                 .textDocument = .{
                     .definition = .{},
                     .diagnostic = .{},
@@ -93,6 +93,9 @@ pub const LspConnection = struct {
                             .insertReplaceSupport = true,
                             .documentationFormat = &.{ .plaintext, .markdown },
                         },
+                    },
+                    .hover = .{
+                        .contentFormat = &.{ .plaintext, .markdown },
                     },
                 },
             },
@@ -130,12 +133,15 @@ pub const LspConnection = struct {
                     const matched_request = self.messages_unreplied.fetchRemove(response_id) orelse continue;
                     defer self.allocator.free(matched_request.value.message);
 
-                    if (std.mem.eql(u8, matched_request.value.method, "initialize")) {
+                    const method = matched_request.value.method;
+                    if (std.mem.eql(u8, method, "initialize")) {
                         try self.handleInitializeResponse(arena.allocator(), resp);
-                    } else if (std.mem.eql(u8, matched_request.value.method, "textDocument/definition")) {
+                    } else if (std.mem.eql(u8, method, "textDocument/definition")) {
                         try self.handleDefinitionResponse(arena.allocator(), resp);
-                    } else if (std.mem.eql(u8, matched_request.value.method, "textDocument/completion")) {
+                    } else if (std.mem.eql(u8, method, "textDocument/completion")) {
                         try self.handleCompletionResponse(arena.allocator(), resp);
+                    } else if (std.mem.eql(u8, method, "textDocument/hover")) {
+                        try self.handleHoverResponse(arena.allocator(), resp);
                     }
                 },
                 .notification => |notif| {
@@ -158,6 +164,14 @@ pub const LspConnection = struct {
     pub fn goToDefinition(self: *LspConnection) !void {
         const buffer = main.editor.active_buffer;
         try self.sendRequest("textDocument/definition", .{
+            .textDocument = .{ .uri = buffer.uri },
+            .position = buffer.cursor.toLsp(),
+        });
+    }
+
+    pub fn hover(self: *LspConnection) !void {
+        const buffer = main.editor.active_buffer;
+        try self.sendRequest("textDocument/hover", .{
             .textDocument = .{ .uri = buffer.uri },
             .position = buffer.cursor.toLsp(),
         });
@@ -367,6 +381,27 @@ pub const LspConnection = struct {
         main.editor.completion_menu.updateItems(items) catch |e| {
             log.log(@This(), "cmp menu update failed: {}\n", .{e});
         };
+    }
+
+    fn handleHoverResponse(self: *LspConnection, arena: std.mem.Allocator, resp: lsp.JsonRPCMessage.Response) !void {
+        _ = self;
+        switch (resp.result_or_error) {
+            .@"error" => {
+                log.log(@This(), "Lsp error: {}\n", .{resp.result_or_error.@"error"});
+                return;
+            },
+            .result => |r| if (r.? == .null) return,
+        }
+        const result = try std.json.parseFromValue(lsp.types.Hover, arena, resp.result_or_error.result.?, .{});
+        const contents = switch (result.value.contents) {
+            .MarkupContent => |c| c.value,
+            // deprecated
+            .MarkedString, .array_of_MarkedString => return,
+        };
+
+        if (main.editor.hover_contents) |c| main.editor.allocator.free(c);
+        main.editor.hover_contents = try main.editor.allocator.dupe(u8, contents);
+        log.log(@This(), "hover content: {s}\n", .{contents});
     }
 
     fn handleNotification(self: *LspConnection, arena: std.mem.Allocator, notif: lsp.JsonRPCMessage.Notification) !void {

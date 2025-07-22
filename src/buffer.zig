@@ -706,6 +706,13 @@ pub const Buffer = struct {
         }
     }
 
+    pub fn showDocumentation(self: *Buffer) !void {
+        log.log(@This(), "show documentation\n", .{});
+        for (self.lsp_connections.items) |conn| {
+            try conn.hover();
+        }
+    }
+
     pub fn copySelectionToClipboard(self: *Buffer) !void {
         if (self.selection) |selection| {
             const last_line = self.content.items[@intCast(selection.end.row)].items;

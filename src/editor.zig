@@ -24,6 +24,7 @@ pub const Editor = struct {
     lsp_connections: std.StringHashMap(lsp.LspConnection),
     messages: std.ArrayList([]const u8),
     message_read_idx: usize = 0,
+    hover_contents: ?[]const u8 = null,
     allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator) !Editor {
@@ -108,6 +109,8 @@ pub const Editor = struct {
             self.allocator.free(message);
         }
         self.messages.deinit();
+
+        if (self.hover_contents) |c| self.allocator.free(c);
     }
 
     pub fn pickFile(self: *Editor) !void {
