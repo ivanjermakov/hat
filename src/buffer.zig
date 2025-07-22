@@ -196,6 +196,11 @@ pub const Buffer = struct {
     }
 
     pub fn deinit(self: *Buffer) void {
+        for (self.lsp_connections.items) |conn| {
+            conn.didClose(self) catch {};
+        }
+        self.lsp_connections.deinit();
+
         self.allocator.free(self.uri);
         self.allocator.free(self.path);
 
@@ -218,8 +223,6 @@ pub const Buffer = struct {
         for (self.pending_changes.items) |*c| c.deinit();
         self.pending_changes.deinit();
         self.uncommitted_changes.deinit();
-
-        self.lsp_connections.deinit();
     }
 
     pub fn write(self: *Buffer) !void {
