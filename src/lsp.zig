@@ -351,14 +351,14 @@ pub const LspConnection = struct {
             },
         };
         if (location) |loc| {
-            const buffer = main.editor.active_buffer;
-            if (std.mem.eql(u8, loc.uri, buffer.uri)) {
-                log.log(@This(), "jump to {}\n", .{loc.range.start});
-                const new_cursor = buf.Cursor.fromLsp(loc.range.start);
-                try buffer.moveCursor(new_cursor);
-            } else {
-                log.log(@This(), "TODO: jump to another file {s}\n", .{loc.uri});
+            if (!std.mem.eql(u8, loc.uri, main.editor.active_buffer.uri)) {
+                if (uriExtractPath(loc.uri)) |path| {
+                    try main.editor.openBuffer(path);
+                }
             }
+            log.log(@This(), "jump to {}\n", .{loc.range.start});
+            const new_cursor = buf.Cursor.fromLsp(loc.range.start);
+            try main.editor.active_buffer.moveCursor(new_cursor);
         }
     }
 
@@ -434,6 +434,14 @@ pub fn extractTextEdit(item: lsp.types.CompletionItem) ?lsp.types.TextEdit {
             },
             .TextEdit => |t| return t,
         }
+    }
+    return null;
+}
+
+pub fn uriExtractPath(uri: []const u8) ?[]const u8 {
+    const prefix = "file://";
+    if (std.mem.startsWith(u8, uri, prefix)) {
+        return uri[prefix.len..];
     }
     return null;
 }
