@@ -335,10 +335,12 @@ pub const Buffer = struct {
     }
 
     pub fn centerCursor(self: *Buffer) !void {
+        const old_offset_row = self.offset.row;
         const dims = main.term.dimensions;
         const target_row: i32 = @intCast(@divFloor(dims.height, 2));
         const term_row = self.cursor.applyOffset(self.offset.negate()).row;
         self.offset.row = @max(0, self.offset.row + term_row - target_row);
+        if (old_offset_row == self.offset.row) return;
         main.editor.dirty.draw = true;
     }
 
@@ -615,6 +617,7 @@ pub const Buffer = struct {
     }
 
     pub fn clearSelection(self: *Buffer) !void {
+        if (self.selection == null) return;
         self.selection = null;
         main.editor.dirty.draw = true;
     }

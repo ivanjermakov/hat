@@ -361,7 +361,7 @@ pub const Terminal = struct {
         for (doc_lines.items) |line| {
             if (line.len > longest_line) longest_line = line.len;
         }
-        var doc_pos = buffer.cursor.applyOffset(buffer.offset.negate()).applyOffset(.{.row = 1});
+        var doc_pos = buffer.cursor.applyOffset(buffer.offset.negate()).applyOffset(.{ .row = 1 });
         const doc_width = @min(max_doc_width, longest_line);
         if (doc_pos.col + doc_width > self.dimensions.width) {
             doc_pos.col = @max(0, @as(i32, @intCast(self.dimensions.width)) - doc_width);
