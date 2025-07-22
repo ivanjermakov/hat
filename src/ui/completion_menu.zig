@@ -85,9 +85,7 @@ pub const CompletionMenu = struct {
         }
 
         // TODO: replace_range might not end at cursor position
-        const text_at = try main.editor.active_buffer.textAt(self.allocator, buf.Span.fromLsp(self.replace_range.?));
-        defer self.allocator.free(text_at);
-        const prompt = try uni.utf8ToBytes(self.allocator, text_at);
+        const prompt = try main.editor.active_buffer.rawTextAt(self.allocator, buf.Span.fromLsp(self.replace_range.?));
         defer self.allocator.free(prompt);
         log.log(@This(), "prompt {s}\n", .{prompt});
 

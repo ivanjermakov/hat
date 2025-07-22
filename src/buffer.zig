@@ -463,9 +463,9 @@ pub const Buffer = struct {
         if (self.cursor.col == line.items.len) {
             span.end = .{ .row = self.cursor.row + 1, .col = 0 };
         }
-        const utf_text = try self.textAt(self.allocator, span);
-        defer self.allocator.free(utf_text);
-        var change = try cha.Change.initDelete(self.allocator, span, utf_text);
+        const text = try self.textAt(self.allocator, span);
+        defer self.allocator.free(text);
+        var change = try cha.Change.initDelete(self.allocator, span, text);
         try self.appendChange(&change);
     }
 
@@ -478,9 +478,9 @@ pub const Buffer = struct {
             }
         } else {
             const span: Span = .{ .start = self.cursor.applyOffset(.{ .col = -1 }), .end = self.cursor };
-            const utf_text = try self.textAt(self.allocator, span);
-            defer self.allocator.free(utf_text);
-            var change = try cha.Change.initDelete(self.allocator, span, utf_text);
+            const text = try self.textAt(self.allocator, span);
+            defer self.allocator.free(text);
+            var change = try cha.Change.initDelete(self.allocator, span, text);
             try self.appendChange(&change);
         }
     }
@@ -491,9 +491,9 @@ pub const Buffer = struct {
             .start = .{ .row = @intCast(row), .col = @intCast(line.items.len) },
             .end = .{ .row = @intCast(row + 1), .col = 0 },
         };
-        const utf_text = try self.textAt(self.allocator, span);
-        defer self.allocator.free(utf_text);
-        var change = try cha.Change.initDelete(self.allocator, span, utf_text);
+        const text = try self.textAt(self.allocator, span);
+        defer self.allocator.free(text);
+        var change = try cha.Change.initDelete(self.allocator, span, text);
         try self.appendChange(&change);
         try self.commitChanges();
     }
@@ -503,9 +503,9 @@ pub const Buffer = struct {
             const last_line = self.content.items[@intCast(selection.end.row)].items;
             const span = selection.toExclusiveEnd(last_line.len);
             try self.enterMode(.normal);
-            const utf_text = try self.textAt(self.allocator, span);
-            defer self.allocator.free(utf_text);
-            var change = try cha.Change.initDelete(self.allocator, span, utf_text);
+            const text = try self.textAt(self.allocator, span);
+            defer self.allocator.free(text);
+            var change = try cha.Change.initDelete(self.allocator, span, text);
             try self.appendChange(&change);
             try self.commitChanges();
         }
@@ -694,6 +694,12 @@ pub const Buffer = struct {
         return res.toOwnedSlice();
     }
 
+    pub fn rawTextAt(self: *Buffer, allocator: std.mem.Allocator, span: Span) ![]const u8 {
+        const text = try self.textAt(self.allocator, span);
+        defer self.allocator.free(text);
+        return try uni.utf8ToBytes(allocator, text);
+    }
+
     pub fn goToDefinition(self: *Buffer) !void {
         for (self.lsp_connections.items) |conn| {
             try conn.goToDefinition();
@@ -703,11 +709,9 @@ pub const Buffer = struct {
     pub fn copySelectionToClipboard(self: *Buffer) !void {
         if (self.selection) |selection| {
             const last_line = self.content.items[@intCast(selection.end.row)].items;
-            const text = try self.textAt(self.allocator, selection.toExclusiveEnd(last_line.len));
+            const text = try self.rawTextAt(self.allocator, selection.toExclusiveEnd(last_line.len));
             defer self.allocator.free(text);
-            const text_uni = try uni.utf8ToBytes(self.allocator, text);
-            defer self.allocator.free(text_uni);
-            try clp.write(self.allocator, text_uni);
+            try clp.write(self.allocator, text);
             try self.enterMode(.normal);
         }
     }
