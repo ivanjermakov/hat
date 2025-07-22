@@ -90,6 +90,8 @@ pub const Terminal = struct {
         const cmp_menu = &main.editor.completion_menu;
         try self.drawCompletionMenu(cmp_menu);
 
+        if (main.editor.hover_contents) |hover| try self.drawHover(hover);
+
         try self.drawMessage();
 
         try self.updateCursor();
@@ -341,29 +343,46 @@ pub const Terminal = struct {
                 }
             }
 
-            const max_doc_width = 90;
-            var longest_line: usize = 0;
-            for (doc_lines.items) |line| {
-                if (line.len > longest_line) longest_line = line.len;
-            }
-            const doc_width = @min(max_doc_width, longest_line);
-
-            try co.attributes.write(co.attributes.documentation_menu, self.writer.writer());
             const doc_pos = menu_pos.applyOffset(.{ .col = menu_width });
-            for (0..doc_lines.items.len) |i| {
-                const doc_line = doc_lines.items[i];
-                try self.moveCursor(.{
-                    .row = doc_pos.row + @as(i32, @intCast(i)),
-                    .col = doc_pos.col,
-                });
-                const available_len = @min(self.dimensions.width - @as(usize, @intCast(doc_pos.col)), doc_width);
-                const visible_len = @min(available_len, doc_line.len);
-                try self.write(doc_line[0..visible_len]);
-                for (0..available_len - visible_len) |_| {
-                    try self.write(" ");
-                }
+            try self.drawDocumentation(doc_lines.items, doc_pos);
+        }
+    }
+
+    fn drawHover(self: *Terminal, text: []const u8) !void {
+        var doc_lines = std.ArrayList([]const u8).init(self.allocator);
+        defer doc_lines.deinit();
+        var doc_iter = std.mem.splitScalar(u8, text, '\n');
+        while (doc_iter.next()) |line| {
+            try doc_lines.append(line);
+        }
+        const buffer = main.editor.active_buffer;
+        const doc_pos = buffer.cursor.applyOffset(.{ .row = 1 });
+        try self.drawDocumentation(doc_lines.items, doc_pos);
+    }
+
+    fn drawDocumentation(self: *Terminal, lines: []const []const u8, pos: buf.Cursor) !void {
+        try co.attributes.write(co.attributes.documentation_menu, self.writer.writer());
+        defer self.resetAttributes() catch {};
+
+        const max_doc_width = 90;
+        var longest_line: usize = 0;
+        for (lines) |line| {
+            if (line.len > longest_line) longest_line = line.len;
+        }
+        const doc_width = @min(max_doc_width, longest_line);
+
+        for (0..lines.len) |i| {
+            const doc_line = lines[i];
+            try self.moveCursor(.{
+                .row = pos.row + @as(i32, @intCast(i)),
+                .col = pos.col,
+            });
+            const available_len = @min(self.dimensions.width - @as(usize, @intCast(pos.col)), doc_width);
+            const visible_len = @min(available_len, doc_line.len);
+            try self.write(doc_line[0..visible_len]);
+            for (0..available_len - visible_len) |_| {
+                try self.write(" ");
             }
-            try self.resetAttributes();
         }
     }
 

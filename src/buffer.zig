@@ -299,6 +299,7 @@ pub const Buffer = struct {
         }
 
         main.editor.dirty.cursor = true;
+        main.editor.resetHover();
     }
 
     test "moveCursor" {
@@ -317,6 +318,8 @@ pub const Buffer = struct {
     }
 
     pub fn enterMode(self: *Buffer, mode: edi.Mode) !void {
+        main.editor.resetHover();
+
         if (main.editor.mode == mode) return;
         switch (main.editor.mode) {
             .insert => try self.commitChanges(),
@@ -706,8 +709,8 @@ pub const Buffer = struct {
         }
     }
 
-    pub fn showDocumentation(self: *Buffer) !void {
-        log.log(@This(), "show documentation\n", .{});
+    pub fn showHover(self: *Buffer) !void {
+        log.log(@This(), "show hover\n", .{});
         for (self.lsp_connections.items) |conn| {
             try conn.hover();
         }

@@ -399,9 +399,10 @@ pub const LspConnection = struct {
             .MarkedString, .array_of_MarkedString => return,
         };
 
-        if (main.editor.hover_contents) |c| main.editor.allocator.free(c);
+        main.editor.resetHover();
         main.editor.hover_contents = try main.editor.allocator.dupe(u8, contents);
         log.log(@This(), "hover content: {s}\n", .{contents});
+        main.editor.dirty.draw = true;
     }
 
     fn handleNotification(self: *LspConnection, arena: std.mem.Allocator, notif: lsp.JsonRPCMessage.Notification) !void {

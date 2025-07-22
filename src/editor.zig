@@ -110,7 +110,7 @@ pub const Editor = struct {
         }
         self.messages.deinit();
 
-        if (self.hover_contents) |c| self.allocator.free(c);
+        self.resetHover();
     }
 
     pub fn pickFile(self: *Editor) !void {
@@ -193,6 +193,14 @@ pub const Editor = struct {
         _ = self.buffers.orderedRemove(0);
         if (self.buffers.items.len == 0) return;
         try self.openBuffer(self.buffers.items[0].path);
+    }
+
+    pub fn resetHover(self: *Editor) void {
+        if (self.hover_contents) |c| {
+            self.hover_contents = null;
+            self.allocator.free(c);
+            main.editor.dirty.draw = true;
+        }
     }
 };
 
