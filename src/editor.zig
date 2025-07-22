@@ -41,18 +41,15 @@ pub const Editor = struct {
     }
 
     pub fn openBuffer(self: *Editor, path: []const u8) !void {
-        for (0..self.buffers.items.len) |buffer_idx| {
-            const buffer = self.buffers.items[buffer_idx];
-            // TODO: resolve paths
-            if (std.mem.eql(u8, buffer.path, path)) {
-                log.log(@This(), "opening existing buffer {s}\n", .{path});
-                // reinsert to maintain recent-first order
-                _ = self.buffers.orderedRemove(buffer_idx);
-                try self.buffers.insert(0, buffer);
-                self.active_buffer = buffer;
-                main.editor.dirty.draw = true;
-                return;
-            }
+        if (self.findBufferByPath(path)) |existing| {
+            log.log(@This(), "opening existing buffer {s}\n", .{path});
+            // reinsert to maintain recent-first order
+            const existing_idx = std.mem.indexOfScalar(*buf.Buffer, self.buffers.items, existing).?;
+            _ = self.buffers.orderedRemove(existing_idx);
+            try self.buffers.insert(0, existing);
+            self.active_buffer = existing;
+            main.editor.dirty.draw = true;
+            return;
         }
         log.log(@This(), "opening file at path {s}\n", .{path});
         const file = try std.fs.cwd().openFile(path, .{ .mode = .read_write });
@@ -78,6 +75,16 @@ pub const Editor = struct {
             log.log(@This(), "attached buffer {s} to lsp {s}\n", .{ path, conn.config.name });
             try conn.didChange(buffer);
         }
+    }
+
+    pub fn findBufferByPath(self: *Editor, path: []const u8) ?*buf.Buffer {
+        for (self.buffers.items) |buffer| {
+            // TODO: resolve paths
+            if (std.mem.eql(u8, buffer.path, path)) {
+                return buffer;
+            }
+        }
+        return null;
     }
 
     pub fn openScratch(self: *Editor, content: ?[]const u8) !void {
