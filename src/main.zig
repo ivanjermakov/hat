@@ -179,10 +179,12 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     for (0..@divFloor(term.dimensions.height, 2)) |_| {
                         try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = -1 }));
                     }
+                    try buffer.centerCursor();
                 } else if (normal_or_select and ch == 'K') {
                     for (0..@divFloor(term.dimensions.height, 2)) |_| {
                         try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = 1 }));
                     }
+                    try buffer.centerCursor();
                 } else if (normal_or_select and ch == 'w') {
                     try buffer.moveToNextWord();
                 } else if (normal_or_select and ch == 'W') {
@@ -200,6 +202,8 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     try buffer.copySelectionToClipboard();
                 } else if (normal_or_select and ch == 'p') {
                     try buffer.changeInsertFromClipboard();
+                } else if (normal_or_select and ch == 'z') {
+                    try buffer.centerCursor();
 
                     // normal mode
                 } else if (editor.mode == .normal and ch == 's') {
@@ -263,11 +267,13 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                         try buffer.goToDefinition();
                     } else if (normal_or_select and ch == 'g' and ch2 == 'i') {
                         try buffer.moveCursor(.{ .col = buffer.cursor.col });
+                        try buffer.centerCursor();
                     } else if (normal_or_select and ch == 'g' and ch2 == 'k') {
                         try buffer.moveCursor(.{
                             .row = @as(i32, @intCast(buffer.content.items.len)) - 1,
                             .col = buffer.cursor.col,
                         });
+                        try buffer.centerCursor();
                     } else if (normal_or_select and ch == 'g' and ch2 == 'l') {
                         const line = buffer.content.items[@intCast(buffer.cursor.row)].items;
                         try buffer.moveCursor(.{ .row = buffer.cursor.row, .col = @intCast(line.len) });

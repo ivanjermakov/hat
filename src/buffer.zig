@@ -329,6 +329,14 @@ pub const Buffer = struct {
         try testing.expectEqual(Cursor{ .row = 2, .col = 2 }, buffer.cursor);
     }
 
+    pub fn centerCursor(self: *Buffer) !void {
+        const dims = main.term.dimensions;
+        const target_row: i32 = @intCast(@divFloor(dims.height, 2));
+        const term_row = self.cursor.applyOffset(self.offset.negate()).row;
+        self.offset.row = @max(0, self.offset.row + term_row - target_row);
+        main.editor.dirty.draw = true;
+    }
+
     pub fn enterMode(self: *Buffer, mode: edi.Mode) !void {
         main.editor.resetHover();
 
