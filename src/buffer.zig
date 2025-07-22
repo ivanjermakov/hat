@@ -106,6 +106,9 @@ pub const Buffer = struct {
     diagnostics: std.ArrayList(lsp.types.Diagnostic),
     /// Cursor position in local buffer character space
     cursor: Cursor = .{},
+    /// Cursor's preferred col
+    /// Used to keep col when moving through variable-with lines
+    cursor_desired_col: ?usize = null,
     /// How buffer is positioned relative to the window
     /// (0, 0) means Buffer.cursor is the same as window cursor
     offset: Cursor = .{},
@@ -235,25 +238,34 @@ pub const Buffer = struct {
         try main.editor.sendMessage(msg);
     }
 
-    pub fn moveCursor(self: *Buffer, new_buf_cursor: Cursor) !void {
+    pub fn moveCursor(self: *Buffer, new_cursor: Cursor) !void {
         const old_cursor = self.cursor;
+        const vertical_only = old_cursor.col == new_cursor.col and old_cursor.row != new_cursor.row;
 
-        if (new_buf_cursor.row < 0) return;
-        self.scrollForCursor(new_buf_cursor);
+        if (new_cursor.row < 0) return;
+        self.scrollForCursor(new_cursor);
 
-        const term_cursor = new_buf_cursor.applyOffset(self.offset.negate());
+        const term_cursor = new_cursor.applyOffset(self.offset.negate());
         const dims = main.term.dimensions;
         const in_term = term_cursor.row >= 0 and term_cursor.row < dims.height and
             term_cursor.col >= 0 and term_cursor.col < dims.width;
         if (!in_term) return;
 
-        if (new_buf_cursor.row + 1 > self.content.items.len) return;
-        const line = &self.content.items[@intCast(new_buf_cursor.row)];
+        if (new_cursor.row + 1 > self.content.items.len) return;
+        const line = &self.content.items[@intCast(new_cursor.row)];
         const max_col = line.items.len;
-        const col: i32 = @intCast(@min(new_buf_cursor.col, max_col));
+        var col: i32 = @intCast(@min(new_cursor.col, max_col));
+        if (vertical_only) {
+            if (self.cursor_desired_col) |desired| {
+                col = @intCast(@min(desired, max_col));
+            }
+        }
+        if (!vertical_only) {
+            self.cursor_desired_col = @intCast(col);
+        }
 
         const valid_cursor = Cursor{
-            .row = new_buf_cursor.row,
+            .row = new_cursor.row,
             .col = col,
         };
 
