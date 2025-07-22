@@ -35,8 +35,10 @@ the beginning
     * [x] System clipboard copy & paste (using `xclip`)
 - [x] [Tree-sitter](https://tree-sitter.github.io/tree-sitter/) syntax awareness
     * [x] Syntax highlighting (24 bit color)
+    * [x] Indent alignment
     * [ ] Syntax tree actions
 - [x] [LSP](https://microsoft.github.io/language-server-protocol/) support
+    * [x] Go to definition
     * [x] Diagnostics
     * [x] Completions w/ documentation
     * [x] Hover

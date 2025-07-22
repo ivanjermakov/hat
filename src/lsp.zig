@@ -130,18 +130,27 @@ pub const LspConnection = struct {
             switch (rpc_message) {
                 .response => |resp| {
                     const response_id = resp.id.?.number;
+
+                    const response_result = b: switch (resp.result_or_error) {
+                        .@"error" => {
+                            log.log(@This(), "Lsp error: {}\n", .{resp.result_or_error.@"error"});
+                            return;
+                        },
+                        .result => |r| break :b r,
+                    };
+
                     const matched_request = self.messages_unreplied.fetchRemove(response_id) orelse continue;
                     defer self.allocator.free(matched_request.value.message);
 
                     const method = matched_request.value.method;
                     if (std.mem.eql(u8, method, "initialize")) {
-                        try self.handleInitializeResponse(arena.allocator(), resp);
+                        try self.handleInitializeResponse(arena.allocator(), response_result);
                     } else if (std.mem.eql(u8, method, "textDocument/definition")) {
-                        try self.handleDefinitionResponse(arena.allocator(), resp);
+                        try self.handleDefinitionResponse(arena.allocator(), response_result);
                     } else if (std.mem.eql(u8, method, "textDocument/completion")) {
-                        try self.handleCompletionResponse(arena.allocator(), resp);
+                        try self.handleCompletionResponse(arena.allocator(), response_result);
                     } else if (std.mem.eql(u8, method, "textDocument/hover")) {
-                        try self.handleHoverResponse(arena.allocator(), resp);
+                        try self.handleHoverResponse(arena.allocator(), response_result);
                     }
                 },
                 .notification => |notif| {
@@ -308,26 +317,21 @@ pub const LspConnection = struct {
         defer self.allocator.free(rpc_message);
     }
 
-    fn handleInitializeResponse(self: *LspConnection, arena: std.mem.Allocator, resp: lsp.JsonRPCMessage.Response) !void {
-        const resp_typed = try std.json.parseFromValue(lsp.types.InitializeResult, arena, resp.result_or_error.result.?, .{});
+    fn handleInitializeResponse(self: *LspConnection, arena: std.mem.Allocator, resp: ?std.json.Value) !void {
+        const resp_typed = try std.json.parseFromValue(lsp.types.InitializeResult, arena, resp.?, .{});
         log.log(@This(), "got init response: {}\n", .{resp_typed});
         try self.sendNotification("initialized", .{});
 
         try self.didOpen();
     }
 
-    fn handleDefinitionResponse(self: *LspConnection, arena: std.mem.Allocator, resp: lsp.JsonRPCMessage.Response) !void {
+    fn handleDefinitionResponse(self: *LspConnection, arena: std.mem.Allocator, resp: ?std.json.Value) !void {
         _ = self;
         const ResponseType = union(enum) {
             Definition: lsp.types.Definition,
             array_of_DefinitionLink: []const lsp.types.DefinitionLink,
         };
-
-        const resp_typed = try lsp.parser.UnionParser(ResponseType).jsonParseFromValue(
-            arena,
-            resp.result_or_error.result.?,
-            .{},
-        );
+        const resp_typed = try lsp.parser.UnionParser(ResponseType).jsonParseFromValue(arena, resp.?, .{});
         log.log(@This(), "got definition response: {}\n", .{resp_typed});
 
         const location = b: switch (resp_typed.Definition) {
@@ -352,27 +356,16 @@ pub const LspConnection = struct {
         }
     }
 
-    fn handleCompletionResponse(self: *LspConnection, arena: std.mem.Allocator, resp: lsp.JsonRPCMessage.Response) !void {
+    fn handleCompletionResponse(self: *LspConnection, arena: std.mem.Allocator, resp: ?std.json.Value) !void {
         _ = self;
         const ResponseType = union(enum) {
             array_of_CompletionItem: []const lsp.types.CompletionItem,
             CompletionList: lsp.types.CompletionList,
         };
-        switch (resp.result_or_error) {
-            .@"error" => {
-                log.log(@This(), "Lsp error: {}\n", .{resp.result_or_error.@"error"});
-                return;
-            },
-            .result => {},
-        }
 
         const items: []const lsp.types.CompletionItem = b: {
             const empty = [_]lsp.types.CompletionItem{};
-            const resp_typed = lsp.parser.UnionParser(ResponseType).jsonParseFromValue(
-                arena,
-                resp.result_or_error.result.?,
-                .{},
-            ) catch break :b &empty;
+            const resp_typed = lsp.parser.UnionParser(ResponseType).jsonParseFromValue(arena, resp.?, .{}) catch break :b &empty;
             switch (resp_typed) {
                 .array_of_CompletionItem => |a| break :b a,
                 .CompletionList => |l| break :b l.items,
@@ -383,16 +376,10 @@ pub const LspConnection = struct {
         };
     }
 
-    fn handleHoverResponse(self: *LspConnection, arena: std.mem.Allocator, resp: lsp.JsonRPCMessage.Response) !void {
+    fn handleHoverResponse(self: *LspConnection, arena: std.mem.Allocator, resp: ?std.json.Value) !void {
         _ = self;
-        switch (resp.result_or_error) {
-            .@"error" => {
-                log.log(@This(), "Lsp error: {}\n", .{resp.result_or_error.@"error"});
-                return;
-            },
-            .result => |r| if (r.? == .null) return,
-        }
-        const result = try std.json.parseFromValue(lsp.types.Hover, arena, resp.result_or_error.result.?, .{});
+        if (resp == null or resp.? == .null) return;
+        const result = try std.json.parseFromValue(lsp.types.Hover, arena, resp.?, .{});
         const contents = switch (result.value.contents) {
             .MarkupContent => |c| c.value,
             // deprecated
