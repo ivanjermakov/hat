@@ -6,6 +6,8 @@ const log = @import("log.zig");
 const buf = @import("buffer.zig");
 const lsp = @import("lsp");
 
+const default_stringify_opts = std.json.StringifyOptions{ .emit_null_optional_fields = false };
+
 pub const types = lsp.types;
 
 pub const LspConfig = struct {
@@ -22,7 +24,7 @@ pub const lsp_config = [_]LspConfig{
     },
     LspConfig{
         .name = "zls",
-        .cmd = &.{"zls"},
+        .cmd = &.{"zls", "--log-level", "debug"},
         .file_types = &.{"zig"},
     },
 };
@@ -46,7 +48,8 @@ pub const LspRequest = struct {
 };
 
 pub const LspConnectionStatus = enum {
-    Connected,
+    Created,
+    Initialized,
     Disconnecting,
     Closed,
 };
@@ -58,7 +61,7 @@ pub const LspConnection = struct {
     messages_unreplied: std.AutoHashMap(i64, LspRequest),
     poll_buf: std.ArrayList(u8),
     poll_header: ?lsp.BaseProtocolHeader,
-    buffers: std.ArrayList(usize),
+    buffers: std.ArrayList(*buf.Buffer),
     allocator: std.mem.Allocator,
 
     pub fn connect(allocator: std.mem.Allocator, config: LspConfig) !LspConnection {
@@ -74,12 +77,12 @@ pub const LspConnection = struct {
 
         var conn = LspConnection{
             .config = config,
-            .status = .Connected,
+            .status = .Created,
             .child = child,
             .messages_unreplied = std.AutoHashMap(i64, LspRequest).init(allocator),
             .poll_buf = std.ArrayList(u8).init(allocator),
             .poll_header = null,
-            .buffers = std.ArrayList(usize).init(allocator),
+            .buffers = std.ArrayList(*buf.Buffer).init(allocator),
             .allocator = allocator,
         };
         try conn.sendRequest("initialize", .{
@@ -123,12 +126,12 @@ pub const LspConnection = struct {
         defer arena.deinit();
 
         for (raw_msgs) |raw_msg_json| {
-            // log.log(@This(), "< raw message: {s}\n", .{raw_msg_json});
             const msg_json = try std.json.parseFromSlice(lsp.JsonRPCMessage, arena.allocator(), raw_msg_json, .{});
             defer msg_json.deinit();
             const rpc_message: lsp.JsonRPCMessage = msg_json.value;
             switch (rpc_message) {
                 .response => |resp| {
+                    log.log(@This(), "< raw response: {s}\n", .{raw_msg_json});
                     const response_id = resp.id.?.number;
 
                     const response_result = b: switch (resp.result_or_error) {
@@ -186,8 +189,7 @@ pub const LspConnection = struct {
         });
     }
 
-    pub fn didOpen(self: *LspConnection) !void {
-        const buffer = main.editor.active_buffer;
+    pub fn didOpen(self: *LspConnection, buffer: *buf.Buffer) !void {
         try self.sendNotification("textDocument/didOpen", .{
             .textDocument = .{
                 .uri = buffer.uri,
@@ -292,8 +294,8 @@ pub const LspConnection = struct {
             .method = method,
             .params = params,
         };
-        const json_message = try std.json.stringifyAlloc(self.allocator, request, .{});
-        // log.log(@This(), "> raw request: {s}\n", .{json_message});
+        const json_message = try std.json.stringifyAlloc(self.allocator, request, default_stringify_opts);
+        log.log(@This(), "> raw request: {s}\n", .{json_message});
         const rpc_message = try std.fmt.allocPrint(self.allocator, "Content-Length: {}\r\n\r\n{s}", .{ json_message.len, json_message });
         _ = try self.child.stdin.?.write(rpc_message);
         defer self.allocator.free(rpc_message);
@@ -309,24 +311,28 @@ pub const LspConnection = struct {
             .method = method,
             .params = params,
         };
-        const json_message = try std.json.stringifyAlloc(self.allocator, request, .{});
+        const json_message = try std.json.stringifyAlloc(self.allocator, request, default_stringify_opts);
         defer self.allocator.free(json_message);
-        // log.log(@This(), "> raw notification: {s}\n", .{json_message});
+        log.log(@This(), "> raw notification: {s}\n", .{json_message});
         const rpc_message = try std.fmt.allocPrint(self.allocator, "Content-Length: {}\r\n\r\n{s}", .{ json_message.len, json_message });
         _ = try self.child.stdin.?.write(rpc_message);
         defer self.allocator.free(rpc_message);
     }
 
     fn handleInitializeResponse(self: *LspConnection, arena: std.mem.Allocator, resp: ?std.json.Value) !void {
+        if (resp == null or resp.? == .null) return;
         const resp_typed = try std.json.parseFromValue(lsp.types.InitializeResult, arena, resp.?, .{});
         log.log(@This(), "got init response: {}\n", .{resp_typed});
         try self.sendNotification("initialized", .{});
-
-        try self.didOpen();
+        self.status = .Initialized;
+        for (self.buffers.items) |buffer| {
+            try self.didOpen(buffer);
+        }
     }
 
     fn handleDefinitionResponse(self: *LspConnection, arena: std.mem.Allocator, resp: ?std.json.Value) !void {
         _ = self;
+        if (resp == null or resp.? == .null) return;
         const ResponseType = union(enum) {
             Definition: lsp.types.Definition,
             array_of_DefinitionLink: []const lsp.types.DefinitionLink,
@@ -358,6 +364,7 @@ pub const LspConnection = struct {
 
     fn handleCompletionResponse(self: *LspConnection, arena: std.mem.Allocator, resp: ?std.json.Value) !void {
         _ = self;
+        if (resp == null or resp.? == .null) return;
         const ResponseType = union(enum) {
             array_of_CompletionItem: []const lsp.types.CompletionItem,
             CompletionList: lsp.types.CompletionList,
@@ -395,13 +402,11 @@ pub const LspConnection = struct {
     fn handleNotification(self: *LspConnection, arena: std.mem.Allocator, notif: lsp.JsonRPCMessage.Notification) !void {
         _ = self;
         // log.log(@This(), "notification: {s}\n", .{notif.method});
-        if (std.mem.eql(u8, notif.method, "textDocument/publishDiagnostics")) {
-            const params_typed = try std.json.parseFromValue(
-                lsp.types.PublishDiagnosticsParams,
-                arena,
-                notif.params.?,
-                .{},
-            );
+        if (std.mem.eql(u8, notif.method, "window/logMessage")) {
+            const params_typed = try std.json.parseFromValue(lsp.types.LogMessageParams, arena, notif.params.?, .{});
+            log.log(@This(), "server log: {s}\n", .{params_typed.value.message});
+        } else if (std.mem.eql(u8, notif.method, "textDocument/publishDiagnostics")) {
+            const params_typed = try std.json.parseFromValue(lsp.types.PublishDiagnosticsParams, arena, notif.params.?, .{});
             log.log(@This(), "got {} diagnostics\n", .{params_typed.value.diagnostics.len});
             if (main.editor.findBufferByUri(params_typed.value.uri)) |target| {
                 target.diagnostics.clearRetainingCapacity();

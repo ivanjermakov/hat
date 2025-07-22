@@ -72,8 +72,9 @@ pub const Editor = struct {
             }
             const conn = self.lsp_connections.getPtr(ftype).?;
             try buffer.lsp_connections.append(conn);
+            try conn.buffers.append(buffer);
             log.log(@This(), "attached buffer {s} to lsp {s}\n", .{ path, conn.config.name });
-            try conn.didChange(buffer);
+            if (conn.status == .Initialized) try conn.didOpen(buffer);
         }
     }
 
@@ -162,7 +163,7 @@ pub const Editor = struct {
             while (iter.next()) |entry| {
                 const conn = entry.value_ptr;
                 switch (conn.status) {
-                    .Connected => {
+                    .Created, .Initialized => {
                         log.log(@This(), "disconnecting lsp client\n", .{});
                         try conn.disconnect();
                     },
