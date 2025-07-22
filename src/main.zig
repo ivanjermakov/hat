@@ -160,10 +160,6 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     try buffer.showHover();
 
                     // normal or select mode
-                } else if (normal_or_select and (ch == 'q' or ch == 'Q')) {
-                    const force = ch == 'Q';
-                    try editor.closeBuffer(force);
-                    if (editor.buffers.items.len == 0) break :main_loop;
                 } else if (normal_or_select and ch == 'i') {
                     try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = -1 }));
                 } else if (normal_or_select and ch == 'k') {
@@ -201,12 +197,12 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     try buffer.changeInsertFromClipboard();
                 } else if (normal_or_select and ch == 'z') {
                     try buffer.centerCursor();
-                } else if (normal_or_select and code == .tab) {
-                    if (editor.buffers.items.len > 1) {
-                        try editor.openBuffer(editor.buffers.items[1].path);
-                    }
 
                     // normal mode
+                } else if (normal_or_select and (ch == 'q' or ch == 'Q')) {
+                    const force = ch == 'Q';
+                    try editor.closeBuffer(force);
+                    if (editor.buffers.items.len == 0) break :main_loop;
                 } else if (editor.mode == .normal and ch == 's') {
                     try buffer.enterMode(.select);
                 } else if (editor.mode == .normal and ch == 'S') {
@@ -223,6 +219,10 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     try buffer.undo();
                 } else if (editor.mode == .normal and ch == 'U') {
                     try buffer.redo();
+                } else if (editor.mode == .normal and code == .tab) {
+                    if (editor.buffers.items.len > 1) {
+                        try editor.openBuffer(editor.buffers.items[1].path);
+                    }
 
                     // insert mode
                 } else if (editor.mode == .insert and code == .delete) {
