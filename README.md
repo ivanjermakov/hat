@@ -33,6 +33,8 @@ the beginning
     * [x] Select and select line modes
     * [ ] Select block mode
     * [x] System clipboard copy & paste (using `xclip`)
+    * [ ] Search
+    * [ ] Replace
 - [x] [Tree-sitter](https://tree-sitter.github.io/tree-sitter/) syntax awareness
     * [x] Syntax highlighting (24 bit color)
     * [x] Indent alignment
@@ -47,7 +49,10 @@ the beginning
     * [ ] Find symbol
 - [x] Multi buffer
     * [x] Buffer management
+    * [x] Find file
     * [x] Find in files
+- [ ] Git integration
+    * [ ] Hunk markers
 - [x] Scratch buffers
 - [x] Unicode support
 - [x] `--printer` mode
