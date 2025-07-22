@@ -133,14 +133,16 @@ pub const Buffer = struct {
         try raw.appendSlice(content_raw);
 
         const scratch = path == null;
-        const file_ext = if (path) |p| std.fs.path.extension(p) else "";
-        const file_type = ft.file_type.get(file_ext) orelse ft.plain;
         const buf_path = if (path) |p|
             try allocator.dupe(u8, p)
         else
             try std.fmt.allocPrint(allocator, "scratch{d:0>2}", .{nextScratchId()});
+        const file_ext = std.fs.path.extension(buf_path);
+        const file_type = ft.file_type.get(file_ext) orelse ft.plain;
 
-        const uri = try std.fmt.allocPrint(allocator, "file://{s}", .{buf_path});
+        const abs_path = try std.fs.realpathAlloc(allocator, buf_path);
+        defer allocator.free(abs_path);
+        const uri = try std.fmt.allocPrint(allocator, "file://{s}", .{abs_path});
         var self = Buffer{
             .path = buf_path,
             .file_type = file_type,
