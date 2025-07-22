@@ -395,9 +395,6 @@ pub const Date = struct {
         return r == .eq or r == .lt;
     }
 
-    // ------------------------------------------------------------------------
-    // Parsing
-    // ------------------------------------------------------------------------
     // Parse date in format YYYY-MM-DD. Numbers must be zero padded.
     pub fn parseIso(ymd: []const u8) !Date {
         const value = std.mem.trim(u8, ymd, " ");
@@ -407,12 +404,6 @@ pub const Date = struct {
         const day = std.fmt.parseInt(u8, value[8..10], 10) catch return error.InvalidFormat;
         return Date.create(year, month, day);
     }
-
-    // TODO: Parsing
-
-    // ------------------------------------------------------------------------
-    // Formatting
-    // ------------------------------------------------------------------------
 
     // Return date in ISO format YYYY-MM-DD
     const ISO_DATE_FMT = "{:0>4}-{:0>2}-{:0>2}";
@@ -428,10 +419,6 @@ pub const Date = struct {
     pub fn writeIso(self: Date, writer: anytype) !void {
         try std.fmt.format(writer, ISO_DATE_FMT, .{ self.year, self.month, self.day });
     }
-
-    // ------------------------------------------------------------------------
-    // Properties
-    // ------------------------------------------------------------------------
 
     // Return day of year starting with 1
     pub fn dayOfYear(self: Date) u16 {
@@ -471,10 +458,6 @@ pub const Date = struct {
         assert(self.month >= 1 and self.month <= 12);
         return @tagName(@as(Month, @enumFromInt(self.month)));
     }
-
-    // ------------------------------------------------------------------------
-    // Operations
-    // ------------------------------------------------------------------------
 
     // Return a copy of the date shifted by the given number of days
     pub fn shiftDays(self: Date, days: i32) Date {
@@ -795,11 +778,8 @@ pub const Time = struct {
     hour: u8 = 0, // 0 to 23
     minute: u8 = 0, // 0 to 59
     second: u8 = 0, // 0 to 59
-    nanosecond: u32 = 0, // 0 to 999999999 TODO: Should this be u20?
+    nanosecond: u32 = 0, // 0 to 999999999
 
-    // ------------------------------------------------------------------------
-    // Constructors
-    // ------------------------------------------------------------------------
     pub fn now() Time {
         return Time.fromTimestamp(time.milliTimestamp());
     }
@@ -886,9 +866,6 @@ pub const Time = struct {
         return h + m + s;
     }
 
-    // -----------------------------------------------------------------------
-    // Comparisons
-    // -----------------------------------------------------------------------
     pub fn eql(self: Time, other: Time) bool {
         return self.cmp(other) == .eq;
     }
@@ -921,16 +898,10 @@ pub const Time = struct {
         return r == .eq or r == .lt;
     }
 
-    // -----------------------------------------------------------------------
-    // Methods
-    // -----------------------------------------------------------------------
     pub fn amOrPm(self: Time) []const u8 {
         return if (self.hour > 12) return "PM" else "AM";
     }
 
-    // -----------------------------------------------------------------------
-    // Formatting Methods
-    // -----------------------------------------------------------------------
     const ISO_HM_FORMAT = "T{d:0>2}:{d:0>2}";
     const ISO_HMS_FORMAT = "T{d:0>2}:{d:0>2}:{d:0>2}";
 
@@ -1041,7 +1012,6 @@ pub const Datetime = struct {
 
     // An absolute or relative delta
     // if years is defined a date is date
-    // TODO: Validate years before allowing it to be created
     pub const Delta = struct {
         years: i16 = 0,
         days: i32 = 0,
@@ -1108,9 +1078,6 @@ pub const Datetime = struct {
         }
     };
 
-    // ------------------------------------------------------------------------
-    // Constructors
-    // ------------------------------------------------------------------------
     pub fn now() Datetime {
         return Datetime.fromTimestamp(time.milliTimestamp());
     }
@@ -1175,9 +1142,6 @@ pub const Datetime = struct {
         return ds + ts;
     }
 
-    // -----------------------------------------------------------------------
-    // Comparisons
-    // -----------------------------------------------------------------------
     pub fn eql(self: Datetime, other: Datetime) bool {
         return self.cmp(other) == .eq;
     }
@@ -1203,10 +1167,6 @@ pub const Datetime = struct {
         const r = self.cmp(other);
         return r == .eq or r == .lt;
     }
-
-    // -----------------------------------------------------------------------
-    // Methods
-    // -----------------------------------------------------------------------
 
     // Return a Datetime.Delta relative to this date
     pub fn sub(self: Datetime, other: Datetime) Delta {
@@ -1294,10 +1254,6 @@ pub const Datetime = struct {
             .time = Time.create(hour, minute, second, nanosecond) catch unreachable, // Error here would mean a bug
         };
     }
-
-    // ------------------------------------------------------------------------
-    // Formatting methods
-    // ------------------------------------------------------------------------
 
     // Formats a timestamp in the format used by HTTP.
     // eg "Tue, 15 Nov 1994 08:12:31 GMT"
@@ -1407,10 +1363,6 @@ pub const Datetime = struct {
             },
         );
     }
-
-    // ------------------------------------------------------------------------
-    // Parsing methods
-    // ------------------------------------------------------------------------
 
     // Parse a HTTP If-Modified-Since header
     // in the format "<day-name>, <day> <month> <year> <hour>:<minute>:<second> GMT"
