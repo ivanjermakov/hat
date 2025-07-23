@@ -667,7 +667,7 @@ pub const Buffer = struct {
             switch (std.math.order(line_indents, line_dedents)) {
                 .gt => indent_next += 1,
                 .lt => {
-                    indent -= 1;
+                    indent = if (indent > 0) indent - 1 else 0;
                     indent_next -= 1;
                 },
                 else => {},
