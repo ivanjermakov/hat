@@ -594,7 +594,7 @@ pub fn getKeys(allocator: std.mem.Allocator, codes: []u8) ![]inp.Key {
 
     while (cs.items.len > 0) {
         const key = parseAnsi(allocator, &cs) catch |e| {
-            log.log(@This(), "{}\n", .{e});
+            log.log(@This(), "key: {}\n", .{e});
             continue;
         };
         try keys.append(key);
