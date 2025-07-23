@@ -13,6 +13,13 @@ pub fn log(comptime caller: type, comptime fmt: []const u8, args: anytype) void 
     std.fmt.format(writer, fmt, args) catch {};
 }
 
+pub fn assertEql(comptime Caller: type, comptime T: type, actual: []const T, expected: []const T) void {
+    if (!std.mem.eql(T, actual, expected)) {
+        log(Caller, "assert failed:\n  actual: {any}\n  expected: {any}\n", .{ actual, expected });
+        unreachable;
+    }
+}
+
 fn callerName(comptime caller: type) []const u8 {
     const caller_name_full = @typeName(caller);
     var caller_name_iter = std.mem.splitBackwardsScalar(u8, caller_name_full, '.');

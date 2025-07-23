@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const testing = std.testing;
 const assert = std.debug.assert;
 const main = @import("main.zig");
@@ -769,12 +770,14 @@ pub const Buffer = struct {
     fn applyChange(self: *Buffer, change: *cha.Change) !void {
         const span = change.old_span;
 
-        if (change.old_text) |old_text| {
-            const text_at = try self.textAt(self.allocator, span);
-            defer self.allocator.free(text_at);
-            std.debug.assert(std.mem.eql(u21, old_text, text_at));
-        } else {
-            std.debug.assert(std.meta.eql(span.start, span.end));
+        if (builtin.mode == .Debug) {
+            if (change.old_text) |old_text| {
+                const text_at = try self.textAt(self.allocator, span);
+                defer self.allocator.free(text_at);
+                log.assertEql(@This(), u21, old_text, text_at);
+            } else {
+                std.debug.assert(std.meta.eql(span.start, span.end));
+            }
         }
 
         try self.moveCursor(span.start);

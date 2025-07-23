@@ -127,12 +127,8 @@ fn startEditor(allocator: std.mem.Allocator) !void {
 
                 if (editor.mode == .insert and key_queue.items[0].printable != null) {
                     var printable = std.ArrayList(u21).init(allocator);
-                    {
-                        const utf = try uni.utf8FromBytes(allocator, key);
-                        defer allocator.free(utf);
-                        try printable.appendSlice(utf);
-                    }
-                    // read more printable keys in case this is a paste command
+                    keys_consumed = 0;
+                    // read all cosecutive printable keys in case this is a paste command
                     while (true) {
                         const next_key = if (keys_consumed < key_queue.items.len) key_queue.items[keys_consumed] else null;
                         if (next_key != null and next_key.?.printable != null) {
