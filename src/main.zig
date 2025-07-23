@@ -113,139 +113,136 @@ fn startEditor(allocator: std.mem.Allocator) !void {
         buffer = editor.active_buffer;
 
         const needs_handle_mappings = try term.updateInput(allocator);
+        const eql = std.mem.eql;
         if (needs_handle_mappings) {
-            handle_mappings: while (key_queue.items.len > 0) {
-                // log.log(@This(), "keys: {any}\n", .{keys.items});
-                const key = key_queue.orderedRemove(0);
-                defer if (key.printable) |p| allocator.free(p);
-
-                const code = key.code;
-                var ch: ?u8 = null;
-                if (key.printable != null and key.printable.?.len == 1) ch = key.printable.?[0];
-
-                const multiple_key = key_queue.items.len > 0;
+            while (key_queue.items.len > 0) {
+                var keys_consumed: usize = 1;
+                const multiple_key = key_queue.items.len > 1;
                 const normal_or_select = editor.mode.normalOrSelect();
                 const cmp_menu_active = editor.mode == .insert and
                     editor.completion_menu.display_items.items.len > 0;
 
+                const key = try std.fmt.allocPrint(allocator, "{}", .{key_queue.items[0]});
+                defer allocator.free(key);
+
                 // cmp_menu
-                if (cmp_menu_active and code == .up) {
+                if (cmp_menu_active and eql(u8, key, "<up>")) {
                     try editor.completion_menu.prevItem();
-                } else if (cmp_menu_active and code == .down) {
+                } else if (cmp_menu_active and eql(u8, key, "<down>")) {
                     try editor.completion_menu.nextItem();
-                } else if (cmp_menu_active and ch == '\n') {
+                } else if (cmp_menu_active and eql(u8, key, "\n")) {
                     try editor.completion_menu.accept();
 
                     // global
-                } else if (code == .up) {
+                } else if (eql(u8, key, "<up>")) {
                     try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = -1 }));
-                } else if (code == .down) {
+                } else if (eql(u8, key, "<down>")) {
                     try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = 1 }));
-                } else if (code == .left) {
+                } else if (eql(u8, key, "<left>")) {
                     try buffer.moveCursor(buffer.cursor.applyOffset(.{ .col = -1 }));
-                } else if (code == .right) {
+                } else if (eql(u8, key, "<right>")) {
                     try buffer.moveCursor(buffer.cursor.applyOffset(.{ .col = 1 }));
-                } else if (code == .escape) {
+                } else if (eql(u8, key, "<escape>")) {
                     try buffer.enterMode(.normal);
                     try editor.dismissMessage();
 
                     // normal mode with modifiers
-                } else if (editor.mode == .normal and ch == 'n' and key.activeModifier(.control)) {
+                } else if (editor.mode == .normal and eql(u8, key, "c-n")) {
                     try editor.pickFile();
-                } else if (editor.mode == .normal and ch == 'f' and key.activeModifier(.control)) {
+                } else if (editor.mode == .normal and eql(u8, key, "c-f")) {
                     try editor.findInFiles();
-                } else if (editor.mode == .normal and ch == 'e' and key.activeModifier(.control)) {
+                } else if (editor.mode == .normal and eql(u8, key, "<c-e>")) {
                     try editor.pickBuffer();
-                } else if (editor.mode == .normal and ch == 'd' and key.activeModifier(.control)) {
+                } else if (editor.mode == .normal and eql(u8, key, "<c-d>")) {
                     try buffer.showHover();
 
                     // normal or select mode
-                } else if (normal_or_select and ch == 'i') {
+                } else if (normal_or_select and eql(u8, key, "i")) {
                     try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = -1 }));
-                } else if (normal_or_select and ch == 'k') {
+                } else if (normal_or_select and eql(u8, key, "k")) {
                     try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = 1 }));
-                } else if (normal_or_select and ch == 'j') {
+                } else if (normal_or_select and eql(u8, key, "j")) {
                     try buffer.moveCursor(buffer.cursor.applyOffset(.{ .col = -1 }));
-                } else if (normal_or_select and ch == 'l') {
+                } else if (normal_or_select and eql(u8, key, "l")) {
                     try buffer.moveCursor(buffer.cursor.applyOffset(.{ .col = 1 }));
-                } else if (normal_or_select and ch == 'I') {
+                } else if (normal_or_select and eql(u8, key, "I")) {
                     for (0..@divFloor(term.dimensions.height, 2)) |_| {
                         try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = -1 }));
                     }
                     try buffer.centerCursor();
-                } else if (normal_or_select and ch == 'K') {
+                } else if (normal_or_select and eql(u8, key, "K")) {
                     for (0..@divFloor(term.dimensions.height, 2)) |_| {
                         try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = 1 }));
                     }
                     try buffer.centerCursor();
-                } else if (normal_or_select and ch == 'w') {
+                } else if (normal_or_select and eql(u8, key, "w")) {
                     try buffer.moveToNextWord();
-                } else if (normal_or_select and ch == 'W') {
+                } else if (normal_or_select and eql(u8, key, "W")) {
                     try buffer.moveToPrevWord();
-                } else if (normal_or_select and ch == 'e') {
+                } else if (normal_or_select and eql(u8, key, "e")) {
                     try buffer.moveToWordEnd();
-                } else if (normal_or_select and ch == 'E') {
+                } else if (normal_or_select and eql(u8, key, "E")) {
                     try buffer.moveToTokenEnd();
-                } else if (normal_or_select and ch == 'd') {
+                } else if (normal_or_select and eql(u8, key, "d")) {
                     try buffer.changeSelectionDelete();
-                } else if (normal_or_select and ch == '=') {
+                } else if (normal_or_select and eql(u8, key, "=")) {
                     try buffer.changeAlignIndent();
                     try buffer.enterMode(.normal);
-                } else if (normal_or_select and ch == 'y') {
+                } else if (normal_or_select and eql(u8, key, "y")) {
                     try buffer.copySelectionToClipboard();
-                } else if (normal_or_select and ch == 'p') {
+                } else if (normal_or_select and eql(u8, key, "p")) {
                     try buffer.changeInsertFromClipboard();
-                } else if (normal_or_select and ch == 'z') {
+                } else if (normal_or_select and eql(u8, key, "z")) {
                     try buffer.centerCursor();
 
                     // normal mode
-                } else if (normal_or_select and (ch == 'q' or ch == 'Q')) {
-                    const force = ch == 'Q';
+                } else if (normal_or_select and (eql(u8, key, "q") or eql(u8, key, "Q"))) {
+                    const force = eql(u8, key, "Q");
                     try editor.closeBuffer(force);
                     if (editor.buffers.items.len == 0) break :main_loop;
-                } else if (editor.mode == .normal and ch == 's') {
+                } else if (editor.mode == .normal and eql(u8, key, "s")) {
                     try buffer.enterMode(.select);
-                } else if (editor.mode == .normal and ch == 'S') {
+                } else if (editor.mode == .normal and eql(u8, key, "S")) {
                     try buffer.enterMode(.select_line);
-                } else if (editor.mode == .normal and ch == 'h') {
+                } else if (editor.mode == .normal and eql(u8, key, "h")) {
                     try buffer.enterMode(.insert);
-                } else if (editor.mode == .normal and ch == 'o') {
+                } else if (editor.mode == .normal and eql(u8, key, "o")) {
                     try buffer.changeInsertLineBelow(@intCast(buffer.cursor.row));
                     try buffer.enterMode(.insert);
-                } else if (editor.mode == .normal and ch == 'O') {
+                } else if (editor.mode == .normal and eql(u8, key, "O")) {
                     try buffer.changeInsertLineBelow(@intCast(buffer.cursor.row - 1));
                     try buffer.enterMode(.insert);
-                } else if (editor.mode == .normal and ch == 'u') {
+                } else if (editor.mode == .normal and eql(u8, key, "u")) {
                     try buffer.undo();
-                } else if (editor.mode == .normal and ch == 'U') {
+                } else if (editor.mode == .normal and eql(u8, key, "U")) {
                     try buffer.redo();
-                } else if (editor.mode == .normal and code == .tab) {
+                } else if (editor.mode == .normal and eql(u8, key, "<tab>")) {
                     if (editor.buffers.items.len > 1) {
                         try editor.openBuffer(editor.buffers.items[1].path);
                     }
 
                     // insert mode
-                } else if (editor.mode == .insert and code == .delete) {
+                } else if (editor.mode == .insert and eql(u8, key, "<delete>")) {
                     try buffer.changeDeleteChar();
-                } else if (editor.mode == .insert and code == .backspace) {
+                } else if (editor.mode == .insert and eql(u8, key, "<backspace>")) {
                     try buffer.changeDeletePrevChar();
-                } else if (editor.mode == .insert and key.printable != null) {
+                } else if (editor.mode == .insert and key_queue.items[0].printable != null) {
                     var printable = std.ArrayList(u21).init(allocator);
                     {
-                        const utf = try uni.utf8FromBytes(allocator, key.printable.?);
+                        const utf = try uni.utf8FromBytes(allocator, key);
                         defer allocator.free(utf);
                         try printable.appendSlice(utf);
                     }
                     // read more printable keys in case this is a paste command
                     while (true) {
-                        const next_key = if (key_queue.items.len == 0) null else key_queue.items[0];
+                        const next_key = if (keys_consumed < key_queue.items.len) key_queue.items[keys_consumed] else null;
                         if (next_key != null and next_key.?.printable != null) {
-                            _ = key_queue.orderedRemove(0);
                             const p = next_key.?.printable.?;
                             defer allocator.free(p);
                             const utf = try uni.utf8FromBytes(allocator, p);
                             defer allocator.free(utf);
                             try printable.appendSlice(utf);
+                            keys_consumed += 1;
                         } else {
                             break;
                         }
@@ -257,42 +254,47 @@ fn startEditor(allocator: std.mem.Allocator) !void {
 
                     // multiple-key
                 } else if (multiple_key) {
-                    const key2 = key_queue.orderedRemove(0);
-                    defer if (key2.printable) |p| allocator.free(p);
-                    var ch2: ?u8 = null;
-                    if (key2.printable != null and key2.printable.?.len == 1) ch2 = key2.printable.?[0];
+                    keys_consumed = 2;
+                    // no need for more than 2 keys for now
+                    const multi_key = try std.fmt.allocPrint(
+                        allocator,
+                        "{}{}",
+                        .{ key_queue.items[0], key_queue.items[1] },
+                    );
+                    defer allocator.free(multi_key);
 
-                    if (editor.mode == .normal and ch == ' ' and ch2 == 'w') {
+                    if (editor.mode == .normal and eql(u8, multi_key, " w")) {
                         try buffer.write();
-                    } else if (editor.mode == .normal and ch == ' ' and ch2 == 'd') {
+                    } else if (editor.mode == .normal and eql(u8, multi_key, " d")) {
                         try buffer.goToDefinition();
-                    } else if (normal_or_select and ch == 'g' and ch2 == 'i') {
+                    } else if (normal_or_select and eql(u8, multi_key, "gi")) {
                         try buffer.moveCursor(.{ .col = buffer.cursor.col });
                         try buffer.centerCursor();
-                    } else if (normal_or_select and ch == 'g' and ch2 == 'k') {
+                    } else if (normal_or_select and eql(u8, multi_key, "gk")) {
                         try buffer.moveCursor(.{
                             .row = @as(i32, @intCast(buffer.content.items.len)) - 1,
                             .col = buffer.cursor.col,
                         });
                         try buffer.centerCursor();
-                    } else if (normal_or_select and ch == 'g' and ch2 == 'l') {
+                    } else if (normal_or_select and eql(u8, multi_key, "gl")) {
                         const line = buffer.content.items[@intCast(buffer.cursor.row)].items;
                         try buffer.moveCursor(.{ .row = buffer.cursor.row, .col = @intCast(line.len) });
-                    } else if (normal_or_select and ch == 'g' and ch2 == 'j') {
+                    } else if (normal_or_select and eql(u8, multi_key, "gj")) {
                         try buffer.moveCursor(.{ .row = buffer.cursor.row, .col = 0 });
                     } else {
-                        // no matches, reinsert key2 and try it as a single key mapping on next iteration
-                        try key_queue.insert(0, try key2.clone(allocator));
-                        continue :handle_mappings;
+                        // no multi-key matches, drop first key as it will never match
+                        const removed = key_queue.orderedRemove(0);
+                        if (removed.printable) |p| allocator.free(p);
+                        keys_consumed = 1;
                     }
                 } else {
-                    if (key_queue.items.len == 0) {
-                        // no matches, reinsert key and wait for more keys
-                        try key_queue.insert(0, try key.clone(allocator));
-                        break :handle_mappings;
-                    } else {
-                        continue :handle_mappings;
-                    }
+                    // no single-key mapping matches, wait for more keys
+                    keys_consumed = 0;
+                    break;
+                }
+                for (0..keys_consumed) |_| {
+                    const removed = key_queue.orderedRemove(0);
+                    if (removed.printable) |p| allocator.free(p);
                 }
             }
         }

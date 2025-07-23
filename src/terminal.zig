@@ -565,7 +565,6 @@ pub fn parseAnsi(allocator: std.mem.Allocator, input: *std.ArrayList(u8)) !inp.K
             key.printable = try printable.toOwnedSlice();
         },
     }
-    log.log(@This(), "{any}\n", .{key});
     return key;
 }
 
@@ -594,9 +593,10 @@ pub fn getKeys(allocator: std.mem.Allocator, codes: []u8) ![]inp.Key {
 
     while (cs.items.len > 0) {
         const key = parseAnsi(allocator, &cs) catch |e| {
-            log.log(@This(), "key: {}\n", .{e});
+            log.log(@This(), "{}\n", .{e});
             continue;
         };
+        log.log(@This(), "key: {}\n", .{key});
         try keys.append(key);
     }
     return try keys.toOwnedSlice();
