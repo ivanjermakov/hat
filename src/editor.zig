@@ -8,6 +8,7 @@ const lsp = @import("lsp.zig");
 const uni = @import("unicode.zig");
 
 pub const Dirty = struct {
+    input: bool = false,
     draw: bool = false,
     cursor: bool = false,
     completion: bool = false,

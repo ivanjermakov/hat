@@ -112,9 +112,11 @@ fn startEditor(allocator: std.mem.Allocator) !void {
         try editor.update();
         buffer = editor.active_buffer;
 
-        const needs_handle_mappings = try term.updateInput(allocator);
+        try term.updateInput(allocator);
+
         const eql = std.mem.eql;
-        if (needs_handle_mappings) {
+        if (editor.dirty.input) {
+            editor.dirty.input = false;
             while (key_queue.items.len > 0) {
                 var keys_consumed: usize = 1;
                 const multiple_key = key_queue.items.len > 1;
@@ -124,6 +126,7 @@ fn startEditor(allocator: std.mem.Allocator) !void {
 
                 const key = try std.fmt.allocPrint(allocator, "{}", .{key_queue.items[0]});
                 defer allocator.free(key);
+                log.log(@This(), "handling key {s}\n", .{key});
 
                 if (editor.mode == .insert and key_queue.items[0].printable != null) {
                     var printable = std.ArrayList(u21).init(allocator);
@@ -145,40 +148,6 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     defer allocator.free(insert_text);
                     try buffer.changeInsertText(insert_text);
                     editor.dirty.completion = true;
-                } else if (multiple_key) {
-                    keys_consumed = 2;
-                    // no need for more than 2 keys for now
-                    const multi_key = try std.fmt.allocPrint(
-                        allocator,
-                        "{}{}",
-                        .{ key_queue.items[0], key_queue.items[1] },
-                    );
-                    defer allocator.free(multi_key);
-
-                    if (editor.mode == .normal and eql(u8, multi_key, " w")) {
-                        try buffer.write();
-                    } else if (editor.mode == .normal and eql(u8, multi_key, " d")) {
-                        try buffer.goToDefinition();
-                    } else if (normal_or_select and eql(u8, multi_key, "gi")) {
-                        try buffer.moveCursor(.{ .col = buffer.cursor.col });
-                        try buffer.centerCursor();
-                    } else if (normal_or_select and eql(u8, multi_key, "gk")) {
-                        try buffer.moveCursor(.{
-                            .row = @as(i32, @intCast(buffer.content.items.len)) - 1,
-                            .col = buffer.cursor.col,
-                        });
-                        try buffer.centerCursor();
-                    } else if (normal_or_select and eql(u8, multi_key, "gl")) {
-                        const line = buffer.content.items[@intCast(buffer.cursor.row)].items;
-                        try buffer.moveCursor(.{ .row = buffer.cursor.row, .col = @intCast(line.len) });
-                    } else if (normal_or_select and eql(u8, multi_key, "gj")) {
-                        try buffer.moveCursor(.{ .row = buffer.cursor.row, .col = 0 });
-                    } else {
-                        // no multi-key matches, drop first key as it will never match and try again
-                        const removed = key_queue.orderedRemove(0);
-                        if (removed.printable) |p| allocator.free(p);
-                        continue;
-                    }
 
                     // cmp_menu
                 } else if (cmp_menu_active and eql(u8, key, "<up>")) {
@@ -281,6 +250,40 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     try buffer.changeDeleteChar();
                 } else if (editor.mode == .insert and eql(u8, key, "<backspace>")) {
                     try buffer.changeDeletePrevChar();
+                } else if (multiple_key) {
+                    keys_consumed = 2;
+                    // no need for more than 2 keys for now
+                    const multi_key = try std.fmt.allocPrint(
+                        allocator,
+                        "{}{}",
+                        .{ key_queue.items[0], key_queue.items[1] },
+                    );
+                    defer allocator.free(multi_key);
+
+                    if (editor.mode == .normal and eql(u8, multi_key, " w")) {
+                        try buffer.write();
+                    } else if (editor.mode == .normal and eql(u8, multi_key, " d")) {
+                        try buffer.goToDefinition();
+                    } else if (normal_or_select and eql(u8, multi_key, "gi")) {
+                        try buffer.moveCursor(.{ .col = buffer.cursor.col });
+                        try buffer.centerCursor();
+                    } else if (normal_or_select and eql(u8, multi_key, "gk")) {
+                        try buffer.moveCursor(.{
+                            .row = @as(i32, @intCast(buffer.content.items.len)) - 1,
+                            .col = buffer.cursor.col,
+                        });
+                        try buffer.centerCursor();
+                    } else if (normal_or_select and eql(u8, multi_key, "gl")) {
+                        const line = buffer.content.items[@intCast(buffer.cursor.row)].items;
+                        try buffer.moveCursor(.{ .row = buffer.cursor.row, .col = @intCast(line.len) });
+                    } else if (normal_or_select and eql(u8, multi_key, "gj")) {
+                        try buffer.moveCursor(.{ .row = buffer.cursor.row, .col = 0 });
+                    } else {
+                        // no multi-key matches, drop first key as it will never match and try again
+                        const removed = key_queue.orderedRemove(0);
+                        if (removed.printable) |p| allocator.free(p);
+                        continue;
+                    }
                 } else {
                     // no mapping matches, wait for more keys
                     keys_consumed = 0;
@@ -293,6 +296,7 @@ fn startEditor(allocator: std.mem.Allocator) !void {
             }
         }
 
+        buffer = editor.active_buffer;
         editor.dirty.draw = editor.dirty.draw or buffer.pending_changes.items.len > 0;
         if (buffer.pending_changes.items.len > 0) {
             buffer.diagnostics.clearRetainingCapacity();
@@ -321,6 +325,13 @@ fn startEditor(allocator: std.mem.Allocator) !void {
     }
 }
 
+fn writeString(allocator: std.mem.Allocator, str: []const u8) !void {
+    const keys = try ter.getKeys(allocator, str);
+    defer allocator.free(keys);
+    try key_queue.appendSlice(keys);
+    editor.dirty.input = true;
+}
+
 comptime {
     std.testing.refAllDecls(@This());
 }
@@ -335,4 +346,3 @@ pub fn testSetup() !void {
         .allocator = allocator,
     };
 }
-

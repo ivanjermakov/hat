@@ -113,17 +113,15 @@ pub const Terminal = struct {
         try self.flush();
     }
 
-    pub fn updateInput(self: *Terminal, allocator: std.mem.Allocator) !bool {
+    pub fn updateInput(self: *Terminal, allocator: std.mem.Allocator) !void {
         _ = self;
-        var dirty = false;
         if (try getCodes(allocator)) |codes| {
             defer allocator.free(codes);
-            dirty = true;
+            main.editor.dirty.input = true;
             const new_keys = try getKeys(allocator, codes);
             defer allocator.free(new_keys);
             try main.key_queue.appendSlice(new_keys);
         }
-        return dirty;
     }
 
     fn clear(self: *Terminal) !void {
