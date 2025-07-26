@@ -48,12 +48,25 @@ pub const Change = struct {
     ) !void {
         _ = fmt;
         _ = options;
-        try std.fmt.format(writer, "{},{}-{},{}", .{
+        try std.fmt.format(writer, "change {},{}-{},{}", .{
             self.old_span.start.row,
             self.old_span.start.col,
             self.old_span.end.row,
             self.old_span.end.col,
         });
+        if (self.old_text) |old_text| {
+            _ = try writer.write(" \"");
+            for (old_text) |ch| try std.fmt.format(writer, "{u}", .{ch});
+            _ = try writer.write("\"");
+        }
+        if (self.new_span) |new_span| {
+            try std.fmt.format(writer, " -> {},{}-{},{}", .{
+                new_span.start.row,
+                new_span.start.col,
+                new_span.end.row,
+                new_span.end.col,
+            });
+        }
         if (self.new_text) |new_text| {
             _ = try writer.write(" \"");
             for (new_text) |ch| try std.fmt.format(writer, "{u}", .{ch});
