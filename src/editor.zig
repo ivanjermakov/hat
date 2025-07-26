@@ -16,6 +16,13 @@ pub const Dirty = struct {
     completion: bool = false,
 };
 
+pub const DotRepeat = enum {
+    outside,
+    inside,
+    commit_ready,
+    executing,
+};
+
 pub const Editor = struct {
     /// List of buffers
     /// Must be always sorted recent-first
@@ -29,6 +36,9 @@ pub const Editor = struct {
     message_read_idx: usize = 0,
     hover_contents: ?[]const u8 = null,
     key_queue: std.ArrayList(inp.Key),
+    dot_repeat_input: std.ArrayList(inp.Key),
+    dot_repeat_input_uncommitted: std.ArrayList(inp.Key),
+    dot_repeat_state: DotRepeat = .outside,
     allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator) !Editor {
@@ -40,6 +50,8 @@ pub const Editor = struct {
             .lsp_connections = std.StringHashMap(lsp.LspConnection).init(allocator),
             .messages = std.ArrayList([]const u8).init(allocator),
             .key_queue = std.ArrayList(inp.Key).init(allocator),
+            .dot_repeat_input = std.ArrayList(inp.Key).init(allocator),
+            .dot_repeat_input_uncommitted = std.ArrayList(inp.Key).init(allocator),
             .allocator = allocator,
         };
         return editor;
@@ -136,6 +148,12 @@ pub const Editor = struct {
 
         for (self.key_queue.items) |key| if (key.printable) |p| self.allocator.free(p);
         self.key_queue.deinit();
+
+        for (self.dot_repeat_input.items) |key| if (key.printable) |p| self.allocator.free(p);
+        self.dot_repeat_input.deinit();
+
+        for (self.dot_repeat_input_uncommitted.items) |key| if (key.printable) |p| self.allocator.free(p);
+        self.dot_repeat_input_uncommitted.deinit();
     }
 
     pub fn pickFile(self: *Editor) !void {
@@ -244,6 +262,58 @@ pub const Editor = struct {
         defer self.allocator.free(keys);
         try self.key_queue.appendSlice(keys);
         self.dirty.input = true;
+    }
+
+    pub fn dotRepeatReset(self: *Editor) void {
+        if (self.dot_repeat_state == .executing) return;
+        self.dot_repeat_input_uncommitted.clearRetainingCapacity();
+        self.dot_repeat_state = .outside;
+    }
+
+    pub fn dotRepeatStart(self: *Editor) void {
+        if (self.dot_repeat_state == .executing) return;
+        self.dot_repeat_input_uncommitted.clearRetainingCapacity();
+        self.dot_repeat_state = .inside;
+    }
+
+    pub fn dotRepeatInside(self: *Editor) void {
+        if (self.dot_repeat_state == .executing) return;
+        self.dot_repeat_state = .inside;
+    }
+
+    pub fn dotRepeatOutside(self: *Editor) void {
+        if (self.dot_repeat_state == .executing) return;
+        self.dot_repeat_state = .outside;
+    }
+
+    pub fn dotRepeatExecuted(self: *Editor) void {
+        if (self.dot_repeat_state == .executing) self.dot_repeat_state = .outside;
+    }
+
+    pub fn dotRepeatCommitReady(self: *Editor) !void {
+        if (self.dot_repeat_state == .executing) return;
+        self.dot_repeat_state = .commit_ready;
+    }
+
+    pub fn dotRepeatCommit(self: *Editor) !void {
+        std.debug.assert(self.dot_repeat_state == .commit_ready);
+
+        for (self.dot_repeat_input.items) |key| if (key.printable) |p| self.allocator.free(p);
+        self.dot_repeat_input.clearRetainingCapacity();
+
+        try self.dot_repeat_input.appendSlice(self.dot_repeat_input_uncommitted.items);
+        self.dot_repeat_input_uncommitted.clearRetainingCapacity();
+        self.dot_repeat_state = .outside;
+    }
+
+    pub fn dotRepeat(self: *Editor) !void {
+        if (self.dot_repeat_input.items.len > 0) {
+            log.log(@This(), "dot repeat of {any}\n", .{self.dot_repeat_input.items});
+            for (self.dot_repeat_input.items) |key| {
+                try self.key_queue.append(try key.clone(self.allocator));
+            }
+            self.dot_repeat_state = .executing;
+        }
     }
 };
 

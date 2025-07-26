@@ -15,7 +15,7 @@ Hat is a **ha**ckable modal **t**ext editor for modern terminals.
     * [x] System clipboard copy & paste (using `xclip`)
     * [ ] Search
     * [ ] Run external command on selection
-    * [ ] Dot repeat last change
+    * [x] Dot repeat last change
     * [ ] Multi repeat
     * [ ] Macros
 - [x] [Tree-sitter](https://tree-sitter.github.io/tree-sitter/) syntax awareness

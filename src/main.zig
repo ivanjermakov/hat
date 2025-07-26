@@ -110,8 +110,13 @@ fn startEditor(allocator: std.mem.Allocator) !void {
         const eql = std.mem.eql;
         if (editor.dirty.input) {
             editor.dirty.input = false;
+            editor.dotRepeatExecuted();
             while (editor.key_queue.items.len > 0) {
                 var keys_consumed: usize = 1;
+                switch (editor.mode) {
+                    .normal => editor.dotRepeatOutside(),
+                    else => editor.dotRepeatInside(),
+                }
                 const multiple_key = editor.key_queue.items.len > 1;
                 const normal_or_select = editor.mode.normalOrSelect();
                 const cmp_menu_active = editor.mode == .insert and
@@ -236,6 +241,8 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     if (editor.buffers.items.len > 1) {
                         try editor.openBuffer(editor.buffers.items[1].path);
                     }
+                } else if (editor.mode == .normal and eql(u8, key, ".")) {
+                    try editor.dotRepeat();
 
                     // insert mode
                 } else if (editor.mode == .insert and eql(u8, key, "<delete>")) {
@@ -282,9 +289,17 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     break;
                 }
                 for (0..keys_consumed) |_| {
+                    switch (editor.dot_repeat_state) {
+                        .inside, .commit_ready => try editor.dot_repeat_input_uncommitted.append(
+                            try editor.key_queue.items[0].clone(editor.allocator),
+                        ),
+                        else => {},
+                    }
                     const removed = editor.key_queue.orderedRemove(0);
                     if (removed.printable) |p| allocator.free(p);
                 }
+                // log.log(@This(), "uncommitted: {any}\n", .{editor.dot_repeat_input_uncommitted.items});
+                // log.log(@This(), "committed: {any}\n", .{editor.dot_repeat_input.items});
             }
         }
 
@@ -312,6 +327,9 @@ fn startEditor(allocator: std.mem.Allocator) !void {
             for (buffer.lsp_connections.items) |conn| {
                 try conn.sendCompletionRequest();
             }
+        }
+        if (editor.dot_repeat_state == .commit_ready) {
+            try editor.dotRepeatCommit();
         }
         std.time.sleep(sleep_ns);
     }

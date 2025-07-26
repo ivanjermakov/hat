@@ -349,10 +349,8 @@ pub const Buffer = struct {
         main.editor.resetHover();
 
         if (main.editor.mode == mode) return;
-        switch (main.editor.mode) {
-            .insert => try self.commitChanges(),
-            else => {},
-        }
+        if (main.editor.mode == .insert) try self.commitChanges();
+
         switch (mode) {
             .normal => {
                 try self.clearSelection();
@@ -362,6 +360,7 @@ pub const Buffer = struct {
             .select_line => try self.selectLine(),
             .insert => try self.clearSelection(),
         }
+        if (mode != .normal) main.editor.dotRepeatInside();
         log.log(@This(), "mode: {}->{}\n", .{ main.editor.mode, mode });
         main.editor.mode = mode;
         main.editor.dirty.cursor = true;
@@ -378,6 +377,7 @@ pub const Buffer = struct {
                 self.selection = .{ .start = old_cursor, .end = self.cursor };
                 main.editor.dirty.draw = true;
             }
+            main.editor.dotRepeatInside();
         }
     }
 
@@ -425,6 +425,7 @@ pub const Buffer = struct {
             self.selection = .{ .start = old_cursor, .end = self.cursor };
             main.editor.dirty.draw = true;
         }
+        main.editor.dotRepeatInside();
     }
 
     /// TODO: search for next word in subsequent lines
@@ -438,6 +439,7 @@ pub const Buffer = struct {
                 self.selection = .{ .start = old_cursor, .end = self.cursor };
                 main.editor.dirty.draw = true;
             }
+            main.editor.dotRepeatInside();
         }
     }
 
@@ -451,6 +453,7 @@ pub const Buffer = struct {
                 self.selection = .{ .start = old_cursor, .end = self.cursor };
                 main.editor.dirty.draw = true;
             }
+            main.editor.dotRepeatInside();
         }
     }
 
@@ -477,6 +480,8 @@ pub const Buffer = struct {
         self.uncommitted_changes.clearRetainingCapacity();
         try self.history.append(new_hist);
         self.history_index = self.history.items.len - 1;
+
+        try main.editor.dotRepeatCommitReady();
     }
 
     pub fn changeInsertText(self: *Buffer, text: []const u21) !void {
@@ -669,7 +674,7 @@ pub const Buffer = struct {
                 .gt => indent_next += 1,
                 .lt => {
                     indent = if (indent > 0) indent - 1 else 0;
-                    indent_next -= 1;
+                    indent_next = if (indent_next > 0) indent_next - 1 else 0;
                 },
                 else => {},
             }
