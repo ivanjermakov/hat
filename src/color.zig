@@ -58,7 +58,7 @@ pub const attributes = enum {
     pub const selection = &[_]Attr{.{ .bg = color.gray3 }};
     pub const keyword = &[_]Attr{.{ .fg = color.magenta }};
     pub const string = &[_]Attr{.{ .fg = color.green }};
-    pub const number = &[_]Attr{.{ .fg = color.yellow }};
+    pub const literal = &[_]Attr{.{ .fg = color.yellow }};
     pub const comment = &[_]Attr{.{ .fg = color.gray7 }};
     pub const diagnostic_error = &[_]Attr{ .curly_underline, .{ .underline = color.red } };
     pub const completion_menu = &[_]Attr{.{ .bg = color.gray2 }};

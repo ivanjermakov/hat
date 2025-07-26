@@ -155,7 +155,8 @@ pub const SpanAttrsTuple = struct {
 pub const syntax_highlight = std.StaticStringMap([]const col.Attr).initComptime(.{
     .{ "keyword", col.attributes.keyword },
     .{ "string", col.attributes.string },
-    .{ "number", col.attributes.number },
+    .{ "number", col.attributes.literal },
+    .{ "boolean", col.attributes.literal },
     .{ "comment", col.attributes.comment },
 });
 
