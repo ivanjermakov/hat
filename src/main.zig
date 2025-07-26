@@ -15,7 +15,7 @@ const env = @import("env.zig");
 const sig = @import("signal.zig");
 
 pub const Args = struct {
-    path: ?[]u8 = null,
+    path: ?[]const u8 = null,
     log: bool = false,
     printer: bool = false,
     highlight_line: ?usize = null,

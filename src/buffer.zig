@@ -179,7 +179,7 @@ pub const Buffer = struct {
     pub fn updateContent(self: *Buffer) !void {
         var lines_iter = std.mem.splitScalar(u8, self.content_raw.items, '\n');
         while (true) {
-            const next: []u8 = @constCast(lines_iter.next() orelse break);
+            const next: []const u8 = @constCast(lines_iter.next() orelse break);
             const view = try std.unicode.Utf8View.init(next);
             var iter = view.iterator();
             var line = std.ArrayList(u21).init(self.allocator);

@@ -1,7 +1,7 @@
 const std = @import("std");
 
 pub const Args = struct {
-    path: ?[]u8 = null,
+    path: ?[]const u8 = null,
 };
 
 pub fn main() void {

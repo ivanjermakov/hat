@@ -254,7 +254,7 @@ pub const LspConnection = struct {
         defer self.allocator.free(read);
         try self.poll_buf.appendSlice(read);
 
-        var messages = std.ArrayList([]u8).init(self.allocator);
+        var messages = std.ArrayList([]const u8).init(self.allocator);
         while (true) {
             if (self.poll_buf.items.len == 0) break;
             var read_stream = std.io.fixedBufferStream(self.poll_buf.items);

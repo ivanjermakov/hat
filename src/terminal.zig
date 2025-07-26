@@ -568,7 +568,7 @@ pub fn parseAnsi(allocator: std.mem.Allocator, input: *std.ArrayList(u8)) !inp.K
     return key;
 }
 
-pub fn getCodes(allocator: std.mem.Allocator) !?[]u8 {
+pub fn getCodes(allocator: std.mem.Allocator) !?[]const u8 {
     if (!fs.poll(main.tty_in)) return null;
     var in_buf = std.ArrayList(u8).init(allocator);
     while (true) {
@@ -584,7 +584,7 @@ pub fn getCodes(allocator: std.mem.Allocator) !?[]u8 {
     return try in_buf.toOwnedSlice();
 }
 
-pub fn getKeys(allocator: std.mem.Allocator, codes: []u8) ![]inp.Key {
+pub fn getKeys(allocator: std.mem.Allocator, codes: []const u8) ![]inp.Key {
     var keys = std.ArrayList(inp.Key).init(allocator);
 
     var cs = std.ArrayList(u8).init(allocator);
@@ -602,7 +602,7 @@ pub fn getKeys(allocator: std.mem.Allocator, codes: []u8) ![]inp.Key {
     return try keys.toOwnedSlice();
 }
 
-fn ansiCodeToString(allocator: std.mem.Allocator, code: u8) ![]u8 {
+fn ansiCodeToString(allocator: std.mem.Allocator, code: u8) ![]const u8 {
     const is_printable = code >= 32 and code < 127;
     if (is_printable) {
         return std.fmt.allocPrint(allocator, "{c}", .{@as(u7, @intCast(code))});
