@@ -522,7 +522,6 @@ pub const Buffer = struct {
             defer self.allocator.free(text);
             var change = try cha.Change.initDelete(self.allocator, span, text);
             try self.appendChange(&change);
-            try self.commitChanges();
         }
     }
 

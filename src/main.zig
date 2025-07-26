@@ -204,8 +204,12 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     try buffer.moveToWordEnd();
                 } else if (normal_or_select and eql(u8, key, "E")) {
                     try buffer.moveToTokenEnd();
+                } else if (editor.mode == .normal and eql(u8, key, "h")) {
+                    try buffer.changeSelectionDelete();
+                    try editor.enterMode(.insert);
                 } else if (normal_or_select and eql(u8, key, "d")) {
                     try buffer.changeSelectionDelete();
+                    try buffer.commitChanges();
                 } else if (normal_or_select and eql(u8, key, "=")) {
                     try buffer.changeAlignIndent();
                     try editor.enterMode(.normal);
@@ -225,8 +229,6 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     try editor.enterMode(.select);
                 } else if (editor.mode == .normal and eql(u8, key, "S")) {
                     try editor.enterMode(.select_line);
-                } else if (editor.mode == .normal and eql(u8, key, "h")) {
-                    try editor.enterMode(.insert);
                 } else if (editor.mode == .normal and eql(u8, key, "o")) {
                     try buffer.changeInsertLineBelow(@intCast(buffer.cursor.row));
                     try editor.enterMode(.insert);
