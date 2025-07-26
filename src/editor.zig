@@ -124,6 +124,27 @@ pub const Editor = struct {
         main.editor.dirty.draw = true;
     }
 
+    pub fn enterMode(self: *Editor, mode: Mode) !void {
+        self.resetHover();
+
+        if (self.mode == mode) return;
+        if (self.mode == .insert) try self.active_buffer.commitChanges();
+
+        switch (mode) {
+            .normal => {
+                try self.active_buffer.clearSelection();
+                self.completion_menu.reset();
+            },
+            .select => try self.active_buffer.selectChar(),
+            .select_line => try self.active_buffer.selectLine(),
+            .insert => try self.active_buffer.clearSelection(),
+        }
+        if (mode != .normal) self.dotRepeatInside();
+        log.log(@This(), "mode: {}->{}\n", .{ self.mode, mode });
+        self.mode = mode;
+        self.dirty.cursor = true;
+    }
+
     pub fn deinit(self: *Editor) void {
         for (self.buffers.items) |buffer| {
             buffer.deinit();

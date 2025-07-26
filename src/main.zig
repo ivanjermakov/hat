@@ -164,7 +164,7 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                 } else if (eql(u8, key, "<right>")) {
                     try buffer.moveCursor(buffer.cursor.applyOffset(.{ .col = 1 }));
                 } else if (eql(u8, key, "<escape>")) {
-                    try buffer.enterMode(.normal);
+                    try editor.enterMode(.normal);
                     try editor.dismissMessage();
 
                     // normal mode with modifiers
@@ -208,7 +208,7 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     try buffer.changeSelectionDelete();
                 } else if (normal_or_select and eql(u8, key, "=")) {
                     try buffer.changeAlignIndent();
-                    try buffer.enterMode(.normal);
+                    try editor.enterMode(.normal);
                 } else if (normal_or_select and eql(u8, key, "y")) {
                     try buffer.copySelectionToClipboard();
                 } else if (normal_or_select and eql(u8, key, "p")) {
@@ -222,17 +222,17 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     try editor.closeBuffer(force);
                     if (editor.buffers.items.len == 0) break :main_loop;
                 } else if (editor.mode == .normal and eql(u8, key, "s")) {
-                    try buffer.enterMode(.select);
+                    try editor.enterMode(.select);
                 } else if (editor.mode == .normal and eql(u8, key, "S")) {
-                    try buffer.enterMode(.select_line);
+                    try editor.enterMode(.select_line);
                 } else if (editor.mode == .normal and eql(u8, key, "h")) {
-                    try buffer.enterMode(.insert);
+                    try editor.enterMode(.insert);
                 } else if (editor.mode == .normal and eql(u8, key, "o")) {
                     try buffer.changeInsertLineBelow(@intCast(buffer.cursor.row));
-                    try buffer.enterMode(.insert);
+                    try editor.enterMode(.insert);
                 } else if (editor.mode == .normal and eql(u8, key, "O")) {
                     try buffer.changeInsertLineBelow(@intCast(buffer.cursor.row - 1));
-                    try buffer.enterMode(.insert);
+                    try editor.enterMode(.insert);
                 } else if (editor.mode == .normal and eql(u8, key, "u")) {
                     try buffer.undo();
                 } else if (editor.mode == .normal and eql(u8, key, "U")) {

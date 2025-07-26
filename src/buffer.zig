@@ -345,27 +345,6 @@ pub const Buffer = struct {
         main.editor.dirty.draw = true;
     }
 
-    pub fn enterMode(self: *Buffer, mode: edi.Mode) !void {
-        main.editor.resetHover();
-
-        if (main.editor.mode == mode) return;
-        if (main.editor.mode == .insert) try self.commitChanges();
-
-        switch (mode) {
-            .normal => {
-                try self.clearSelection();
-                main.editor.completion_menu.reset();
-            },
-            .select => try self.selectChar(),
-            .select_line => try self.selectLine(),
-            .insert => try self.clearSelection(),
-        }
-        if (mode != .normal) main.editor.dotRepeatInside();
-        log.log(@This(), "mode: {}->{}\n", .{ main.editor.mode, mode });
-        main.editor.mode = mode;
-        main.editor.dirty.cursor = true;
-    }
-
     /// TODO: search for next word in subsequent lines
     pub fn moveToNextWord(self: *Buffer) !void {
         const old_cursor = self.cursor;
@@ -538,7 +517,7 @@ pub const Buffer = struct {
         if (self.selection) |selection| {
             const last_line = self.content.items[@intCast(selection.end.row)].items;
             const span = selection.toExclusiveEnd(last_line.len);
-            try self.enterMode(.normal);
+            try main.editor.enterMode(.normal);
             const text = try self.textAt(self.allocator, span);
             defer self.allocator.free(text);
             var change = try cha.Change.initDelete(self.allocator, span, text);
@@ -554,7 +533,7 @@ pub const Buffer = struct {
         defer buffer.deinit();
 
         buffer.cursor = .{ .row = 0, .col = 1 };
-        try buffer.enterMode(.select);
+        try main.editor.enterMode(.select);
         try buffer.changeSelectionDelete();
 
         try buffer.commitChanges();
@@ -570,7 +549,7 @@ pub const Buffer = struct {
         defer buffer.deinit();
 
         try buffer.moveCursor(.{ .row = 0, .col = 1 });
-        try buffer.enterMode(.select);
+        try main.editor.enterMode(.select);
         try buffer.moveCursor(.{ .row = 0, .col = 3 });
         try buffer.changeSelectionDelete();
 
@@ -588,7 +567,7 @@ pub const Buffer = struct {
         defer buffer.deinit();
 
         try buffer.moveCursor(.{ .row = 0, .col = 1 });
-        try buffer.enterMode(.select);
+        try main.editor.enterMode(.select);
         try buffer.moveCursor(Cursor{ .row = 2, .col = 2 });
 
         try testing.expectEqual(Cursor{ .row = 0, .col = 1 }, buffer.selection.?.start);
@@ -756,7 +735,7 @@ pub const Buffer = struct {
             const text = try self.rawTextAt(self.allocator, selection.toExclusiveEnd(last_line.len));
             defer self.allocator.free(text);
             try clp.write(self.allocator, text);
-            try self.enterMode(.normal);
+            try main.editor.enterMode(.normal);
         }
     }
 
@@ -770,6 +749,21 @@ pub const Buffer = struct {
         defer self.allocator.free(text_uni);
         try self.changeInsertText(text_uni);
         try self.commitChanges();
+    }
+
+    pub fn selectChar(self: *Buffer) !void {
+        self.selection = .{ .start = self.cursor, .end = self.cursor };
+        main.editor.dirty.draw = true;
+    }
+
+    pub fn selectLine(self: *Buffer) !void {
+        const row = self.cursor.row;
+        const line = self.content.items[@intCast(row)].items;
+        self.selection = .{
+            .start = .{ .row = row, .col = 0 },
+            .end = .{ .row = row, .col = @intCast(line.len) },
+        };
+        main.editor.dirty.draw = true;
     }
 
     fn applyChange(self: *Buffer, change: *cha.Change) !void {
@@ -881,21 +875,6 @@ pub const Buffer = struct {
         try new_line.appendSlice(line[@intCast(self.cursor.col)..]);
         try self.content.insert(@intCast(self.cursor.row + 1), new_line);
         try self.moveCursor(.{ .row = self.cursor.row + 1, .col = 0 });
-    }
-
-    fn selectChar(self: *Buffer) !void {
-        self.selection = .{ .start = self.cursor, .end = self.cursor };
-        main.editor.dirty.draw = true;
-    }
-
-    fn selectLine(self: *Buffer) !void {
-        const row = self.cursor.row;
-        const line = self.content.items[@intCast(row)].items;
-        self.selection = .{
-            .start = .{ .row = row, .col = 0 },
-            .end = .{ .row = row, .col = @intCast(line.len) },
-        };
-        main.editor.dirty.draw = true;
     }
 
     fn lineAlignIndent(self: *Buffer, row: i32) !void {
