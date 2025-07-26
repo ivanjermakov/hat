@@ -113,17 +113,6 @@ pub const Terminal = struct {
         try self.flush();
     }
 
-    pub fn updateInput(self: *Terminal, allocator: std.mem.Allocator) !void {
-        _ = self;
-        if (try getCodes(allocator)) |codes| {
-            defer allocator.free(codes);
-            main.editor.dirty.input = true;
-            const new_keys = try getKeys(allocator, codes);
-            defer allocator.free(new_keys);
-            try main.key_queue.appendSlice(new_keys);
-        }
-    }
-
     fn clear(self: *Terminal) !void {
         try self.write("\x1b[2J");
     }

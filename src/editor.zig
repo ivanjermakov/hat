@@ -5,7 +5,9 @@ const cmp = @import("ui/completion_menu.zig");
 const fzf = @import("ui/fzf.zig");
 const log = @import("log.zig");
 const lsp = @import("lsp.zig");
+const inp = @import("input.zig");
 const uni = @import("unicode.zig");
+const ter = @import("terminal.zig");
 
 pub const Dirty = struct {
     input: bool = false,
@@ -26,6 +28,7 @@ pub const Editor = struct {
     messages: std.ArrayList([]const u8),
     message_read_idx: usize = 0,
     hover_contents: ?[]const u8 = null,
+    key_queue: std.ArrayList(inp.Key),
     allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator) !Editor {
@@ -36,6 +39,7 @@ pub const Editor = struct {
             .completion_menu = cmp.CompletionMenu.init(allocator),
             .lsp_connections = std.StringHashMap(lsp.LspConnection).init(allocator),
             .messages = std.ArrayList([]const u8).init(allocator),
+            .key_queue = std.ArrayList(inp.Key).init(allocator),
             .allocator = allocator,
         };
         return editor;
@@ -129,6 +133,9 @@ pub const Editor = struct {
         self.messages.deinit();
 
         self.resetHover();
+
+        for (self.key_queue.items) |key| if (key.printable) |p| self.allocator.free(p);
+        self.key_queue.deinit();
     }
 
     pub fn pickFile(self: *Editor) !void {
@@ -156,6 +163,17 @@ pub const Editor = struct {
     pub fn update(self: *Editor) !void {
         var lsp_iter = self.lsp_connections.valueIterator();
         while (lsp_iter.next()) |conn| try conn.update();
+        try self.updateInput();
+    }
+
+    pub fn updateInput(self: *Editor) !void {
+        if (try ter.getCodes(self.allocator)) |codes| {
+            defer self.allocator.free(codes);
+            main.editor.dirty.input = true;
+            const new_keys = try ter.getKeys(self.allocator, codes);
+            defer self.allocator.free(new_keys);
+            try main.editor.key_queue.appendSlice(new_keys);
+        }
     }
 
     pub fn disconnect(self: *Editor) !void {
@@ -219,6 +237,13 @@ pub const Editor = struct {
             self.allocator.free(c);
             main.editor.dirty.draw = true;
         }
+    }
+
+    pub fn writeInputString(self: *Editor, str: []const u8) !void {
+        const keys = try ter.getKeys(self.allocator, str);
+        defer self.allocator.free(keys);
+        try self.key_queue.appendSlice(keys);
+        self.dirty.input = true;
     }
 };
 

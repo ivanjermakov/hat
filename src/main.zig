@@ -33,7 +33,6 @@ pub var term: ter.Terminal = undefined;
 
 pub var log_enabled = true;
 pub var args: Args = .{};
-pub var key_queue: std.ArrayList(inp.Key) = undefined;
 
 pub fn main() !void {
     var debug_allocator: std.heap.DebugAllocator(.{ .stack_trace_frames = 10 }) = .init;
@@ -100,40 +99,33 @@ pub fn main() !void {
 }
 
 fn startEditor(allocator: std.mem.Allocator) !void {
-    key_queue = std.ArrayList(inp.Key).init(allocator);
-    defer {
-        for (key_queue.items) |key| if (key.printable) |p| allocator.free(p);
-        key_queue.deinit();
-    }
-
     var buffer = editor.active_buffer;
 
     main_loop: while (true) {
         try editor.update();
         buffer = editor.active_buffer;
 
-        try term.updateInput(allocator);
+        try editor.updateInput();
 
         const eql = std.mem.eql;
         if (editor.dirty.input) {
             editor.dirty.input = false;
-            while (key_queue.items.len > 0) {
+            while (editor.key_queue.items.len > 0) {
                 var keys_consumed: usize = 1;
-                const multiple_key = key_queue.items.len > 1;
+                const multiple_key = editor.key_queue.items.len > 1;
                 const normal_or_select = editor.mode.normalOrSelect();
                 const cmp_menu_active = editor.mode == .insert and
                     editor.completion_menu.display_items.items.len > 0;
 
-                const key = try std.fmt.allocPrint(allocator, "{}", .{key_queue.items[0]});
+                const key = try std.fmt.allocPrint(allocator, "{}", .{editor.key_queue.items[0]});
                 defer allocator.free(key);
-                log.log(@This(), "handling key {s}\n", .{key});
 
-                if (editor.mode == .insert and key_queue.items[0].printable != null) {
+                if (editor.mode == .insert and editor.key_queue.items[0].printable != null) {
                     var printable = std.ArrayList(u21).init(allocator);
                     keys_consumed = 0;
                     // read all cosecutive printable keys in case this is a paste command
                     while (true) {
-                        const next_key = if (keys_consumed < key_queue.items.len) key_queue.items[keys_consumed] else null;
+                        const next_key = if (keys_consumed < editor.key_queue.items.len) editor.key_queue.items[keys_consumed] else null;
                         if (next_key != null and next_key.?.printable != null) {
                             const p = next_key.?.printable.?;
                             const utf = try uni.utf8FromBytes(allocator, p);
@@ -256,7 +248,7 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     const multi_key = try std.fmt.allocPrint(
                         allocator,
                         "{}{}",
-                        .{ key_queue.items[0], key_queue.items[1] },
+                        .{ editor.key_queue.items[0], editor.key_queue.items[1] },
                     );
                     defer allocator.free(multi_key);
 
@@ -280,7 +272,7 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                         try buffer.moveCursor(.{ .row = buffer.cursor.row, .col = 0 });
                     } else {
                         // no multi-key matches, drop first key as it will never match and try again
-                        const removed = key_queue.orderedRemove(0);
+                        const removed = editor.key_queue.orderedRemove(0);
                         if (removed.printable) |p| allocator.free(p);
                         continue;
                     }
@@ -290,7 +282,7 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     break;
                 }
                 for (0..keys_consumed) |_| {
-                    const removed = key_queue.orderedRemove(0);
+                    const removed = editor.key_queue.orderedRemove(0);
                     if (removed.printable) |p| allocator.free(p);
                 }
             }
@@ -323,13 +315,6 @@ fn startEditor(allocator: std.mem.Allocator) !void {
         }
         std.time.sleep(sleep_ns);
     }
-}
-
-fn writeString(allocator: std.mem.Allocator, str: []const u8) !void {
-    const keys = try ter.getKeys(allocator, str);
-    defer allocator.free(keys);
-    try key_queue.appendSlice(keys);
-    editor.dirty.input = true;
 }
 
 comptime {
