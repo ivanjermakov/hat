@@ -184,7 +184,6 @@ pub const Buffer = struct {
         try self.updateRaw();
         if (self.ts_state) |*ts_state| try ts_state.reparse(self.content_raw.items);
         try self.updateLinePositions();
-        try self.updateIndents();
     }
 
     pub fn updateContent(self: *Buffer) !void {
@@ -568,6 +567,7 @@ pub const Buffer = struct {
     }
 
     pub fn changeAlignIndent(self: *Buffer) !void {
+        try self.updateIndents();
         if (self.selection) |selection| {
             const start: usize = @intCast(selection.start.row);
             const end: usize = @intCast(selection.end.row + 1);
