@@ -336,7 +336,7 @@ fn startEditor(allocator: std.mem.Allocator) !void {
             try editor.dotRepeatCommit();
         }
         if (try buffer.syncFs()) {
-            log.log(@This(), "external buffer modification\n", .{});
+            try editor.sendMessage("external buffer modification");
             try buffer.changeFsExternal();
         }
         std.time.sleep(sleep_ns);
