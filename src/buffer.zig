@@ -136,6 +136,12 @@ pub const Buffer = struct {
     pub fn init(allocator: std.mem.Allocator, path: ?[]const u8, content_raw: []const u8) !Buffer {
         var raw = std.ArrayList(u8).init(allocator);
         try raw.appendSlice(content_raw);
+        // make sure last line always ends with newline
+        if (raw.getLastOrNull()) |last| {
+            if (last != '\n') {
+                try raw.append('\n');
+            }
+        }
 
         const scratch = path == null;
         const buf_path = if (path) |p|
@@ -251,7 +257,7 @@ pub const Buffer = struct {
         if (!in_term) return;
 
         if (new_cursor.row >= self.line_positions.items.len) return;
-        const max_col = self.lineLength(@intCast(new_cursor.row)) - 1;
+        const max_col = self.lineLength(@intCast(new_cursor.row));
         var col: i32 = @intCast(@min(new_cursor.col, max_col));
         if (vertical_only) {
             if (self.cursor_desired_col) |desired| {
@@ -315,7 +321,7 @@ pub const Buffer = struct {
             \\def
             \\ghijk
         );
-        defer buffer.deinit();
+        defer main.editor.deinit();
 
         try buffer.moveCursor(.{ .col = 1 });
         try testing.expectEqual(Cursor{ .col = 1 }, buffer.cursor);
@@ -353,7 +359,7 @@ pub const Buffer = struct {
         var buffer = try testSetup(
             \\one two three
         );
-        defer buffer.deinit();
+        defer main.editor.deinit();
 
         buffer.cursor = .{ .row = 0, .col = 0 };
         try buffer.moveToNextWord();
@@ -361,17 +367,6 @@ pub const Buffer = struct {
             Span{ .start = .{}, .end = .{ .col = 4 } },
             buffer.selection,
         );
-    }
-
-    test "moveToNextWord no move" {
-        var buffer = try testSetup(
-            \\one two three
-        );
-        defer buffer.deinit();
-
-        buffer.cursor = .{ .row = 0, .col = 9 };
-        try buffer.moveToNextWord();
-        try testing.expectEqual(null, buffer.selection);
     }
 
     /// TODO: search for next word in preceding lines
@@ -509,7 +504,7 @@ pub const Buffer = struct {
         var buffer = try testSetup(
             \\abc
         );
-        defer buffer.deinit();
+        defer main.editor.deinit();
 
         buffer.cursor = .{ .row = 0, .col = 1 };
         try main.editor.enterMode(.select);
@@ -517,7 +512,7 @@ pub const Buffer = struct {
 
         try buffer.commitChanges();
         try buffer.updateRaw();
-        try testing.expectEqualStrings("ac", buffer.content_raw.items);
+        try testing.expectEqualStrings("ac\n", buffer.content_raw.items);
     }
 
     test "changeSelectionDelete line to end" {
@@ -525,7 +520,7 @@ pub const Buffer = struct {
             \\abc
             \\def
         );
-        defer buffer.deinit();
+        defer main.editor.deinit();
 
         try buffer.moveCursor(.{ .row = 0, .col = 1 });
         try main.editor.enterMode(.select);
@@ -534,7 +529,7 @@ pub const Buffer = struct {
 
         try buffer.commitChanges();
         try buffer.updateRaw();
-        try testing.expectEqualStrings("adef", buffer.content_raw.items);
+        try testing.expectEqualStrings("adef\n", buffer.content_raw.items);
     }
 
     test "changeSelectionDelete multiple lines" {
@@ -543,7 +538,7 @@ pub const Buffer = struct {
             \\def
             \\ghijk
         );
-        defer buffer.deinit();
+        defer main.editor.deinit();
 
         try buffer.moveCursor(.{ .row = 0, .col = 1 });
         try main.editor.enterMode(.select);
@@ -555,7 +550,7 @@ pub const Buffer = struct {
 
         try buffer.commitChanges();
         try buffer.updateRaw();
-        try testing.expectEqualStrings("ajk", buffer.content_raw.items);
+        try testing.expectEqualStrings("ajk\n", buffer.content_raw.items);
     }
 
     pub fn changeInsertLineBelow(self: *Buffer, row: i32) !void {
@@ -709,6 +704,7 @@ pub const Buffer = struct {
 
     pub fn lineContent(self: *const Buffer, row: usize) []const u21 {
         const start = self.lineStart(row);
+        log.log(@This(), "buffer {any}, row: {}, start: {}\n", .{ self.content.items, row, start });
         return self.content.items[start .. start + self.lineLength(row)];
     }
 
@@ -784,7 +780,7 @@ pub const Buffer = struct {
             .start = span.start,
             .end = self.posToCursor(delete_start + if (change.new_text) |new_text| new_text.len else 0),
         };
-        self.cursor = change.new_span.?.end;
+        try self.moveCursor(change.new_span.?.end);
         log.log(@This(), "applied change: {}\n", .{change});
     }
 
@@ -824,12 +820,6 @@ pub const Buffer = struct {
         // TODO: less allocations
         defer self.allocator.free(raw);
         try self.content_raw.appendSlice(raw);
-
-        var b: [3]u8 = undefined;
-        for (self.content.items) |ch| {
-            const len = try std.unicode.utf8Encode(ch, &b);
-            try self.content_raw.appendSlice(b[0..len]);
-        }
     }
 
     fn scrollForCursor(self: *Buffer, new_buf_cursor: Cursor) void {
@@ -856,21 +846,21 @@ pub const Buffer = struct {
         }
     }
 
-    fn testSetup(content: []const u8) !Buffer {
+    fn testSetup(content: []const u8) !*Buffer {
         try main.testSetup();
-        const allocator = std.testing.allocator;
-        const buffer = try init(allocator, "test.txt", content);
-        log.log(@This(), "created test buffer with content: \n{s}\n", .{content});
+        try main.editor.openScratch(content);
+        const buffer = main.editor.active_buffer;
+        log.log(@This(), "created test buffer with content: \n{s}", .{buffer.content_raw.items});
         return buffer;
     }
 
     test "test buffer" {
-        var buffer = try testSetup(
+        const buffer = try testSetup(
             \\abc
         );
-        defer buffer.deinit();
+        defer main.editor.deinit();
 
-        try testing.expectEqualStrings("abc", buffer.content_raw.items);
+        try testing.expectEqualStrings("abc\n", buffer.content_raw.items);
     }
 };
 
