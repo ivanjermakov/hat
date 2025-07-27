@@ -85,9 +85,9 @@ pub const State = struct {
         return self;
     }
 
-    pub fn edit(self: *State, change: *const cha.Change, buffer: *const buf.Buffer) !void {
+    pub fn edit(self: *State, change: *const cha.Change) !void {
         std.debug.assert(self.tree != null);
-        const edit_input = change.toTs(buffer);
+        const edit_input = change.toTs();
         ts.ts_tree_edit(self.tree, &edit_input);
     }
 

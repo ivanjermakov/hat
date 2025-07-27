@@ -461,11 +461,7 @@ pub const Buffer = struct {
     }
 
     pub fn changeInsertText(self: *Buffer, text: []const u21) !void {
-        var change = try cha.Change.initInsert(
-            self.allocator,
-            .{ .start = self.cursor, .end = self.cursor },
-            text,
-        );
+        var change = try cha.Change.initInsert(self.allocator, self, self.cursor, text);
         try self.appendChange(&change);
     }
 
@@ -475,7 +471,7 @@ pub const Buffer = struct {
         if (self.cursor.col == line_len) {
             span.end = .{ .row = self.cursor.row + 1, .col = 0 };
         }
-        var change = try cha.Change.initDelete(self.allocator, span, self.textAt(span));
+        var change = try cha.Change.initDelete(self.allocator, self, span);
         try self.appendChange(&change);
     }
 
@@ -483,7 +479,7 @@ pub const Buffer = struct {
         const pos = self.cursorToPos(self.cursor);
         if (pos == 0) return;
         const span: Span = .{ .start = self.posToCursor(pos - 1), .end = self.posToCursor(pos) };
-        var change = try cha.Change.initDelete(self.allocator, span, self.textAt(span));
+        var change = try cha.Change.initDelete(self.allocator, self, span);
         try self.appendChange(&change);
     }
 
@@ -502,7 +498,7 @@ pub const Buffer = struct {
             const last_line_len = self.lineLength(@intCast(selection.end.row));
             const span = selection.toExclusiveEnd(last_line_len);
             try main.editor.enterMode(.normal);
-            var change = try cha.Change.initDelete(self.allocator, span, self.textAt(span));
+            var change = try cha.Change.initDelete(self.allocator, self, span);
             try self.appendChange(&change);
         }
     }
@@ -562,16 +558,14 @@ pub const Buffer = struct {
 
     pub fn changeInsertLineBelow(self: *Buffer, row: i32) !void {
         const pos: Cursor = .{ .row = row, .col = @intCast(self.lineLength(@intCast(row))) };
-        const span: Span = .{ .start = pos, .end = pos };
-        var change = try cha.Change.initInsert(self.allocator, span, &.{'\n'});
+        var change = try cha.Change.initInsert(self.allocator, self, pos, &.{'\n'});
         try self.appendChange(&change);
         try self.commitChanges();
     }
 
     pub fn changeInsertLineAbove(self: *Buffer, row: i32) !void {
         const pos: Cursor = .{ .row = row, .col = 0 };
-        const span: Span = .{ .start = pos, .end = pos };
-        var change = try cha.Change.initInsert(self.allocator, span, &.{'\n'});
+        var change = try cha.Change.initInsert(self.allocator, self, pos, &.{'\n'});
         try self.appendChange(&change);
         try self.commitChanges();
         try self.moveCursor(.{ .row = row });
@@ -697,6 +691,13 @@ pub const Buffer = struct {
         return line_start + @as(usize, @intCast(cursor.col));
     }
 
+    pub fn cursorToBytePos(self: *const Buffer, cursor: Cursor) usize {
+        const line_start = self.lineStart(@intCast(cursor.row));
+        const part_end = line_start + @as(usize, @intCast(cursor.col));
+        const part_byte_len = uni.utf8ByteLen(self.content.items[line_start..part_end]) catch unreachable;
+        return line_start + part_byte_len;
+    }
+
     pub fn posToCursor(self: *const Buffer, pos: usize) Cursor {
         var i: usize = 0;
         var line_start: usize = 0;
@@ -802,7 +803,7 @@ pub const Buffer = struct {
         const file_content_uni = try uni.utf8FromBytes(self.allocator, file_content);
         defer self.allocator.free(file_content_uni);
 
-        var change = try cha.Change.initReplace(self.allocator, self.fullSpan(), self.content.items, file_content_uni);
+        var change = try cha.Change.initReplace(self.allocator, self, self.fullSpan(), file_content_uni);
         try self.appendChange(&change);
         try self.commitChanges();
 
@@ -819,11 +820,7 @@ pub const Buffer = struct {
         const span = change.old_span;
 
         if (builtin.mode == .Debug) {
-            if (change.old_text) |old_text| {
-                log.assertEql(@This(), u21, old_text, self.textAt(span));
-            } else {
-                std.debug.assert(std.meta.eql(span.start, span.end));
-            }
+            log.assertEql(@This(), u21, change.old_text, self.textAt(span));
         }
 
         try self.moveCursor(span.start);
@@ -835,12 +832,13 @@ pub const Buffer = struct {
             .start = span.start,
             .end = self.posToCursor(delete_start + if (change.new_text) |new_text| new_text.len else 0),
         };
+        change.new_byte_span = cha.ByteSpan.fromBufSpan(self, change.new_span.?);
         try self.moveCursor(change.new_span.?.end);
         self.cursor = change.new_span.?.end;
         std.debug.assert(std.meta.eql(self.cursor, change.new_span.?.end));
         log.log(@This(), "applied change: {}\n", .{change});
 
-        if (self.ts_state) |*ts_state| try ts_state.edit(change, self);
+        if (self.ts_state) |*ts_state| try ts_state.edit(change);
     }
 
     /// Delete every character from cursor (including) to the end of line
@@ -867,8 +865,7 @@ pub const Buffer = struct {
         const new_text = try self.allocator.alloc(u21, correct_indent_spaces);
         defer self.allocator.free(new_text);
         @memset(new_text, ' ');
-        const old_text = self.textAt(span);
-        var change = try cha.Change.initReplace(self.allocator, span, old_text, new_text);
+        var change = try cha.Change.initReplace(self.allocator, self, span, new_text);
         try self.appendChange(&change);
         try self.moveCursor(old_cursor);
     }

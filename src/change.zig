@@ -6,38 +6,43 @@ const ts = @import("ts.zig");
 
 pub const Change = struct {
     old_span: buf.Span,
-    old_text: ?[]const u21 = null,
+    old_byte_span: ByteSpan,
+    old_text: []const u21,
     new_span: ?buf.Span = null,
+    new_byte_span: ?ByteSpan = null,
     new_text: ?[]const u21 = null,
     allocator: std.mem.Allocator,
 
-    pub fn initInsert(allocator: std.mem.Allocator, span: buf.Span, new_text: []const u21) !Change {
-        return .{
-            .old_span = span,
-            .new_text = try allocator.dupe(u21, new_text),
-            .allocator = allocator,
-        };
+    pub fn initInsert(
+        allocator: std.mem.Allocator,
+        buffer: *const buf.Buffer,
+        pos: buf.Cursor,
+        new_text: []const u21,
+    ) !Change {
+        return initReplace(allocator, buffer, .{ .start = pos, .end = pos }, new_text);
     }
 
-    pub fn initDelete(allocator: std.mem.Allocator, span: buf.Span, old_text: []const u21) !Change {
-        return .{
-            .old_span = span,
-            .old_text = try allocator.dupe(u21, old_text),
-            .allocator = allocator,
-        };
+    pub fn initDelete(allocator: std.mem.Allocator, buffer: *const buf.Buffer, span: buf.Span) !Change {
+        return initReplace(allocator, buffer, span, &.{});
     }
 
-    pub fn initReplace(allocator: std.mem.Allocator, span: buf.Span, old_text: []const u21, new_text: []const u21) !Change {
+    pub fn initReplace(
+        allocator: std.mem.Allocator,
+        buffer: *const buf.Buffer,
+        span: buf.Span,
+        new_text: []const u21,
+    ) !Change {
         return .{
             .old_span = span,
-            .old_text = try allocator.dupe(u21, old_text),
+            .old_byte_span = ByteSpan.fromBufSpan(buffer, span),
+            .old_text = try allocator.dupe(u21, buffer.textAt(span)),
             .new_text = try allocator.dupe(u21, new_text),
             .allocator = allocator,
         };
     }
 
     pub fn deinit(self: *Change) void {
-        if (self.old_text) |t| self.allocator.free(t);
+        self.allocator.free(self.old_text);
         if (self.new_text) |t| self.allocator.free(t);
     }
 
@@ -55,11 +60,10 @@ pub const Change = struct {
             self.old_span.end.row,
             self.old_span.end.col,
         });
-        if (self.old_text) |old_text| {
-            _ = try writer.write(" \"");
-            for (old_text) |ch| try std.fmt.format(writer, "{u}", .{ch});
-            _ = try writer.write("\"");
-        }
+        _ = try writer.write(" \"");
+        for (self.old_text) |ch| try std.fmt.format(writer, "{u}", .{ch});
+        _ = try writer.write("\"");
+
         if (self.new_span) |new_span| {
             try std.fmt.format(writer, " -> {},{}-{},{}", .{
                 new_span.start.row,
@@ -78,9 +82,11 @@ pub const Change = struct {
     pub fn invert(self: *const Change) !Change {
         return .{
             .old_span = self.new_span.?,
+            .old_byte_span = self.new_byte_span.?,
             .new_span = self.old_span,
-            .new_text = if (self.old_text) |s| try self.allocator.dupe(u21, s) else null,
-            .old_text = if (self.new_text) |s| try self.allocator.dupe(u21, s) else null,
+            .new_byte_span = self.old_byte_span,
+            .new_text = try self.allocator.dupe(u21, self.old_text),
+            .old_text = try self.allocator.dupe(u21, self.new_text.?),
             .allocator = self.allocator,
         };
     }
@@ -88,7 +94,7 @@ pub const Change = struct {
     pub fn clone(self: *const Change, allocator: std.mem.Allocator) !Change {
         var cloned = self.*;
         if (self.new_text) |t| cloned.new_text = try allocator.dupe(u21, t);
-        if (self.old_text) |t| cloned.old_text = try allocator.dupe(u21, t);
+        cloned.old_text = try allocator.dupe(u21, self.old_text);
         return cloned;
     }
 
@@ -102,14 +108,13 @@ pub const Change = struct {
         };
     }
 
-    pub fn toTs(self: *const Change, buffer: *const buf.Buffer) ts.ts.TSInputEdit {
+    pub fn toTs(self: *const Change) ts.ts.TSInputEdit {
         const start_point = self.old_span.start.toTs();
         const old_end_point = self.old_span.end.toTs();
         const new_end_point = if (self.new_span) |new_span| new_span.end.toTs() else old_end_point;
-        const start_byte: u32 = @intCast(buffer.cursorToPos(self.old_span.start));
-        const old_span_in_range = self.old_span.end.row < buffer.line_positions.items.len;
-        const old_end_byte: u32 = if (old_span_in_range) @intCast(buffer.cursorToPos(self.old_span.end)) else start_byte;
-        const new_end_byte: u32 = if (self.new_span) |new_span| @intCast(buffer.cursorToPos(new_span.end)) else old_end_byte;
+        const start_byte: u32 = @intCast(self.old_byte_span.start);
+        const old_end_byte: u32 = @intCast(self.old_byte_span.end);
+        const new_end_byte: u32 = @intCast(self.new_byte_span.?.end);
         return .{
             .start_byte = start_byte,
             .old_end_byte = old_end_byte,
@@ -117,6 +122,18 @@ pub const Change = struct {
             .start_point = start_point,
             .old_end_point = old_end_point,
             .new_end_point = new_end_point,
+        };
+    }
+};
+
+pub const ByteSpan = struct {
+    start: usize,
+    end: usize,
+
+    pub fn fromBufSpan(buffer: *const buf.Buffer, span: buf.Span) ByteSpan {
+        return .{
+            .start = buffer.cursorToBytePos(span.start),
+            .end = buffer.cursorToBytePos(span.end),
         };
     }
 };
