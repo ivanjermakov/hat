@@ -442,7 +442,7 @@ pub const Buffer = struct {
             return;
         }
         log.log(@This(), "commit {} changes\n", .{self.uncommitted_changes.items.len});
-        if ((self.history_index orelse 0) + 1 != self.history.items.len) {
+        if (self.history_index == null or self.history_index.? + 1 != self.history.items.len) {
             log.log(@This(), "history overwrite, idx: {?}\n", .{self.history_index});
             const i = if (self.history_index) |i| i + 1 else 0;
             for (self.history.items[i..]) |*chs| {
