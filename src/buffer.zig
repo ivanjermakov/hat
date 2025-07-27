@@ -770,6 +770,7 @@ pub const Buffer = struct {
         const delete_start = self.cursorToPos(span.start);
         const delete_end = self.cursorToPos(span.end);
         try self.content.replaceRange(delete_start, delete_end - delete_start, change.new_text orelse &.{});
+        try self.updateLinePositions();
         change.new_span = .{
             .start = span.start,
             .end = self.posToCursor(delete_start + if (change.new_text) |new_text| new_text.len else 0),
