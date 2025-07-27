@@ -386,7 +386,8 @@ pub const Terminal = struct {
     fn drawMessage(self: *Terminal) !void {
         if (main.editor.message_read_idx == main.editor.messages.items.len) return;
         const message = main.editor.messages.items[main.editor.message_read_idx];
-        try self.moveCursor(.{ .row = @intCast(self.dimensions.height - 1) });
+        const message_height = std.mem.count(u8, message, "\n") + 1;
+        try self.moveCursor(.{ .row = @intCast(self.dimensions.height - message_height) });
         try co.attributes.write(co.attributes.message, self.writer.writer());
         try self.write(message);
         try self.resetAttributes();
