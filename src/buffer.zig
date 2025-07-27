@@ -12,6 +12,7 @@ const cha = @import("change.zig");
 const uni = @import("unicode.zig");
 const ter = @import("terminal.zig");
 const clp = @import("clipboard.zig");
+const dt = @import("datetime.zig");
 
 pub const Cursor = struct {
     row: i32 = 0,
@@ -102,6 +103,7 @@ pub const Span = struct {
 pub const Buffer = struct {
     path: []const u8,
     uri: []const u8,
+    stat: ?std.fs.File.Stat = null,
     /// Incremented on every content change
     version: usize = 0,
     file_type: ft.FileTypeConfig,
@@ -178,6 +180,7 @@ pub const Buffer = struct {
             .scratch = scratch,
             .allocator = allocator,
         };
+        _ = try self.syncFs();
         try self.updateContent();
         try self.updateLinePositions();
         if (self.file_type.ts) |ts_conf| {
@@ -237,6 +240,7 @@ pub const Buffer = struct {
         const file = try std.fs.cwd().createFile(self.path, .{ .truncate = true });
         defer file.close();
         try file.writeAll(self.content_raw.items);
+        _ = try self.syncFs();
 
         self.file_history_index = self.history_index;
 
@@ -771,6 +775,44 @@ pub const Buffer = struct {
             .end = .{ .row = row, .col = @intCast(self.lineLength(@intCast(row))) },
         };
         main.editor.dirty.draw = true;
+    }
+
+    pub fn syncFs(self: *Buffer) !bool {
+        if (self.scratch) return false;
+        const f = try std.fs.cwd().openFile(self.path, .{});
+        const stat = try f.stat();
+        const newer = stat.mtime > if (self.stat) |s| s.mtime else 0;
+        if (newer) {
+            if (main.log_enabled) {
+                const time = dt.Datetime.fromSeconds(@as(f64, @floatFromInt(stat.mtime)) / std.time.ns_per_s);
+                var time_buf: [32]u8 = undefined;
+                const time_str = time.formatISO8601Buf(&time_buf, false) catch "";
+                log.log(@This(), "mtime {} ({s})\n", .{ stat.mtime, time_str });
+            }
+            self.stat = stat;
+        }
+        return newer;
+    }
+
+    pub fn changeFsExternal(self: *Buffer) !void {
+        const old_cursor = self.cursor;
+        const file = try std.fs.cwd().openFile(self.path, .{ .mode = .read_write });
+        const file_content = try file.readToEndAlloc(self.allocator, std.math.maxInt(usize));
+        defer self.allocator.free(file_content);
+        const file_content_uni = try uni.utf8FromBytes(self.allocator, file_content);
+        defer self.allocator.free(file_content_uni);
+
+        var change = try cha.Change.initReplace(self.allocator, self.fullSpan(), self.content.items, file_content_uni);
+        try self.appendChange(&change);
+        try self.commitChanges();
+
+        // TODO: attempt to keep cursor at the same semantic place
+        try self.moveCursor(old_cursor);
+    }
+
+    fn fullSpan(self: *Buffer) Span {
+        if (self.content.items.len == 0) return Span{ .start = .{}, .end = .{} };
+        return Span{ .start = .{}, .end = .{ .row = @intCast(self.line_positions.items.len) } };
     }
 
     fn applyChange(self: *Buffer, change: *cha.Change) !void {

@@ -107,7 +107,8 @@ pub const Change = struct {
         const old_end_point = self.old_span.end.toTs();
         const new_end_point = if (self.new_span) |new_span| new_span.end.toTs() else old_end_point;
         const start_byte: u32 = @intCast(buffer.cursorToPos(self.old_span.start));
-        const old_end_byte: u32 = @intCast(buffer.cursorToPos(self.old_span.end));
+        const old_span_in_range = self.old_span.end.row < buffer.line_positions.items.len;
+        const old_end_byte: u32 = if (old_span_in_range) @intCast(buffer.cursorToPos(self.old_span.end)) else start_byte;
         const new_end_byte: u32 = if (self.new_span) |new_span| @intCast(buffer.cursorToPos(new_span.end)) else old_end_byte;
         return .{
             .start_byte = start_byte,
