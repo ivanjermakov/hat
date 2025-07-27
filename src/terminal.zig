@@ -157,7 +157,7 @@ pub const Terminal = struct {
         for (@intCast(area.pos.row)..@as(usize, @intCast(area.pos.row)) + area.dims.height) |term_row| {
             const buffer_row = @as(i32, @intCast(term_row)) + buffer.offset.row;
             try self.moveCursor(.{ .row = @intCast(term_row), .col = area.pos.col });
-            if (buffer_row < 0 or buffer_row >= buffer.content.items.len) {
+            if (buffer_row < 0 or buffer_row >= buffer.line_positions.items.len) {
                 // TODO: option to show "~"
             } else {
                 // TODO: option to use non-relative line numbers
@@ -192,12 +192,12 @@ pub const Terminal = struct {
         for (@intCast(area.pos.row)..@as(usize, @intCast(area.pos.row)) + area.dims.height) |term_row| {
             const buffer_row = @as(i32, @intCast(term_row)) + buffer.offset.row;
             if (buffer_row < 0) continue;
-            if (buffer_row >= buffer.content.items.len) break;
+            if (buffer_row >= buffer.line_positions.items.len) break;
 
-            var byte: usize = buffer.line_positions.items[@intCast(buffer_row)];
+            var byte: usize = if (buffer_row > 0) buffer.line_byte_positions.items[@intCast(buffer_row - 1)] else 0;
             var term_col: i32 = 0;
 
-            var line = buffer.content.items[@intCast(buffer_row)].items;
+            var line = buffer.lineContent(@intCast(buffer_row));
             try self.moveCursor(.{ .row = @intCast(term_row), .col = area.pos.col });
 
             if (buffer.offset.col > 0) {
@@ -428,7 +428,7 @@ pub fn printBuffer(buffer: *buf.Buffer, writer: std.io.AnyWriter, highlight: ?Hi
     var last_attrs: ?[]const u8 = null;
 
     var start_row: i32 = 0;
-    var end_row: i32 = @intCast(buffer.content.items.len);
+    var end_row: i32 = @intCast(buffer.line_positions.items.len);
     if (highlight) |hi| {
         const half_term: i32 = @divFloor(@as(i32, @intCast(hi.term_height)), 2);
         start_row = @as(i32, @intCast(hi.highlight_line)) - half_term;
@@ -444,10 +444,10 @@ pub fn printBuffer(buffer: *buf.Buffer, writer: std.io.AnyWriter, highlight: ?Hi
             last_attrs = null;
             row += 1;
         }
-        if (row < 0 or row >= buffer.content.items.len) continue;
-        const line = buffer.content.items[@intCast(row)].items;
+        if (row < 0 or row >= buffer.line_positions.items.len) continue;
+        const line = buffer.lineContent(@intCast(row));
 
-        var byte: usize = buffer.line_positions.items[@intCast(row)];
+        var byte: usize = buffer.line_byte_positions.items[@intCast(row)];
         var term_col: i32 = 0;
 
         for (line) |ch| {

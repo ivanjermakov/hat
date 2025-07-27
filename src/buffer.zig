@@ -98,8 +98,7 @@ pub const Buffer = struct {
     /// Incremented on every content change
     version: usize = 0,
     file_type: ft.FileTypeConfig,
-    /// Array list of array lists of utf8 codepoints
-    content: std.ArrayList(std.ArrayList(u21)),
+    content: std.ArrayList(u21),
     content_raw: std.ArrayList(u8),
     ts_state: ?ts.State = null,
     /// End is inclusive
@@ -113,7 +112,12 @@ pub const Buffer = struct {
     /// How buffer is positioned relative to the window
     /// (0, 0) means Buffer.cursor is the same as window cursor
     offset: Cursor = .{},
+    /// Array list of character start position of next line
+    /// Length equals number of lines, last item means total buffer character size
     line_positions: std.ArrayList(usize),
+    /// Array list of byte start position of next line
+    /// Length equals number of lines, last item means total buffer byte size
+    line_byte_positions: std.ArrayList(usize),
     /// Indent depth for each line
     indents: std.ArrayList(usize),
     history: std.ArrayList(std.ArrayList(cha.Change)),
@@ -148,10 +152,11 @@ pub const Buffer = struct {
             .path = buf_path,
             .file_type = file_type,
             .uri = uri,
-            .content = std.ArrayList(std.ArrayList(u21)).init(allocator),
+            .content = std.ArrayList(u21).init(allocator),
             .content_raw = raw,
             .diagnostics = std.ArrayList(lsp.types.Diagnostic).init(allocator),
             .line_positions = std.ArrayList(usize).init(allocator),
+            .line_byte_positions = std.ArrayList(usize).init(allocator),
             .indents = std.ArrayList(usize).init(allocator),
             .history = std.ArrayList(std.ArrayList(cha.Change)).init(allocator),
             .pending_changes = std.ArrayList(cha.Change).init(allocator),
@@ -177,23 +182,11 @@ pub const Buffer = struct {
     }
 
     pub fn updateContent(self: *Buffer) !void {
-        var lines_iter = std.mem.splitScalar(u8, self.content_raw.items, '\n');
-        while (true) {
-            const next: []const u8 = @constCast(lines_iter.next() orelse break);
-            const view = try std.unicode.Utf8View.init(next);
-            var iter = view.iterator();
-            var line = std.ArrayList(u21).init(self.allocator);
-            while (iter.nextCodepoint()) |ch| {
-                try line.append(ch);
-            }
-            try self.content.append(line);
-        }
-        if (self.content.getLastOrNull()) |last| {
-            if (last.items.len == 0) {
-                _ = self.content.orderedRemove(self.content.items.len - 1);
-                last.deinit();
-            }
-        }
+        self.content.clearRetainingCapacity();
+        const content_uni = try uni.utf8FromBytes(self.allocator, self.content_raw.items);
+        // TODO: less allocations
+        defer self.allocator.free(content_uni);
+        try self.content.appendSlice(content_uni);
     }
 
     pub fn deinit(self: *Buffer) void {
@@ -207,12 +200,12 @@ pub const Buffer = struct {
 
         if (self.ts_state) |*ts_state| ts_state.deinit();
 
-        for (self.content.items) |line| line.deinit();
         self.content.deinit();
         self.content_raw.deinit();
 
         self.diagnostics.deinit();
         self.line_positions.deinit();
+        self.line_byte_positions.deinit();
         self.indents.deinit();
 
         for (self.history.items) |*i| {
@@ -258,8 +251,7 @@ pub const Buffer = struct {
         if (!in_term) return;
 
         if (new_cursor.row + 1 > self.content.items.len) return;
-        const line = &self.content.items[@intCast(new_cursor.row)];
-        const max_col = line.items.len;
+        const max_col = self.lineLength(@intCast(new_cursor.row));
         var col: i32 = @intCast(@min(new_cursor.col, max_col));
         if (vertical_only) {
             if (self.cursor_desired_col) |desired| {
@@ -301,14 +293,11 @@ pub const Buffer = struct {
                     (selection.end.row != old_cursor.row or self.cursor.row < selection.start.row);
                 if (move_start) {
                     selection.start = .{ .row = self.cursor.row, .col = 0 };
-                    const last_line = self.content.items[@intCast(selection.end.row)].items;
-                    selection.end.col = @intCast(last_line.len);
                 } else {
                     selection.start.col = 0;
                     selection.end.row = self.cursor.row;
-                    const last_line = self.content.items[@intCast(selection.end.row)].items;
-                    selection.end.col = @intCast(last_line.len);
                 }
+                selection.end.col = @intCast(self.lineLength(@intCast(selection.end.row)));
                 main.editor.dirty.draw = true;
             },
             else => {
@@ -348,9 +337,9 @@ pub const Buffer = struct {
     /// TODO: search for next word in subsequent lines
     pub fn moveToNextWord(self: *Buffer) !void {
         const old_cursor = self.cursor;
-        const line = self.content.items[@intCast(self.cursor.row)];
+        const line = self.lineContent(@intCast(self.cursor.row));
 
-        if (nextWordStart(line.items, @intCast(self.cursor.col))) |col| {
+        if (nextWordStart(line, @intCast(self.cursor.col))) |col| {
             try self.moveCursor(.{ .row = self.cursor.row, .col = @intCast(col) });
             if (self.selection == null) {
                 self.selection = .{ .start = old_cursor, .end = self.cursor };
@@ -388,11 +377,11 @@ pub const Buffer = struct {
     /// TODO: search for next word in preceding lines
     pub fn moveToPrevWord(self: *Buffer) !void {
         const old_cursor = self.cursor;
-        const line = self.content.items[@intCast(self.cursor.row)];
+        const line = self.lineContent(@intCast(self.cursor.row));
 
         var col: usize = 0;
         while (col < self.cursor.col) {
-            if (nextWordStart(line.items, col)) |word_start| {
+            if (nextWordStart(line, col)) |word_start| {
                 if (word_start >= self.cursor.col) break;
                 col = word_start;
             }
@@ -410,9 +399,9 @@ pub const Buffer = struct {
     /// TODO: search for next word in subsequent lines
     pub fn moveToWordEnd(self: *Buffer) !void {
         const old_cursor = self.cursor;
-        const line = self.content.items[@intCast(self.cursor.row)];
+        const line = self.lineContent(@intCast(self.cursor.row));
 
-        if (wordEnd(line.items, @intCast(self.cursor.col + 1))) |col| {
+        if (wordEnd(line, @intCast(self.cursor.col + 1))) |col| {
             try self.moveCursor(.{ .row = self.cursor.row, .col = @intCast(col) });
             if (self.selection == null) {
                 self.selection = .{ .start = old_cursor, .end = self.cursor };
@@ -424,9 +413,9 @@ pub const Buffer = struct {
 
     pub fn moveToTokenEnd(self: *Buffer) !void {
         const old_cursor = self.cursor;
-        const line = self.content.items[@intCast(self.cursor.row)];
+        const line = self.lineContent(@intCast(self.cursor.row));
 
-        if (tokenEnd(line.items, @intCast(self.cursor.col + 1))) |col| {
+        if (tokenEnd(line, @intCast(self.cursor.col + 1))) |col| {
             try self.moveCursor(.{ .row = self.cursor.row, .col = @intCast(col) });
             if (self.selection == null) {
                 self.selection = .{ .start = old_cursor, .end = self.cursor };
@@ -474,13 +463,11 @@ pub const Buffer = struct {
 
     pub fn changeDeleteChar(self: *Buffer) !void {
         var span: Span = .{ .start = self.cursor, .end = self.cursor.applyOffset(.{ .col = 1 }) };
-        const line = self.content.items[@intCast(self.cursor.row)];
-        if (self.cursor.col == line.items.len) {
+        const line_len = self.lineLength(@intCast(self.cursor.row));
+        if (self.cursor.col == line_len) {
             span.end = .{ .row = self.cursor.row + 1, .col = 0 };
         }
-        const text = try self.textAt(self.allocator, span);
-        defer self.allocator.free(text);
-        var change = try cha.Change.initDelete(self.allocator, span, text);
+        var change = try cha.Change.initDelete(self.allocator, span, self.textAt(span));
         try self.appendChange(&change);
     }
 
@@ -493,34 +480,27 @@ pub const Buffer = struct {
             }
         } else {
             const span: Span = .{ .start = self.cursor.applyOffset(.{ .col = -1 }), .end = self.cursor };
-            const text = try self.textAt(self.allocator, span);
-            defer self.allocator.free(text);
-            var change = try cha.Change.initDelete(self.allocator, span, text);
+            var change = try cha.Change.initDelete(self.allocator, span, self.textAt(span));
             try self.appendChange(&change);
         }
     }
 
     pub fn changeJoinWithLineBelow(self: *Buffer, row: usize) !void {
-        const line = &self.content.items[row];
         const span: Span = .{
-            .start = .{ .row = @intCast(row), .col = @intCast(line.items.len) },
+            .start = .{ .row = @intCast(row), .col = @intCast(self.lineLength(row)) },
             .end = .{ .row = @intCast(row + 1), .col = 0 },
         };
-        const text = try self.textAt(self.allocator, span);
-        defer self.allocator.free(text);
-        var change = try cha.Change.initDelete(self.allocator, span, text);
+        var change = try cha.Change.initDelete(self.allocator, span, self.textAt(span));
         try self.appendChange(&change);
         try self.commitChanges();
     }
 
     pub fn changeSelectionDelete(self: *Buffer) !void {
         if (self.selection) |selection| {
-            const last_line = self.content.items[@intCast(selection.end.row)].items;
-            const span = selection.toExclusiveEnd(last_line.len);
+            const last_line_len = self.lineLength(@intCast(selection.end.row));
+            const span = selection.toExclusiveEnd(last_line_len);
             try main.editor.enterMode(.normal);
-            const text = try self.textAt(self.allocator, span);
-            defer self.allocator.free(text);
-            var change = try cha.Change.initDelete(self.allocator, span, text);
+            var change = try cha.Change.initDelete(self.allocator, span, self.textAt(span));
             try self.appendChange(&change);
         }
     }
@@ -608,18 +588,26 @@ pub const Buffer = struct {
 
     pub fn updateLinePositions(self: *Buffer) !void {
         self.line_positions.clearRetainingCapacity();
+        self.line_byte_positions.clearRetainingCapacity();
+        var line_iter = std.mem.splitScalar(u21, self.content.items, '\n');
         var byte: usize = 0;
-        for (0..self.content.items.len) |i| {
-            try self.line_positions.append(byte);
-            const line = &self.content.items[i];
-            for (line.items) |ch| {
+        var char: usize = 0;
+        while (line_iter.next()) |line| {
+            for (line) |ch| {
                 byte += try std.unicode.utf8CodepointSequenceLength(ch);
             }
             // new line
             byte += 1;
+            char += line.len + 1;
+            try self.line_positions.append(char);
+            try self.line_byte_positions.append(byte);
         }
-        // indicate last line length
-        try self.line_positions.append(byte);
+        // remove phantom line
+        const line_count = self.line_positions.items.len;
+        if (line_count > 1 and self.line_positions.items[line_count - 1] - self.line_positions.items[line_count - 2] == 1) {
+            _ = self.line_positions.orderedRemove(line_count - 1);
+            _ = self.line_byte_positions.orderedRemove(line_count - 1);
+        }
     }
 
     pub fn updateIndents(self: *Buffer) !void {
@@ -637,10 +625,10 @@ pub const Buffer = struct {
 
         var indent: usize = 0;
         var indent_next: usize = 0;
-        for (0..self.line_positions.items.len - 1) |row| {
+        for (0..self.line_byte_positions.items.len - 1) |row| {
             indent = indent_next;
-            const line_byte_start = self.line_positions.items[row];
-            const line_byte_end = self.line_positions.items[row + 1];
+            const line_byte_start = self.line_byte_positions.items[row];
+            const line_byte_end = self.line_byte_positions.items[row + 1];
             var line_indents: usize = 0;
             var line_dedents: usize = 0;
             for (line_byte_start..line_byte_end) |byte| {
@@ -689,30 +677,47 @@ pub const Buffer = struct {
         self.history_index = redo_idx;
     }
 
-    pub fn textAt(self: *Buffer, allocator: std.mem.Allocator, span: Span) ![]const u21 {
-        var res = std.ArrayList(u21).init(allocator);
-        for (@intCast(span.start.row)..@intCast(span.end.row + 1)) |row| {
-            if (row >= self.content.items.len) break;
-            const line = &self.content.items[row];
-            if (row == span.start.row and row == span.end.row) {
-                try res.appendSlice(line.items[@intCast(span.start.col)..@intCast(span.end.col)]);
-            } else if (row == span.start.row) {
-                try res.appendSlice(line.items[@intCast(span.start.col)..]);
-                try res.append('\n');
-            } else if (row == span.end.row) {
-                try res.appendSlice(line.items[0..@intCast(span.end.col)]);
-            } else {
-                try res.appendSlice(line.items);
-                try res.append('\n');
-            }
-        }
-        return res.toOwnedSlice();
+    pub fn textAt(self: *const Buffer, span: Span) []const u21 {
+        const start = self.cursorToPos(span.start);
+        const end = self.cursorToPos(span.end);
+        return self.content.items[start .. end - start];
     }
 
-    pub fn rawTextAt(self: *Buffer, allocator: std.mem.Allocator, span: Span) ![]const u8 {
-        const text = try self.textAt(self.allocator, span);
-        defer self.allocator.free(text);
-        return try uni.utf8ToBytes(allocator, text);
+    pub fn cursorToPos(self: *const Buffer, cursor: Cursor) usize {
+        const line_start = self.lineStart(@intCast(cursor.row));
+        return line_start + @as(usize, @intCast(cursor.col));
+    }
+
+    pub fn posToCursor(self: *const Buffer, pos: usize) Cursor {
+        var i: usize = 0;
+        var line_start: usize = 0;
+        for (self.line_positions.items) |l_pos| {
+            if (l_pos >= pos) {
+                line_start = l_pos;
+                break;
+            }
+            i += 1;
+        }
+        return Cursor{ .row = @intCast(i), .col = @intCast(pos - line_start) };
+    }
+
+    pub fn lineLength(self: *const Buffer, row: usize) usize {
+        if (row == 0) return self.line_positions.items[row];
+        return self.line_positions.items[row] - self.line_positions.items[row - 1];
+    }
+
+    pub fn lineStart(self: *const Buffer, row: usize) usize {
+        if (row == 0) return 0;
+        return self.line_positions.items[row - 1];
+    }
+
+    pub fn lineContent(self: *const Buffer, row: usize) []const u21 {
+        const start = self.lineStart(row);
+        return self.content.items[start .. start + self.lineLength(row)];
+    }
+
+    pub fn rawTextAt(self: *const Buffer, allocator: std.mem.Allocator, span: Span) ![]const u8 {
+        return try uni.utf8ToBytes(allocator, self.textAt(span));
     }
 
     pub fn goToDefinition(self: *Buffer) !void {
@@ -730,8 +735,8 @@ pub const Buffer = struct {
 
     pub fn copySelectionToClipboard(self: *Buffer) !void {
         if (self.selection) |selection| {
-            const last_line = self.content.items[@intCast(selection.end.row)].items;
-            const text = try self.rawTextAt(self.allocator, selection.toExclusiveEnd(last_line.len));
+            const last_line_len = self.lineLength(@intCast(selection.end.row));
+            const text = try self.rawTextAt(self.allocator, selection.toExclusiveEnd(last_line_len));
             defer self.allocator.free(text);
             try clp.write(self.allocator, text);
             try main.editor.enterMode(.normal);
@@ -757,10 +762,9 @@ pub const Buffer = struct {
 
     pub fn selectLine(self: *Buffer) !void {
         const row = self.cursor.row;
-        const line = self.content.items[@intCast(row)].items;
         self.selection = .{
             .start = .{ .row = row, .col = 0 },
-            .end = .{ .row = row, .col = @intCast(line.len) },
+            .end = .{ .row = row, .col = @intCast(self.lineLength(@intCast(row))) },
         };
         main.editor.dirty.draw = true;
     }
@@ -770,54 +774,20 @@ pub const Buffer = struct {
 
         if (builtin.mode == .Debug) {
             if (change.old_text) |old_text| {
-                const text_at = try self.textAt(self.allocator, span);
-                defer self.allocator.free(text_at);
-                log.assertEql(@This(), u21, old_text, text_at);
+                log.assertEql(@This(), u21, old_text, self.textAt(span));
             } else {
                 std.debug.assert(std.meta.eql(span.start, span.end));
             }
         }
 
         try self.moveCursor(span.start);
-        try self.deleteSpan(span);
+        const delete_start = self.cursorToPos(span.start);
+        const delete_end = self.cursorToPos(span.end);
+        try self.content.replaceRange(delete_start, delete_end - delete_start, change.new_text orelse &.{});
         self.cursor = span.start;
-        if (change.new_text) |new_text| try self.insertText(new_text);
+        try self.moveCursor(self.posToCursor(delete_start + if (change.new_text) |new_text| new_text.len else 0));
         change.new_span = .{ .start = span.start, .end = self.cursor };
         log.log(@This(), "applied change: {}\n", .{change});
-    }
-
-    fn deleteSpan(self: *Buffer, span: Span) !void {
-        if (!std.meta.eql(span.start, span.end)) {
-            if (span.end.row - span.start.row > 1) {
-                // remove fully selected lines
-                try self.deleteLineRange(@intCast(span.start.row + 1), @intCast(span.end.row));
-            }
-            // start and end on separate lines
-            if (span.end.row - span.start.row > 0) {
-                try self.deleteToEnd(span.start);
-                const new_end: Cursor = .{ .row = span.start.row + 1, .col = span.end.col };
-                if (new_end.row < self.content.items.len) {
-                    try self.deleteToStart(new_end);
-                    try self.joinWithLineBelow(@intCast(span.start.row));
-                }
-            } else {
-                // start and end on the same line
-                var line = &self.content.items[@intCast(span.start.row)];
-                try line.replaceRange(
-                    @intCast(span.start.col),
-                    @intCast(span.end.col - span.start.col),
-                    &[_]u21{},
-                );
-            }
-        }
-        try self.moveCursor(span.start);
-    }
-
-    fn joinWithLineBelow(self: *Buffer, row: usize) !void {
-        var line = &self.content.items[row];
-        var next_line = self.content.orderedRemove(row + 1);
-        defer next_line.deinit();
-        try line.appendSlice(next_line.items);
     }
 
     /// Delete every character from cursor (including) to the end of line
@@ -838,15 +808,6 @@ pub const Buffer = struct {
             @intCast(cursor.col),
             &[_]u21{},
         );
-    }
-
-    /// End is exclusive
-    fn deleteLineRange(self: *Buffer, start: usize, end: usize) !void {
-        if (end - start <= 0) return;
-        for (start..end) |_| {
-            const line = self.content.orderedRemove(start);
-            line.deinit();
-        }
     }
 
     fn insertText(self: *Buffer, text: []const u21) !void {
@@ -878,7 +839,7 @@ pub const Buffer = struct {
 
     fn lineAlignIndent(self: *Buffer, row: i32) !void {
         const old_cursor = self.cursor;
-        const line = self.content.items[@intCast(row)].items;
+        const line = self.lineContent(@intCast(row));
         const correct_indent: usize = self.indents.items[@intCast(row)];
         const correct_indent_spaces = correct_indent * self.file_type.indent_spaces;
         const current_indent_spaces: usize = lineIndentSpaces(line);
@@ -890,8 +851,7 @@ pub const Buffer = struct {
         const new_text = try self.allocator.alloc(u21, correct_indent_spaces);
         defer self.allocator.free(new_text);
         @memset(new_text, ' ');
-        const old_text = try self.textAt(self.allocator, span);
-        defer self.allocator.free(old_text);
+        const old_text = self.textAt(span);
         var change = try cha.Change.initReplace(self.allocator, span, old_text, new_text);
         try self.appendChange(&change);
         try self.moveCursor(old_cursor);
@@ -899,18 +859,16 @@ pub const Buffer = struct {
 
     fn updateRaw(self: *Buffer) !void {
         self.content_raw.clearRetainingCapacity();
+        const raw = try uni.utf8ToBytes(self.allocator, self.content.items);
+        // TODO: less allocations
+        defer self.allocator.free(raw);
+        try self.content_raw.appendSlice(raw);
         if (self.content.items.len == 0) return;
 
         var b: [3]u8 = undefined;
-        for (0..self.content.items.len) |i| {
-            const line = &self.content.items[i];
-            for (line.items) |ch| {
-                const len = try std.unicode.utf8Encode(ch, &b);
-                try self.content_raw.appendSlice(b[0..len]);
-            }
-            if (i != self.content.items.len - 1) {
-                try self.content_raw.append('\n');
-            }
+        for (self.content.items) |ch| {
+            const len = try std.unicode.utf8Encode(ch, &b);
+            try self.content_raw.appendSlice(b[0..len]);
         }
     }
 
@@ -931,9 +889,7 @@ pub const Buffer = struct {
             self.offset.col += term_cursor.col;
             main.editor.dirty.draw = true;
         } else if (term_cursor.col >= dims.width and new_buf_cursor.row >= 0 and new_buf_cursor.row < self.content.items.len) {
-            const line = &self.content.items[@intCast(new_buf_cursor.row)];
-            const line_len = line.items.len;
-            if (new_buf_cursor.col <= line_len) {
+            if (new_buf_cursor.col <= self.lineLength(@intCast(new_buf_cursor.row))) {
                 self.offset.col += 1 + term_cursor.col - @as(i32, @intCast(dims.width));
                 main.editor.dirty.draw = true;
             }
@@ -958,7 +914,7 @@ pub const Buffer = struct {
     }
 };
 
-fn nextWordStart(line: []u21, pos: usize) ?usize {
+fn nextWordStart(line: []const u21, pos: usize) ?usize {
     if (line.len == 0) return null;
     var col = pos;
     while (col < line.len - 1) {
@@ -973,7 +929,7 @@ fn nextWordStart(line: []u21, pos: usize) ?usize {
     return null;
 }
 
-fn wordEnd(line: []u21, pos: usize) ?usize {
+fn wordEnd(line: []const u21, pos: usize) ?usize {
     if (line.len == 0) return null;
     var col = pos;
     while (col < line.len - 1) {
@@ -987,7 +943,7 @@ fn wordEnd(line: []u21, pos: usize) ?usize {
     return null;
 }
 
-fn tokenEnd(line: []u21, pos: usize) ?usize {
+fn tokenEnd(line: []const u21, pos: usize) ?usize {
     if (line.len == 0) return null;
     var col = pos;
     while (col < line.len - 1) {

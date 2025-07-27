@@ -270,13 +270,15 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                         try buffer.centerCursor();
                     } else if (normal_or_select and eql(u8, multi_key, "gk")) {
                         try buffer.moveCursor(.{
-                            .row = @as(i32, @intCast(buffer.content.items.len)) - 1,
+                            .row = @as(i32, @intCast(buffer.line_positions.items.len)) - 1,
                             .col = buffer.cursor.col,
                         });
                         try buffer.centerCursor();
                     } else if (normal_or_select and eql(u8, multi_key, "gl")) {
-                        const line = buffer.content.items[@intCast(buffer.cursor.row)].items;
-                        try buffer.moveCursor(.{ .row = buffer.cursor.row, .col = @intCast(line.len) });
+                        try buffer.moveCursor(.{
+                            .row = buffer.cursor.row,
+                            .col = @intCast(buffer.lineLength(@intCast(buffer.cursor.row))),
+                        });
                     } else if (normal_or_select and eql(u8, multi_key, "gj")) {
                         try buffer.moveCursor(.{ .row = buffer.cursor.row, .col = 0 });
                     } else {
