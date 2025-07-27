@@ -467,17 +467,11 @@ pub const Buffer = struct {
     }
 
     pub fn changeDeletePrevChar(self: *Buffer) !void {
-        if (self.cursor.col == 0) {
-            if (self.cursor.row > 0) {
-                try self.changeJoinWithLineBelow(@intCast(self.cursor.row - 1));
-            } else {
-                return;
-            }
-        } else {
-            const span: Span = .{ .start = self.cursor.applyOffset(.{ .col = -1 }), .end = self.cursor };
-            var change = try cha.Change.initDelete(self.allocator, span, self.textAt(span));
-            try self.appendChange(&change);
-        }
+        const pos = self.cursorToPos(self.cursor);
+        if (pos == 0) return;
+        const span: Span = .{ .start = self.posToCursor(pos - 1), .end = self.posToCursor(pos) };
+        var change = try cha.Change.initDelete(self.allocator, span, self.textAt(span));
+        try self.appendChange(&change);
     }
 
     pub fn changeJoinWithLineBelow(self: *Buffer, row: usize) !void {
@@ -685,16 +679,17 @@ pub const Buffer = struct {
         var i: usize = 0;
         var line_start: usize = 0;
         for (self.line_positions.items) |l_pos| {
-            if (l_pos >= pos) break;
+            if (l_pos > pos) break;
             line_start = l_pos;
             i += 1;
         }
         return Cursor{ .row = @intCast(i), .col = @intCast(pos - line_start) };
     }
 
+    /// Line character length (excl. newline character)
     pub fn lineLength(self: *const Buffer, row: usize) usize {
-        if (row == 0) return self.line_positions.items[row];
-        return self.line_positions.items[row] - self.line_positions.items[row - 1];
+        if (row == 0) return self.line_positions.items[row] - 1;
+        return self.line_positions.items[row] - self.line_positions.items[row - 1] - 1;
     }
 
     pub fn lineStart(self: *const Buffer, row: usize) usize {
@@ -704,7 +699,6 @@ pub const Buffer = struct {
 
     pub fn lineContent(self: *const Buffer, row: usize) []const u21 {
         const start = self.lineStart(row);
-        log.log(@This(), "buffer {any}, row: {}, start: {}\n", .{ self.content.items, row, start });
         return self.content.items[start .. start + self.lineLength(row)];
     }
 
@@ -781,6 +775,8 @@ pub const Buffer = struct {
             .end = self.posToCursor(delete_start + if (change.new_text) |new_text| new_text.len else 0),
         };
         try self.moveCursor(change.new_span.?.end);
+        self.cursor = change.new_span.?.end;
+        std.debug.assert(std.meta.eql(self.cursor, change.new_span.?.end));
         log.log(@This(), "applied change: {}\n", .{change});
     }
 
