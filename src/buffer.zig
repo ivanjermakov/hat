@@ -749,7 +749,7 @@ pub const Buffer = struct {
 
     pub fn changeInsertFromClipboard(self: *Buffer) !void {
         if (main.editor.mode == .select or main.editor.mode == .select_line) {
-            return error.Todo;
+            try self.changeSelectionDelete();
         }
         const text = try clp.read(self.allocator);
         defer self.allocator.free(text);
