@@ -548,12 +548,20 @@ pub const Buffer = struct {
     }
 
     pub fn changeInsertLineBelow(self: *Buffer, row: i32) !void {
-        const pos: Cursor = .{ .row = row + 1, .col = 0 };
+        const pos: Cursor = .{ .row = row, .col = @intCast(self.lineLength(@intCast(row))) };
         const span: Span = .{ .start = pos, .end = pos };
         var change = try cha.Change.initInsert(self.allocator, span, &.{'\n'});
         try self.appendChange(&change);
-        try self.moveCursor(pos);
         try self.commitChanges();
+    }
+
+    pub fn changeInsertLineAbove(self: *Buffer, row: i32) !void {
+        const pos: Cursor = .{ .row = row, .col = 0 };
+        const span: Span = .{ .start = pos, .end = pos };
+        var change = try cha.Change.initInsert(self.allocator, span, &.{'\n'});
+        try self.appendChange(&change);
+        try self.commitChanges();
+        try self.moveCursor(.{.row = row});
     }
 
     pub fn changeAlignIndent(self: *Buffer) !void {

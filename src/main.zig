@@ -230,10 +230,10 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                 } else if (editor.mode == .normal and eql(u8, key, "S")) {
                     try editor.enterMode(.select_line);
                 } else if (editor.mode == .normal and eql(u8, key, "o")) {
-                    try buffer.changeInsertLineBelow(@intCast(buffer.cursor.row));
+                    try buffer.changeInsertLineBelow(buffer.cursor.row);
                     try editor.enterMode(.insert);
                 } else if (editor.mode == .normal and eql(u8, key, "O")) {
-                    try buffer.changeInsertLineBelow(@intCast(buffer.cursor.row - 1));
+                    try buffer.changeInsertLineAbove(buffer.cursor.row);
                     try editor.enterMode(.insert);
                 } else if (editor.mode == .normal and eql(u8, key, "u")) {
                     try buffer.undo();
