@@ -250,8 +250,8 @@ pub const Buffer = struct {
             term_cursor.col >= 0 and term_cursor.col < dims.width;
         if (!in_term) return;
 
-        if (new_cursor.row + 1 > self.content.items.len) return;
-        const max_col = self.lineLength(@intCast(new_cursor.row));
+        if (new_cursor.row >= self.line_positions.items.len) return;
+        const max_col = self.lineLength(@intCast(new_cursor.row)) - 1;
         var col: i32 = @intCast(@min(new_cursor.col, max_col));
         if (vertical_only) {
             if (self.cursor_desired_col) |desired| {
@@ -811,7 +811,7 @@ pub const Buffer = struct {
     }
 
     fn insertText(self: *Buffer, text: []const u21) !void {
-        if (self.cursor.row == self.content.items.len) {
+        if (self.cursor.row == self.line_positions.items.len) {
             const new_line = std.ArrayList(u21).init(self.allocator);
             try self.content.append(new_line);
         }
@@ -863,7 +863,6 @@ pub const Buffer = struct {
         // TODO: less allocations
         defer self.allocator.free(raw);
         try self.content_raw.appendSlice(raw);
-        if (self.content.items.len == 0) return;
 
         var b: [3]u8 = undefined;
         for (self.content.items) |ch| {
@@ -882,13 +881,13 @@ pub const Buffer = struct {
         if (term_cursor.row < 0 and new_buf_cursor.row >= 0) {
             self.offset.row += term_cursor.row;
             main.editor.dirty.draw = true;
-        } else if (term_cursor.row >= dims.height and new_buf_cursor.row < self.content.items.len) {
+        } else if (term_cursor.row >= dims.height and new_buf_cursor.row < self.line_positions.items.len) {
             self.offset.row += 1 + term_cursor.row - @as(i32, @intCast(dims.height));
             main.editor.dirty.draw = true;
         } else if (term_cursor.col < 0 and new_buf_cursor.col >= 0) {
             self.offset.col += term_cursor.col;
             main.editor.dirty.draw = true;
-        } else if (term_cursor.col >= dims.width and new_buf_cursor.row >= 0 and new_buf_cursor.row < self.content.items.len) {
+        } else if (term_cursor.col >= dims.width and new_buf_cursor.row >= 0 and new_buf_cursor.row < self.line_positions.items.len) {
             if (new_buf_cursor.col <= self.lineLength(@intCast(new_buf_cursor.row))) {
                 self.offset.col += 1 + term_cursor.col - @as(i32, @intCast(dims.width));
                 main.editor.dirty.draw = true;
