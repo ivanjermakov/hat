@@ -432,10 +432,13 @@ pub const Buffer = struct {
             return;
         }
         log.log(@This(), "commit {} changes\n", .{self.uncommitted_changes.items.len});
-        // history overwrite
         if ((self.history_index orelse 0) + 1 != self.history.items.len) {
-            const i = self.history_index orelse 0;
-            for (self.history.items[i..]) |*ch| ch.deinit();
+            log.log(@This(), "history overwrite, idx: {?}\n", .{self.history_index});
+            const i = if (self.history_index) |i| i + 1 else 0;
+            for (self.history.items[i..]) |*chs| {
+                for (chs.items) |*ch| ch.deinit();
+                chs.deinit();
+            }
             try self.history.replaceRange(i, self.history.items.len - i, &.{});
         }
         var new_hist = try std.ArrayList(cha.Change).initCapacity(self.allocator, 1);
@@ -561,7 +564,7 @@ pub const Buffer = struct {
         var change = try cha.Change.initInsert(self.allocator, span, &.{'\n'});
         try self.appendChange(&change);
         try self.commitChanges();
-        try self.moveCursor(.{.row = row});
+        try self.moveCursor(.{ .row = row });
     }
 
     pub fn changeAlignIndent(self: *Buffer) !void {
