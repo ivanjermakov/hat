@@ -678,6 +678,7 @@ pub const Buffer = struct {
             var redo_change = try change.clone(self.allocator);
             try self.applyChange(&redo_change);
             try self.pending_changes.append(redo_change);
+            try self.moveCursor(change.new_span.?.start);
         }
         self.history_index = redo_idx;
     }
