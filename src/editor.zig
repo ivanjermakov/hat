@@ -250,7 +250,7 @@ pub const Editor = struct {
 
     pub fn dismissMessage(self: *Editor) !void {
         if (self.message_read_idx == self.messages.items.len) return;
-        self.message_read_idx += 1;
+        self.message_read_idx = self.messages.items.len;
         self.dirty.draw = true;
     }
 
