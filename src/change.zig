@@ -2,6 +2,7 @@ const std = @import("std");
 const buf = @import("buffer.zig");
 const uni = @import("unicode.zig");
 const lsp = @import("lsp.zig");
+const ts = @import("ts.zig");
 
 pub const Change = struct {
     old_span: buf.Span,
@@ -98,6 +99,23 @@ pub const Change = struct {
                 .range = self.old_span.toLsp(),
                 .text = text,
             },
+        };
+    }
+
+    pub fn toTs(self: *const Change, buffer: *const buf.Buffer) ts.ts.TSInputEdit {
+        const start_point = self.old_span.start.toTs();
+        const old_end_point = self.old_span.end.toTs();
+        const new_end_point = if (self.new_span) |new_span| new_span.end.toTs() else old_end_point;
+        const start_byte: u32 = @intCast(buffer.cursorToPos(self.old_span.start));
+        const old_end_byte: u32 = @intCast(buffer.cursorToPos(self.old_span.end));
+        const new_end_byte: u32 = if (self.new_span) |new_span| @intCast(buffer.cursorToPos(new_span.end)) else old_end_byte;
+        return .{
+            .start_byte = start_byte,
+            .old_end_byte = old_end_byte,
+            .new_end_byte = new_end_byte,
+            .start_point = start_point,
+            .old_end_point = old_end_point,
+            .new_end_point = new_end_point,
         };
     }
 };

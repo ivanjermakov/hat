@@ -49,6 +49,13 @@ pub const Cursor = struct {
             .character = @intCast(self.col),
         };
     }
+
+    pub fn toTs(self: Cursor) ts.ts.TSPoint {
+        return .{
+            .row = @intCast(self.row),
+            .column = @intCast(self.col),
+        };
+    }
 };
 
 pub const Span = struct {
@@ -790,6 +797,8 @@ pub const Buffer = struct {
         self.cursor = change.new_span.?.end;
         std.debug.assert(std.meta.eql(self.cursor, change.new_span.?.end));
         log.log(@This(), "applied change: {}\n", .{change});
+
+        if (self.ts_state) |*ts_state| try ts_state.edit(change, self);
     }
 
     /// Delete every character from cursor (including) to the end of line

@@ -2,6 +2,8 @@ const std = @import("std");
 const col = @import("color.zig");
 const ft = @import("file_type.zig");
 const log = @import("log.zig");
+const cha = @import("change.zig");
+const buf = @import("buffer.zig");
 const ts_c = @cImport({
     @cInclude("tree_sitter/api.h");
 });
@@ -83,13 +85,18 @@ pub const State = struct {
         return self;
     }
 
+    pub fn edit(self: *State, change: *const cha.Change, buffer: *const buf.Buffer) !void {
+        std.debug.assert(self.tree != null);
+        const edit_input = change.toTs(buffer);
+        ts.ts_tree_edit(self.tree, &edit_input);
+    }
+
     pub fn reparse(self: *State, content: []const u8) !void {
         if (self.parser == null) return;
 
-        if (self.tree) |old_tree| ts.ts_tree_delete(old_tree);
         self.tree = ts.ts_parser_parse_string(
             self.parser,
-            null,
+            self.tree,
             @ptrCast(content),
             @intCast(content.len),
         );
