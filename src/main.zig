@@ -204,7 +204,7 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     try buffer.moveToWordEnd();
                 } else if (normal_or_select and eql(u8, key, "E")) {
                     try buffer.moveToTokenEnd();
-                } else if (editor.mode == .normal and eql(u8, key, "h")) {
+                } else if (normal_or_select and eql(u8, key, "h")) {
                     try buffer.changeSelectionDelete();
                     try editor.enterMode(.insert);
                 } else if (normal_or_select and eql(u8, key, "d")) {
