@@ -128,7 +128,7 @@ fn startEditor(allocator: std.mem.Allocator) !void {
 
                 // command line menu
                 if (cmd_active and eql(u8, key, "\n")) {
-                    return error.Todo;
+                    try editor.handleCmd();
                 } else if (cmd_active and eql(u8, key, "<escape>")) {
                     editor.command_line.close();
                 } else if (cmd_active and editor.key_queue.items[0].printable != null) {

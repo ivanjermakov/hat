@@ -2,6 +2,7 @@ const std = @import("std");
 const buf = @import("buffer.zig");
 const uni = @import("unicode.zig");
 const lsp = @import("lsp.zig");
+const reg = @import("regex");
 const ts = @import("ts.zig");
 
 pub const Change = struct {
@@ -135,5 +136,9 @@ pub const ByteSpan = struct {
             .start = buffer.cursorToBytePos(span.start),
             .end = buffer.cursorToBytePos(span.end),
         };
+    }
+
+    pub fn fromRegex(span: reg.Span) ByteSpan {
+        return .{ .start = span.lower, .end = span.upper };
     }
 };

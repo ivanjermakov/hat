@@ -41,6 +41,7 @@ pub const Editor = struct {
     dot_repeat_input: std.ArrayList(inp.Key),
     dot_repeat_input_uncommitted: std.ArrayList(inp.Key),
     dot_repeat_state: DotRepeat = .outside,
+    find_query: ?[]const u21 = null,
     allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator) !Editor {
@@ -179,6 +180,8 @@ pub const Editor = struct {
 
         for (self.dot_repeat_input_uncommitted.items) |key| if (key.printable) |p| self.allocator.free(p);
         self.dot_repeat_input_uncommitted.deinit();
+
+        if (self.find_query) |fq| self.allocator.free(fq);
     }
 
     pub fn pickFile(self: *Editor) !void {
@@ -244,6 +247,12 @@ pub const Editor = struct {
             }
             std.Thread.sleep(main.sleep_ns);
         }
+    }
+
+    pub fn sendMessageFmt(self: *Editor, comptime fmt: []const u8, args: anytype) !void {
+        const msg = try std.fmt.allocPrint(self.allocator, fmt, args);
+        defer self.allocator.free(msg);
+        try main.editor.sendMessage(msg);
     }
 
     pub fn sendMessage(self: *Editor, msg: []const u8) !void {
@@ -339,6 +348,16 @@ pub const Editor = struct {
             }
             self.dot_repeat_state = .executing;
         }
+    }
+
+    pub fn handleCmd(self: *Editor) !void {
+        switch (self.command_line.command.?) {
+            .find => {
+                self.find_query = try self.allocator.dupe(u21, self.command_line.content.items);
+                try self.active_buffer.findNext(self.find_query.?);
+            },
+        }
+        self.command_line.close();
     }
 };
 

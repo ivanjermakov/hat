@@ -2,6 +2,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 const testing = std.testing;
 const assert = std.debug.assert;
+const reg = @import("regex");
 const main = @import("main.zig");
 const edi = @import("editor.zig");
 const ft = @import("file_type.zig");
@@ -810,6 +811,33 @@ pub const Buffer = struct {
 
         // TODO: attempt to keep cursor at the same semantic place
         try self.moveCursor(old_cursor);
+    }
+
+    pub fn findNext(self: *Buffer, query: []const u21) !void {
+        const query_b = try uni.utf8ToBytes(self.allocator, query);
+        defer self.allocator.free(query_b);
+        log.log(@This(), "find query \"{s}\" in \"{s}\"\n", .{ query_b, self.content_raw.items });
+        var re = try reg.Regex.compile(self.allocator, query_b);
+        defer re.deinit();
+
+        var captures_opt = try re.captures(self.content_raw.items);
+        log.log(@This(), "captures opt {?}\n", .{captures_opt});
+        if (captures_opt) |*captures| {
+            defer captures.deinit();
+            const cursor_pos = self.cursorToPos(self.cursor);
+
+            const match_count = captures.len();
+            log.log(@This(), "captures {}\n", .{captures});
+            for (0..match_count) |i| {
+                const span = cha.ByteSpan.fromRegex(captures.boundsAt(i).?);
+                if (span.start > cursor_pos) {
+                    try main.editor.sendMessageFmt("matches {s} [{}/{}]", .{ query_b, i + 1, match_count });
+                    break;
+                }
+            }
+        } else {
+            try main.editor.sendMessageFmt("no matches for {s}", .{query_b});
+        }
     }
 
     fn fullSpan(self: *Buffer) Span {

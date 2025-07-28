@@ -44,6 +44,7 @@ pub const CommandLine = struct {
         self.content.clearRetainingCapacity();
         self.cursor = 0;
         main.editor.dirty.draw = true;
+        log.log(@This(), "cmd closed\n", .{});
     }
 
     pub fn insert(self: *CommandLine, text: []const u21) !void {
