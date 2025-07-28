@@ -138,7 +138,7 @@ pub const ByteSpan = struct {
         };
     }
 
-    pub fn fromRegex(span: reg.Span) ByteSpan {
-        return .{ .start = span.lower, .end = span.upper };
+    pub fn fromRegex(match: reg.RegexMatch) ByteSpan {
+        return .{ .start = match.getStartAt(0).?, .end = match.getEndAt(0).? };
     }
 };

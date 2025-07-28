@@ -87,10 +87,9 @@ pub const Terminal = struct {
 
         if (main.editor.hover_contents) |hover| try self.drawHover(hover);
 
-        try self.drawMessage();
-
         try self.updateCursor();
 
+        if (main.editor.command_line.command == null) try self.drawMessage();
         if (main.editor.command_line.command != null) try self.drawCmd(&main.editor.command_line);
 
         try self.flush();

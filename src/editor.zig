@@ -257,6 +257,7 @@ pub const Editor = struct {
 
     pub fn sendMessage(self: *Editor, msg: []const u8) !void {
         log.log(@This(), "message: {s}\n", .{msg});
+        try main.editor.dismissMessage();
         try self.messages.append(try self.allocator.dupe(u8, msg));
         self.dirty.draw = true;
     }
@@ -353,6 +354,7 @@ pub const Editor = struct {
     pub fn handleCmd(self: *Editor) !void {
         switch (self.command_line.command.?) {
             .find => {
+                if (self.find_query) |fq| self.allocator.free(fq);
                 self.find_query = try self.allocator.dupe(u21, self.command_line.content.items);
                 try self.active_buffer.findNext(self.find_query.?);
             },

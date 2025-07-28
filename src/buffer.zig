@@ -816,24 +816,24 @@ pub const Buffer = struct {
     pub fn findNext(self: *Buffer, query: []const u21) !void {
         const query_b = try uni.utf8ToBytes(self.allocator, query);
         defer self.allocator.free(query_b);
-        log.log(@This(), "find query \"{s}\" in \"{s}\"\n", .{ query_b, self.content_raw.items });
-        var re = try reg.Regex.compile(self.allocator, query_b);
+        // TODO: catch invalid regex
+        var re = try reg.Regex.from(query_b, false, self.allocator);
         defer re.deinit();
 
-        var captures_opt = try re.captures(self.content_raw.items);
-        log.log(@This(), "captures opt {?}\n", .{captures_opt});
-        if (captures_opt) |*captures| {
-            defer captures.deinit();
-            const cursor_pos = self.cursorToPos(self.cursor);
-
-            const match_count = captures.len();
-            log.log(@This(), "captures {}\n", .{captures});
-            for (0..match_count) |i| {
-                const span = cha.ByteSpan.fromRegex(captures.boundsAt(i).?);
-                if (span.start > cursor_pos) {
-                    try main.editor.sendMessageFmt("matches {s} [{}/{}]", .{ query_b, i + 1, match_count });
-                    break;
-                }
+        var matches = re.searchAll(self.content_raw.items, 0, -1);
+        defer re.deinitMatchList(&matches);
+        const cursor_pos = self.cursorToPos(self.cursor);
+        for (0..matches.items.len) |i| {
+            const match = matches.items[i];
+            const span = cha.ByteSpan.fromRegex(match);
+            if (span.start > cursor_pos) {
+                try main.editor.sendMessageFmt("matches {s} [{}/{}]", .{ query_b, i + 1, matches.items.len });
+                try self.moveCursor(self.posToCursor(span.start));
+                self.selection = .{
+                    .start = self.posToCursor(span.start),
+                    .end = self.posToCursor(span.end - 1),
+                };
+                break;
             }
         } else {
             try main.editor.sendMessageFmt("no matches for {s}", .{query_b});
