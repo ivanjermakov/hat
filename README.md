@@ -11,7 +11,6 @@ Hat is a **ha**ckable modal **t**ext editor for modern terminals.
 - [x] Modal text editing
     * [x] Unlimited undo/redo
     * [x] Normal, select, select line, and insert modes
-    * [ ] Select block mode
     * [x] System clipboard copy & paste (using `xclip`)
     * [ ] Search
     * [ ] Run external command on selection

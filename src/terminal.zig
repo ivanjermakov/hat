@@ -11,6 +11,7 @@ const log = @import("log.zig");
 const fs = @import("fs.zig");
 const inp = @import("input.zig");
 const cmp = @import("ui/completion_menu.zig");
+const cmd = @import("ui/command_line.zig");
 const uni = @import("unicode.zig");
 
 pub const Dimensions = struct {
@@ -89,6 +90,9 @@ pub const Terminal = struct {
         try self.drawMessage();
 
         try self.updateCursor();
+
+        if (main.editor.command_line.command != null) try self.drawCmd(&main.editor.command_line);
+
         try self.flush();
     }
 
@@ -391,6 +395,19 @@ pub const Terminal = struct {
         try co.attributes.write(co.attributes.message, self.writer.writer());
         try self.write(message);
         try self.resetAttributes();
+    }
+
+    fn drawCmd(self: *Terminal, command_line: *const cmd.CommandLine) !void {
+        const last_row = self.dimensions.height - 1;
+        const prefix = command_line.command.?.prefix();
+        try self.moveCursor(.{ .row = @intCast(last_row) });
+        try co.attributes.write(co.attributes.command_line, self.writer.writer());
+        try self.write(prefix);
+        for (command_line.content.items) |ch| {
+            try self.format("{u}", .{ch});
+        }
+        try self.resetAttributes();
+        try self.moveCursor(.{ .row = @intCast(last_row), .col = @intCast(prefix.len + command_line.cursor) });
     }
 };
 

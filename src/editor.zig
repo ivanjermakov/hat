@@ -2,6 +2,7 @@ const std = @import("std");
 const main = @import("main.zig");
 const buf = @import("buffer.zig");
 const cmp = @import("ui/completion_menu.zig");
+const cmd = @import("ui/command_line.zig");
 const fzf = @import("ui/fzf.zig");
 const log = @import("log.zig");
 const lsp = @import("lsp.zig");
@@ -31,6 +32,7 @@ pub const Editor = struct {
     mode: Mode,
     dirty: Dirty,
     completion_menu: cmp.CompletionMenu,
+    command_line: cmd.CommandLine,
     lsp_connections: std.StringHashMap(lsp.LspConnection),
     messages: std.ArrayList([]const u8),
     message_read_idx: usize = 0,
@@ -47,6 +49,7 @@ pub const Editor = struct {
             .mode = .normal,
             .dirty = .{},
             .completion_menu = cmp.CompletionMenu.init(allocator),
+            .command_line = cmd.CommandLine.init(allocator),
             .lsp_connections = std.StringHashMap(lsp.LspConnection).init(allocator),
             .messages = std.ArrayList([]const u8).init(allocator),
             .key_queue = std.ArrayList(inp.Key).init(allocator),
@@ -153,6 +156,7 @@ pub const Editor = struct {
         self.buffers.deinit();
 
         self.completion_menu.deinit();
+        self.command_line.deinit();
 
         {
             var val_iter = self.lsp_connections.valueIterator();

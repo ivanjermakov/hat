@@ -121,11 +121,23 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                 const normal_or_select = editor.mode.normalOrSelect();
                 const cmp_menu_active = editor.mode == .insert and
                     editor.completion_menu.display_items.items.len > 0;
+                const cmd_active = editor.command_line.command != null;
 
                 const key = try std.fmt.allocPrint(allocator, "{}", .{editor.key_queue.items[0]});
                 defer allocator.free(key);
 
-                if (editor.mode == .insert and editor.key_queue.items[0].printable != null) {
+                // command line menu
+                if (cmd_active and eql(u8, key, "\n")) {
+                    return error.Todo;
+                } else if (cmd_active and eql(u8, key, "<escape>")) {
+                    editor.command_line.close();
+                } else if (cmd_active and editor.key_queue.items[0].printable != null) {
+                    const key_uni = try uni.utf8FromBytes(allocator, key);
+                    defer allocator.free(key_uni);
+                    try editor.command_line.insert(key_uni);
+
+                    // text insertion
+                } else if (editor.mode == .insert and editor.key_queue.items[0].printable != null) {
                     var printable = std.ArrayList(u21).init(allocator);
                     keys_consumed = 0;
                     // read all cosecutive printable keys in case this is a paste command
@@ -219,6 +231,8 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     try buffer.changeInsertFromClipboard();
                 } else if (normal_or_select and eql(u8, key, "z")) {
                     try buffer.centerCursor();
+                } else if (normal_or_select and eql(u8, key, "/")) {
+                    try editor.command_line.activate(.find);
 
                     // normal mode
                 } else if (normal_or_select and (eql(u8, key, "q") or eql(u8, key, "Q"))) {
