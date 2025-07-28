@@ -7,8 +7,8 @@ fn linkLibs(b: *std.Build, compile: *std.Build.Step.Compile) void {
     const lsp_codegen = b.dependency("lsp_codegen", .{});
     compile.root_module.addImport("lsp", lsp_codegen.module("lsp"));
 
-    const regex = b.dependency("regex", .{});
-    compile.root_module.addImport("regex", regex.module("regex"));
+    const regex = b.dependency("pcrez", .{});
+    compile.root_module.addImport("regex", regex.module("pcrez"));
 }
 
 pub fn build(b: *std.Build) void {

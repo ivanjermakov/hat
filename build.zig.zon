@@ -8,9 +8,9 @@
             .url = "git+https://github.com/zigtools/zig-lsp-codegen.git#30ccbd10fec9c4eaad5196f2d560b80d6cc2c078",
             .hash = "lsp_codegen-0.1.0-CMjjo9nOCQA7rKs_uLFYA6A2FQ7hRqwXeID0CRnql0AD",
         },
-        .regex = .{
-            .url = "git+https://github.com/tiehuis/zig-regex#88105ccfb6d679111b91d798d97cd4eb95617452",
-            .hash = "regex-0.1.2-axC356XdAQCrReHJQmJLbCDBoYVvzj8y-wE1PXUjT4V6",
+        .pcrez = .{
+            .url = "git+https://github.com/qaptoR-zig/PCREz/#baa0793fa3ace5972367cc4786f22d9ab02e22b8",
+            .hash = "pcrez-0.0.1-f7US7RtXAACTgQMK1xiplwjrrLrUyavR82_nIrS2tjq-",
         },
     },
     .paths = .{

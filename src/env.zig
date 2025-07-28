@@ -7,25 +7,23 @@ const reg = @import("regex");
 pub fn expand(allocator: std.mem.Allocator, str: []const u8, getenv: *const @TypeOf(std.posix.getenv)) ![]const u8 {
     var res = std.ArrayList(u8).init(allocator);
 
-    var re = try reg.Regex.compile(allocator, "\\$[A-Z0-Z]+");
+    var re = try reg.Regex.from("\\$[A-Z0-Z]+", false, allocator);
     defer re.deinit();
 
     var cursor: usize = 0;
-    var captures_opt = try re.captures(str);
-    if (captures_opt) |*captures| {
-        defer captures.deinit();
-
-        for (0..captures.len()) |i| {
-            const variable = captures.sliceAt(i).?;
-            const span = captures.boundsAt(i).?;
-            if (cursor < span.lower) {
-                try res.appendSlice(str[cursor..span.lower]);
-            }
-            // without dollar sign
-            const val = getenv(variable[1..]) orelse "";
-            try res.appendSlice(val);
-            cursor = span.upper;
+    var matches = re.searchAll(str, 0, -1);
+    defer re.deinitMatchList(&matches);
+    for (matches.items) |match| {
+        const match_text = match.getStringAt(0);
+        const start = match.getStartAt(0).?;
+        const end = match.getEndAt(0).?;
+        if (cursor < start) {
+            try res.appendSlice(str[cursor..match.getStartAt(0).?]);
         }
+        // without dollar sign
+        const val = getenv(match_text[1..]) orelse "";
+        try res.appendSlice(val);
+        cursor = end;
     }
     // append rest of the string
     try res.appendSlice(str[cursor..]);
