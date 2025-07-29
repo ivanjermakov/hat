@@ -813,25 +813,39 @@ pub const Buffer = struct {
         try self.moveCursor(old_cursor);
     }
 
-    pub fn findNext(self: *Buffer, query: []const u21) !void {
+    pub fn findNext(self: *Buffer, query: []const u21, forward: bool) !void {
         const query_b = try uni.utf8ToBytes(self.allocator, query);
         defer self.allocator.free(query_b);
         const spans = try self.find(query_b);
         defer self.allocator.free(spans);
         const cursor_pos = self.cursorToPos(self.cursor);
         var match: ?usize = null;
-        for (0..spans.len) |i| {
-            const span = spans[i];
-            if (span.start > cursor_pos) {
-                match = i;
-                break;
+        if (forward) {
+            for (0..spans.len) |i| {
+                if (spans[i].start > cursor_pos) {
+                    match = i;
+                    break;
+                }
+            } else {
+                if (spans.len > 0) {
+                    match = 0;
+                } else {
+                    try main.editor.sendMessageFmt("no matches for {s}", .{query_b});
+                }
             }
         } else {
-            if (spans.len > 0) {
-                // wrap around
-                match = 0;
+            for (0..spans.len) |i_| {
+                const i = spans.len - i_ - 1;
+                if (spans[i].start < cursor_pos) {
+                    match = i;
+                    break;
+                }
             } else {
-                try main.editor.sendMessageFmt("no matches for {s}", .{query_b});
+                if (spans.len > 0) {
+                    match = spans.len - 1;
+                } else {
+                    try main.editor.sendMessageFmt("no matches for {s}", .{query_b});
+                }
             }
         }
         if (match) |m| {

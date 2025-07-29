@@ -12,7 +12,7 @@ Hat is a **ha**ckable modal **t**ext editor for modern terminals.
     * [x] Unlimited undo/redo
     * [x] Normal, select, select line, and insert modes
     * [x] System clipboard copy & paste (using `xclip`)
-    * [ ] Search
+    * [x] Find in buffer
     * [ ] Run external command on selection
     * [x] Dot repeat last change
     * [ ] Multi repeat

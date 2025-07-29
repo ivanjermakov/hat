@@ -356,7 +356,7 @@ pub const Editor = struct {
             .find => {
                 if (self.find_query) |fq| self.allocator.free(fq);
                 self.find_query = try self.allocator.dupe(u21, self.command_line.content.items);
-                try self.active_buffer.findNext(self.find_query.?);
+                try self.active_buffer.findNext(self.find_query.?, true);
             },
         }
         self.command_line.close();
