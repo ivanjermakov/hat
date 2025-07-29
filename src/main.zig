@@ -127,14 +127,24 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                 defer allocator.free(key);
 
                 // command line menu
-                if (cmd_active and eql(u8, key, "\n")) {
-                    try editor.handleCmd();
-                } else if (cmd_active and eql(u8, key, "<escape>")) {
-                    editor.command_line.close();
-                } else if (cmd_active and editor.key_queue.items[0].printable != null) {
-                    const key_uni = try uni.utf8FromBytes(allocator, key);
-                    defer allocator.free(key_uni);
-                    try editor.command_line.insert(key_uni);
+                if (cmd_active) {
+                    if (eql(u8, key, "\n")) {
+                        try editor.handleCmd();
+                    } else if (cmd_active and eql(u8, key, "<escape>")) {
+                        editor.command_line.close();
+                    } else if (cmd_active and eql(u8, key, "<left>")) {
+                        editor.command_line.left();
+                    } else if (cmd_active and eql(u8, key, "<right>")) {
+                        editor.command_line.right();
+                    } else if (cmd_active and eql(u8, key, "<backspace>")) {
+                        editor.command_line.backspace();
+                    } else if (cmd_active and eql(u8, key, "<delete>")) {
+                        editor.command_line.delete();
+                    } else if (cmd_active and editor.key_queue.items[0].printable != null) {
+                        const key_uni = try uni.utf8FromBytes(allocator, key);
+                        defer allocator.free(key_uni);
+                        try editor.command_line.insert(key_uni);
+                    }
 
                     // text insertion
                 } else if (editor.mode == .insert and editor.key_queue.items[0].printable != null) {

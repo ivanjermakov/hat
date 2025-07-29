@@ -53,4 +53,29 @@ pub const CommandLine = struct {
         self.cursor += text.len;
         main.editor.dirty.draw = true;
     }
+
+    pub fn left(self: *CommandLine) void {
+        if (self.cursor == 0) return;
+        self.cursor -= 1;
+        main.editor.dirty.draw = true;
+    }
+
+    pub fn right(self: *CommandLine) void {
+        if (self.cursor == self.content.items.len) return;
+        self.cursor += 1;
+        main.editor.dirty.draw = true;
+    }
+
+    pub fn backspace(self: *CommandLine) void {
+        if (self.cursor == 0) return;
+        self.left();
+        _ = self.content.orderedRemove(self.cursor);
+        main.editor.dirty.draw = true;
+    }
+
+    pub fn delete(self: *CommandLine) void {
+        if (self.cursor == self.content.items.len) return;
+        _ = self.content.orderedRemove(self.cursor);
+        main.editor.dirty.draw = true;
+    }
 };
