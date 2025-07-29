@@ -231,8 +231,6 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     try buffer.changeInsertFromClipboard();
                 } else if (normal_or_select and eql(u8, key, "z")) {
                     try buffer.centerCursor();
-                } else if (normal_or_select and eql(u8, key, "/")) {
-                    try editor.command_line.activate(.find);
 
                     // normal mode
                 } else if (normal_or_select and (eql(u8, key, "q") or eql(u8, key, "Q"))) {
@@ -259,6 +257,10 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     }
                 } else if (editor.mode == .normal and eql(u8, key, ".")) {
                     try editor.dotRepeat();
+                } else if (editor.mode == .normal and eql(u8, key, "/")) {
+                    try editor.command_line.activate(.find);
+                } else if (editor.mode == .normal and eql(u8, key, "n")) {
+                    if (editor.find_query) |q| try buffer.findNext(q);
 
                     // insert mode
                 } else if (editor.mode == .insert and eql(u8, key, "<delete>")) {

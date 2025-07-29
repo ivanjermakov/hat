@@ -816,28 +816,48 @@ pub const Buffer = struct {
     pub fn findNext(self: *Buffer, query: []const u21) !void {
         const query_b = try uni.utf8ToBytes(self.allocator, query);
         defer self.allocator.free(query_b);
+        const spans = try self.find(query_b);
+        defer self.allocator.free(spans);
+        const cursor_pos = self.cursorToPos(self.cursor);
+        var match: ?usize = null;
+        for (0..spans.len) |i| {
+            const span = spans[i];
+            if (span.start > cursor_pos) {
+                match = i;
+                break;
+            }
+        } else {
+            if (spans.len > 0) {
+                // wrap around
+                match = 0;
+            } else {
+                try main.editor.sendMessageFmt("no matches for {s}", .{query_b});
+            }
+        }
+        if (match) |m| {
+            const span = spans[m];
+            try main.editor.sendMessageFmt("[{}/{}] {s}", .{ m + 1, spans.len, query_b });
+            try self.moveCursor(self.posToCursor(span.start));
+            self.selection = .{
+                .start = self.posToCursor(span.start),
+                .end = self.posToCursor(span.end - 1),
+            };
+        }
+    }
+
+    fn find(self: *Buffer, query: []const u8) ![]const cha.ByteSpan {
+        var spans = std.ArrayList(cha.ByteSpan).init(self.allocator);
         // TODO: catch invalid regex
-        var re = try reg.Regex.from(query_b, false, self.allocator);
+        var re = try reg.Regex.from(query, false, self.allocator);
         defer re.deinit();
 
         var matches = re.searchAll(self.content_raw.items, 0, -1);
         defer re.deinitMatchList(&matches);
-        const cursor_pos = self.cursorToPos(self.cursor);
         for (0..matches.items.len) |i| {
             const match = matches.items[i];
-            const span = cha.ByteSpan.fromRegex(match);
-            if (span.start > cursor_pos) {
-                try main.editor.sendMessageFmt("matches {s} [{}/{}]", .{ query_b, i + 1, matches.items.len });
-                try self.moveCursor(self.posToCursor(span.start));
-                self.selection = .{
-                    .start = self.posToCursor(span.start),
-                    .end = self.posToCursor(span.end - 1),
-                };
-                break;
-            }
-        } else {
-            try main.editor.sendMessageFmt("no matches for {s}", .{query_b});
+            try spans.append(cha.ByteSpan.fromRegex(match));
         }
+        return spans.toOwnedSlice();
     }
 
     fn fullSpan(self: *Buffer) Span {
