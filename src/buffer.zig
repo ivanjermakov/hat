@@ -816,33 +816,21 @@ pub const Buffer = struct {
     pub fn findNext(self: *Buffer, query: []const u21, forward: bool) !void {
         const query_b = try uni.utf8ToBytes(self.allocator, query);
         defer self.allocator.free(query_b);
+        // TODO: catch invalid regex
         const spans = try self.find(query_b);
         defer self.allocator.free(spans);
         const cursor_pos = self.cursorToPos(self.cursor);
         var match: ?usize = null;
         if (forward) {
-            for (0..spans.len) |i| {
-                if (spans[i].start > cursor_pos) {
-                    match = i;
-                    break;
-                }
-            } else {
-                if (spans.len > 0) {
-                    match = 0;
-                } else {
-                    try main.editor.sendMessageFmt("no matches for {s}", .{query_b});
-                }
-            }
-        } else {
             for (0..spans.len) |i_| {
-                const i = spans.len - i_ - 1;
-                if (spans[i].start < cursor_pos) {
+                const i = if (forward) i_ else spans.len - i_ - 1;
+                if (if (forward) spans[i].start > cursor_pos else spans[i].start < cursor_pos) {
                     match = i;
                     break;
                 }
             } else {
                 if (spans.len > 0) {
-                    match = spans.len - 1;
+                    match = if (forward) 0 else spans.len - 1;
                 } else {
                     try main.editor.sendMessageFmt("no matches for {s}", .{query_b});
                 }
@@ -861,7 +849,6 @@ pub const Buffer = struct {
 
     fn find(self: *Buffer, query: []const u8) ![]const cha.ByteSpan {
         var spans = std.ArrayList(cha.ByteSpan).init(self.allocator);
-        // TODO: catch invalid regex
         var re = try reg.Regex.from(query, false, self.allocator);
         defer re.deinit();
 
