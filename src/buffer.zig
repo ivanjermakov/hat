@@ -104,6 +104,7 @@ pub const Span = struct {
 pub const Buffer = struct {
     path: []const u8,
     uri: []const u8,
+    file: ?std.fs.File,
     stat: ?std.fs.File.Stat = null,
     /// Incremented on every content change
     version: usize = 0,
@@ -160,12 +161,14 @@ pub const Buffer = struct {
             try std.fmt.allocPrint(allocator, "scratch{d:0>2}", .{nextScratchId()});
         const file_ext = std.fs.path.extension(buf_path);
         const file_type = ft.file_type.get(file_ext) orelse ft.plain;
+        const file = if (scratch) null else try std.fs.cwd().openFile(buf_path, .{});
 
         const abs_path = std.fs.realpathAlloc(allocator, buf_path) catch null;
         defer if (abs_path) |a| allocator.free(a);
         const uri = try std.fmt.allocPrint(allocator, "file://{s}", .{abs_path orelse buf_path});
         var self = Buffer{
             .path = buf_path,
+            .file = file,
             .file_type = file_type,
             .uri = uri,
             .content = std.ArrayList(u21).init(allocator),
@@ -233,6 +236,8 @@ pub const Buffer = struct {
         for (self.pending_changes.items) |*c| c.deinit();
         self.pending_changes.deinit();
         self.uncommitted_changes.deinit();
+
+        if (self.file) |f| f.close();
     }
 
     pub fn write(self: *Buffer) !void {
@@ -782,8 +787,7 @@ pub const Buffer = struct {
 
     pub fn syncFs(self: *Buffer) !bool {
         if (self.scratch) return false;
-        const f = try std.fs.cwd().openFile(self.path, .{});
-        const stat = try f.stat();
+        const stat = try self.file.?.stat();
         const newer = stat.mtime > if (self.stat) |s| s.mtime else 0;
         if (newer) {
             if (main.log_enabled) {
