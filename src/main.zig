@@ -22,8 +22,8 @@ pub const Args = struct {
     term_height: ?usize = null,
 };
 
-pub const sleep_ns = 16 * 1e6;
-pub const sleep_lsp_ns = sleep_ns;
+pub const sleep_ns: u64 = 16 * 1e6;
+pub const sleep_lsp_ns: u64 = sleep_ns;
 pub const std_in = std.io.getStdIn();
 pub const std_out = std.io.getStdOut();
 pub const std_err = std.io.getStdErr();
@@ -106,12 +106,14 @@ fn startEditor(allocator: std.mem.Allocator) !void {
     var buffer = editor.active_buffer;
 
     main_loop: while (true) {
+        defer {
+            if (sleep_ns > perf.total) {
+                std.time.sleep(sleep_ns - perf.total);
+            }
+        }
+
         _ = timer.lap();
         _ = timer_total.lap();
-        defer {
-            // TODO: sleep for `sleep_ns - perf.total`
-            std.time.sleep(sleep_ns);
-        }
 
         try editor.updateInput();
         perf.input = timer.lap();
@@ -384,6 +386,8 @@ fn startEditor(allocator: std.mem.Allocator) !void {
             try editor.sendMessage("external buffer modification");
             try buffer.changeFsExternal();
         }
+        perf.sync = timer.lap();
+
         perf.total = timer_total.lap();
         if (perf.total > 1000 * std.time.ns_per_us) {
             log.log(@This(), "frame perf: \n{}", .{perf});
@@ -397,6 +401,7 @@ const PerfInfo = struct {
     did_change: u64,
     draw: u64,
     commit: u64,
+    sync: u64,
     total: u64,
 
     pub fn format(
@@ -410,7 +415,7 @@ const PerfInfo = struct {
 
         try std.fmt.format(
             writer,
-            "total: {}\n  input: {}\n  mapping: {}\n  did_change: {}\n  draw: {}\n  commit: {}\n",
+            "total: {}\n  input: {}\n  mapping: {}\n  did_change: {}\n  draw: {}\n  commit: {}\n  sync: {}\n",
             .{
                 self.total / std.time.ns_per_us,
                 self.input / std.time.ns_per_us,
@@ -418,6 +423,7 @@ const PerfInfo = struct {
                 self.did_change / std.time.ns_per_us,
                 self.draw / std.time.ns_per_us,
                 self.commit / std.time.ns_per_us,
+                self.sync / std.time.ns_per_us,
             },
         );
     }
