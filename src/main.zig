@@ -353,14 +353,18 @@ fn startEditor(allocator: std.mem.Allocator) !void {
         if (buffer.pending_changes.items.len > 0) {
             buffer.diagnostics.clearRetainingCapacity();
             try buffer.reparse();
+            perf.parse = timer.lap();
             for (buffer.lsp_connections.items) |conn| {
                 try conn.didChange(editor.active_buffer);
             }
             for (buffer.pending_changes.items) |*change| change.deinit();
             buffer.pending_changes.clearRetainingCapacity();
             buffer.version += 1;
+            perf.did_change = timer.lap();
+        } else {
+            perf.parse = 0;
+            perf.did_change = 0;
         }
-        perf.did_change = timer.lap();
 
         if (editor.dirty.draw) {
             editor.dirty.draw = false;
@@ -398,6 +402,7 @@ fn startEditor(allocator: std.mem.Allocator) !void {
 const PerfInfo = struct {
     input: u64,
     mapping: u64,
+    parse: u64,
     did_change: u64,
     draw: u64,
     commit: u64,
@@ -415,10 +420,11 @@ const PerfInfo = struct {
 
         try std.fmt.format(
             writer,
-            "total: {}\n  input: {}\n  mapping: {}\n  did_change: {}\n  draw: {}\n  commit: {}\n  sync: {}\n",
+            "total: {}\n  input: {}\n  parse: {}\n  mapping: {}\n  did_change: {}\n  draw: {}\n  commit: {}\n  sync: {}\n",
             .{
                 self.total / std.time.ns_per_us,
                 self.input / std.time.ns_per_us,
+                self.parse / std.time.ns_per_us,
                 self.mapping / std.time.ns_per_us,
                 self.did_change / std.time.ns_per_us,
                 self.draw / std.time.ns_per_us,
