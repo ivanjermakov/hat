@@ -665,7 +665,7 @@ pub const Buffer = struct {
             const hist_to_undo = self.history.items[h_idx].items;
             var change_iter = std.mem.reverseIterator(hist_to_undo);
             while (change_iter.next()) |change_to_undo| {
-                log.log(@This(), "undo change: {}\n", .{change_to_undo});
+                // log.log(@This(), "undo change: {}\n", .{change_to_undo});
                 var inv_change = try change_to_undo.invert();
                 try self.applyChange(&inv_change);
                 try self.pending_changes.append(inv_change);
@@ -890,7 +890,7 @@ pub const Buffer = struct {
         try self.moveCursor(change.new_span.?.end);
         self.cursor = change.new_span.?.end;
         std.debug.assert(std.meta.eql(self.cursor, change.new_span.?.end));
-        log.log(@This(), "applied change: {}\n", .{change});
+        // log.log(@This(), "applied change: {}\n", .{change});
 
         if (self.ts_state) |*ts_state| try ts_state.edit(change);
     }
