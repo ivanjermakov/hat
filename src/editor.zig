@@ -206,10 +206,9 @@ pub const Editor = struct {
         try self.openBuffer(buf_path);
     }
 
-    pub fn update(self: *Editor) !void {
+    pub fn updateLsp(self: *Editor) !void {
         var lsp_iter = self.lsp_connections.valueIterator();
         while (lsp_iter.next()) |conn| try conn.update();
-        try self.updateInput();
     }
 
     pub fn updateInput(self: *Editor) !void {

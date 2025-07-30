@@ -99,13 +99,20 @@ pub fn main() !void {
 }
 
 fn startEditor(allocator: std.mem.Allocator) !void {
+    var timer = try std.time.Timer.start();
+    var timer_total = try std.time.Timer.start();
+    var perf = std.mem.zeroes(PerfInfo);
     var buffer = editor.active_buffer;
 
     main_loop: while (true) {
-        try editor.update();
+        _ = timer.lap();
+        _ = timer_total.lap();
+        try editor.updateLsp();
         buffer = editor.active_buffer;
+        perf.lsp = timer.lap();
 
         try editor.updateInput();
+        perf.input = timer.lap();
 
         const eql = std.mem.eql;
         if (editor.dirty.input) {
@@ -334,6 +341,7 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                 // log.log(@This(), "committed: {any}\n", .{editor.dot_repeat_input.items});
             }
         }
+        perf.mapping = timer.lap();
 
         buffer = editor.active_buffer;
         editor.dirty.draw = editor.dirty.draw or buffer.pending_changes.items.len > 0;
@@ -347,6 +355,8 @@ fn startEditor(allocator: std.mem.Allocator) !void {
             buffer.pending_changes.clearRetainingCapacity();
             buffer.version += 1;
         }
+        perf.did_change = timer.lap();
+
         if (editor.dirty.draw) {
             editor.dirty.draw = false;
             try term.draw();
@@ -354,6 +364,8 @@ fn startEditor(allocator: std.mem.Allocator) !void {
             editor.dirty.cursor = false;
             try term.updateCursor();
         }
+        perf.draw = timer.lap();
+
         if (editor.dirty.completion) {
             editor.dirty.completion = false;
             for (buffer.lsp_connections.items) |conn| {
@@ -363,13 +375,53 @@ fn startEditor(allocator: std.mem.Allocator) !void {
         if (editor.dot_repeat_state == .commit_ready) {
             try editor.dotRepeatCommit();
         }
+        perf.commit = timer.lap();
+
         if (try buffer.syncFs()) {
             try editor.sendMessage("external buffer modification");
             try buffer.changeFsExternal();
         }
+        perf.total = timer_total.lap();
+        if (perf.total > 1000 * std.time.ns_per_us) {
+            log.log(@This(), "frame perf: \n{}", .{perf});
+        }
         std.time.sleep(sleep_ns);
     }
 }
+
+const PerfInfo = struct {
+    lsp: u64,
+    input: u64,
+    mapping: u64,
+    did_change: u64,
+    draw: u64,
+    commit: u64,
+    total: u64,
+
+    pub fn format(
+        self: *const PerfInfo,
+        comptime fmt: []const u8,
+        options: std.fmt.FormatOptions,
+        writer: anytype,
+    ) !void {
+        _ = fmt;
+        _ = options;
+
+        try std.fmt.format(
+            writer,
+            "total: {}\n  lsp: {}\n  input: {}\n  mapping: {}\n  did_change: {}\n  draw: {}\n  commit: {}\n",
+            .{
+                self.total / std.time.ns_per_us,
+                self.lsp / std.time.ns_per_us,
+                self.input / std.time.ns_per_us,
+                self.mapping / std.time.ns_per_us,
+                self.did_change / std.time.ns_per_us,
+                self.draw / std.time.ns_per_us,
+                self.commit / std.time.ns_per_us,
+            },
+        );
+    }
+};
 
 comptime {
     std.testing.refAllDecls(@This());
