@@ -393,7 +393,7 @@ fn startEditor(allocator: std.mem.Allocator) !void {
         perf.sync = timer.lap();
 
         perf.total = timer_total.lap();
-        if (perf.total > 1000 * std.time.ns_per_us) {
+        if (perf.total > 10 * std.time.ns_per_ms) {
             log.log(@This(), "frame perf: \n{}", .{perf});
         }
     }
