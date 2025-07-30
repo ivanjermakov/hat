@@ -62,6 +62,7 @@ pub const LspConnection = struct {
     poll_buf: std.ArrayList(u8),
     poll_header: ?lsp.BaseProtocolHeader,
     buffers: std.ArrayList(*buf.Buffer),
+    thread: std.Thread,
     allocator: std.mem.Allocator,
 
     pub fn connect(allocator: std.mem.Allocator, config: LspConfig) !LspConnection {
@@ -75,7 +76,7 @@ pub const LspConnection = struct {
         try child.spawn();
         try child.waitForSpawn();
 
-        var conn = LspConnection{
+        var self = LspConnection{
             .config = config,
             .status = .Created,
             .child = child,
@@ -83,9 +84,11 @@ pub const LspConnection = struct {
             .poll_buf = std.ArrayList(u8).init(allocator),
             .poll_header = null,
             .buffers = std.ArrayList(*buf.Buffer).init(allocator),
+            .thread = undefined,
             .allocator = allocator,
         };
-        try conn.sendRequest("initialize", .{
+
+        try self.sendRequest("initialize", .{
             .capabilities = lsp.types.ClientCapabilities{
                 .textDocument = .{
                     .definition = .{},
@@ -104,7 +107,14 @@ pub const LspConnection = struct {
             },
         });
 
-        return conn;
+        return self;
+    }
+
+    pub fn lspLoop(self: *LspConnection) !void {
+        while (self.status != .Closed) {
+            try self.update();
+            std.Thread.sleep(main.sleep_lsp_ns);
+        }
     }
 
     pub fn disconnect(self: *LspConnection) !void {

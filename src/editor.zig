@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const main = @import("main.zig");
 const buf = @import("buffer.zig");
 const cmp = @import("ui/completion_menu.zig");
@@ -92,6 +93,8 @@ pub const Editor = struct {
                 try self.lsp_connections.put(ftype, conn);
             }
             const conn = self.lsp_connections.getPtr(ftype).?;
+            conn.thread = try std.Thread.spawn(.{}, lsp.LspConnection.lspLoop, .{conn});
+
             try buffer.lsp_connections.append(conn);
             try conn.buffers.append(buffer);
             log.log(@This(), "attached buffer {s} to lsp {s}\n", .{ path, conn.config.name });
@@ -204,11 +207,6 @@ pub const Editor = struct {
         defer self.allocator.free(buf_path);
         log.log(@This(), "picked buffer: {s}\n", .{buf_path});
         try self.openBuffer(buf_path);
-    }
-
-    pub fn updateLsp(self: *Editor) !void {
-        var lsp_iter = self.lsp_connections.valueIterator();
-        while (lsp_iter.next()) |conn| try conn.update();
     }
 
     pub fn updateInput(self: *Editor) !void {

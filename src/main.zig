@@ -23,6 +23,7 @@ pub const Args = struct {
 };
 
 pub const sleep_ns = 16 * 1e6;
+pub const sleep_lsp_ns = sleep_ns;
 pub const std_in = std.io.getStdIn();
 pub const std_out = std.io.getStdOut();
 pub const std_err = std.io.getStdErr();
@@ -107,14 +108,16 @@ fn startEditor(allocator: std.mem.Allocator) !void {
     main_loop: while (true) {
         _ = timer.lap();
         _ = timer_total.lap();
-        try editor.updateLsp();
-        buffer = editor.active_buffer;
-        perf.lsp = timer.lap();
+        defer {
+            // TODO: sleep for `sleep_ns - perf.total`
+            std.time.sleep(sleep_ns);
+        }
 
         try editor.updateInput();
         perf.input = timer.lap();
 
         const eql = std.mem.eql;
+        buffer = editor.active_buffer;
         if (editor.dirty.input) {
             editor.dirty.input = false;
             editor.dotRepeatExecuted();
@@ -385,12 +388,10 @@ fn startEditor(allocator: std.mem.Allocator) !void {
         if (perf.total > 1000 * std.time.ns_per_us) {
             log.log(@This(), "frame perf: \n{}", .{perf});
         }
-        std.time.sleep(sleep_ns);
     }
 }
 
 const PerfInfo = struct {
-    lsp: u64,
     input: u64,
     mapping: u64,
     did_change: u64,
@@ -409,10 +410,9 @@ const PerfInfo = struct {
 
         try std.fmt.format(
             writer,
-            "total: {}\n  lsp: {}\n  input: {}\n  mapping: {}\n  did_change: {}\n  draw: {}\n  commit: {}\n",
+            "total: {}\n  input: {}\n  mapping: {}\n  did_change: {}\n  draw: {}\n  commit: {}\n",
             .{
                 self.total / std.time.ns_per_us,
-                self.lsp / std.time.ns_per_us,
                 self.input / std.time.ns_per_us,
                 self.mapping / std.time.ns_per_us,
                 self.did_change / std.time.ns_per_us,
