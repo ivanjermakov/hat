@@ -8,6 +8,8 @@ Hat is a **ha**ckable modal **t**ext editor for modern terminals.
 
 ## Features
 
+## Core functionality
+
 - [x] Modal text editing
     * [x] Unlimited undo/redo
     * [x] Normal, select, select line, and insert modes
@@ -20,24 +22,29 @@ Hat is a **ha**ckable modal **t**ext editor for modern terminals.
 - [x] [Tree-sitter](https://tree-sitter.github.io/tree-sitter/) syntax awareness
     * [x] Syntax highlighting (24 bit color)
     * [x] Indent alignment
-    * [ ] Syntax tree actions
 - [x] [LSP](https://microsoft.github.io/language-server-protocol/) support
     * [x] Go to definition
     * [x] Diagnostics
     * [x] Completions w/ documentation
     * [x] Hover
     * [ ] Rename
-    * [ ] Document highlight
-    * [ ] Find symbol
 - [x] Multi buffer
     * [x] Buffer management
     * [x] Find file
     * [x] Find in files
-- [ ] Git integration
-    * [ ] Hunk markers
 - [x] Scratch buffers
 - [x] Unicode support
+- [ ] Cross-platform (Linux, Windows, MacOS)
 - [x] `--printer` mode
+
+## Functionality available in patches
+
+| Done | Name                     | Link |
+| ---- | ------------------------ | ---- |
+| 🚧   | Git hunk markers         |      |
+| 🚧   | LSP highlight            |      |
+| 🚧   | LSP find symbol          |      |
+| 🚧   | Tree-sitter tree actions |      |
 
 ## Philosophy
 
