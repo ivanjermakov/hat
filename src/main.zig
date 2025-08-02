@@ -7,6 +7,7 @@ const ft = @import("file_type.zig");
 const buf = @import("buffer.zig");
 const co = @import("color.zig");
 const ter = @import("terminal.zig");
+const pri = @import("printer.zig");
 const lsp = @import("lsp.zig");
 const log = @import("log.zig");
 const uni = @import("unicode.zig");
@@ -77,10 +78,10 @@ pub fn main() !void {
         var buffer = try buf.Buffer.init(allocator, path, file_content);
         defer buffer.deinit();
         try buffer.reparse();
-        try ter.printBuffer(
+        try pri.printBuffer(
             &buffer,
             std_out.writer().any(),
-            try ter.HighlightConfig.fromArgs(args),
+            try pri.HighlightConfig.fromArgs(args),
         );
         return;
     } else {
