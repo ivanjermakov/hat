@@ -49,8 +49,7 @@ pub fn printBuffer(buffer: *buf.Buffer, writer: std.io.AnyWriter, highlight: ?Hi
         if (row < 0 or row >= buffer.line_positions.items.len) continue;
         const line = buffer.lineContent(@intCast(row));
 
-        var byte: usize = buffer.line_byte_positions.items[@intCast(row)];
-        var term_col: i32 = 0;
+        var byte: usize = buffer.lineStart(@intCast(row));
 
         for (line) |ch| {
             attrs_stream.reset();
@@ -84,7 +83,6 @@ pub fn printBuffer(buffer: *buf.Buffer, writer: std.io.AnyWriter, highlight: ?Hi
             try std.fmt.format(w, "{u}", .{ch});
 
             byte += try std.unicode.utf8CodepointSequenceLength(ch);
-            term_col += 1;
         }
     }
     try buf_writer.flush();
