@@ -4,6 +4,7 @@ const ext = @import("../external.zig");
 const log = @import("../log.zig");
 const col = @import("../color.zig");
 const buf = @import("../buffer.zig");
+const lsp = @import("../lsp.zig");
 
 const Cursor = core.Cursor;
 const Allocator = std.mem.Allocator;
@@ -23,12 +24,12 @@ pub fn pickFile(allocator: Allocator) ![]const u8 {
     return try allocator.dupe(u8, std.mem.trim(u8, out, "\n"));
 }
 
-pub const FindInFilesResult = struct {
+pub const FindResult = struct {
     path: []const u8,
     position: Cursor,
 };
 
-pub fn findInFiles(allocator: Allocator) !FindInFilesResult {
+pub fn findInFiles(allocator: Allocator) !FindResult {
     const rg_cmd = "rg -n --column --no-heading --smart-case {q}";
     var cmd = std.ArrayList([]const u8).init(allocator);
     defer cmd.deinit();
@@ -77,6 +78,44 @@ pub fn pickBuffer(allocator: Allocator, buffers: []const *buf.Buffer) ![]const u
     if (out.len == 0) return error.EmptyOut;
     var iter = std.mem.splitScalar(u8, out, ':');
     return try allocator.dupe(u8, iter.next().?);
+}
+
+/// TODO: dry
+pub fn pickLspLocation(allocator: Allocator, locations: []const lsp.types.Location) !FindResult {
+    var bufs = std.ArrayList(u8).init(allocator);
+    for (locations) |location| {
+        const start = location.range.start;
+        const path = try lsp.pathFromUri(allocator, location.uri);
+        defer allocator.free(path);
+        const s = try std.fmt.allocPrint(
+            allocator,
+            "{s}:{}:{}:\n",
+            .{ path, start.line + 1, start.character + 1 },
+        );
+        defer allocator.free(s);
+        try bufs.appendSlice(s);
+    }
+    const bufs_str = try bufs.toOwnedSlice();
+    defer allocator.free(bufs_str);
+
+    var cmd = std.ArrayList([]const u8).init(allocator);
+    defer cmd.deinit();
+    try cmd.appendSlice(fzf_command);
+    try cmd.append("--preview");
+    try cmd.append("hat --printer --term-height=$FZF_PREVIEW_LINES --highlight-line={2} {1}");
+    try cmd.appendSlice(&.{ "--delimiter", ":" });
+
+    const out = try ext.runExternalWait(allocator, cmd.items, bufs_str);
+    defer allocator.free(out);
+    if (out.len == 0) return error.EmptyOut;
+    var iter = std.mem.splitScalar(u8, out, ':');
+    return .{
+        .path = try allocator.dupe(u8, iter.next().?),
+        .position = .{
+            .row = try std.fmt.parseInt(i32, iter.next().?, 10) - 1,
+            .col = try std.fmt.parseInt(i32, iter.next().?, 10) - 1,
+        },
+    };
 }
 
 const fzf_command: []const []const u8 = &.{

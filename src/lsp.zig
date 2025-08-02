@@ -1,11 +1,13 @@
 const std = @import("std");
-const posix = std.posix;
+const lsp = @import("lsp");
 const main = @import("main.zig");
 const core = @import("core.zig");
 const fs = @import("fs.zig");
 const log = @import("log.zig");
 const buf = @import("buffer.zig");
-const lsp = @import("lsp");
+const fzf = @import("ui/fzf.zig");
+
+const posix = std.posix;
 
 const Cursor = core.Cursor;
 const Allocator = std.mem.Allocator;
@@ -96,6 +98,7 @@ pub const LspConnection = struct {
             .capabilities = lsp.types.ClientCapabilities{
                 .textDocument = .{
                     .definition = .{},
+                    .references = .{},
                     .diagnostic = .{},
                     .publishDiagnostics = .{},
                     .completion = .{
@@ -164,6 +167,8 @@ pub const LspConnection = struct {
                         try self.handleInitializeResponse(arena.allocator(), response_result);
                     } else if (std.mem.eql(u8, method, "textDocument/definition")) {
                         try self.handleDefinitionResponse(arena.allocator(), response_result);
+                    } else if (std.mem.eql(u8, method, "textDocument/references")) {
+                        try self.handleFindReferencesResponse(arena.allocator(), response_result);
                     } else if (std.mem.eql(u8, method, "textDocument/completion")) {
                         try self.handleCompletionResponse(arena.allocator(), response_result);
                     } else if (std.mem.eql(u8, method, "textDocument/hover")) {
@@ -192,6 +197,15 @@ pub const LspConnection = struct {
         try self.sendRequest("textDocument/definition", .{
             .textDocument = .{ .uri = buffer.uri },
             .position = buffer.cursor.toLsp(),
+        });
+    }
+
+    pub fn findReferences(self: *LspConnection) !void {
+        const buffer = main.editor.active_buffer;
+        try self.sendRequest("textDocument/references", .{
+            .textDocument = .{ .uri = buffer.uri },
+            .position = buffer.cursor.toLsp(),
+            .context = .{ .includeDeclaration = true },
         });
     }
 
@@ -304,6 +318,7 @@ pub const LspConnection = struct {
         return try messages.toOwnedSlice();
     }
 
+    /// TODO: send only if server has capability
     fn sendRequest(
         self: *LspConnection,
         comptime method: []const u8,
@@ -380,6 +395,22 @@ pub const LspConnection = struct {
             const new_cursor = Cursor.fromLsp(loc.range.start);
             try main.editor.active_buffer.moveCursor(new_cursor);
         }
+    }
+
+    fn handleFindReferencesResponse(self: *LspConnection, arena: Allocator, resp: ?std.json.Value) !void {
+        if (resp == null or resp.? == .null) return;
+        const resp_typed = try std.json.parseFromValue([]const lsp.types.Location, arena, resp.?, .{});
+        const locations = resp_typed.value;
+        log.log(@This(), "got reference locations: {any}\n", .{locations});
+        const pick_result = fzf.pickLspLocation(self.allocator, locations) catch |e| {
+            log.log(@This(), "{}\n", .{e});
+            std.debug.dumpStackTrace(@errorReturnTrace().?.*);
+            return;
+        };
+        defer self.allocator.free(pick_result.path);
+        log.log(@This(), "picked reference: {}\n", .{pick_result});
+        try main.editor.openBuffer(pick_result.path);
+        try main.editor.active_buffer.moveCursor(pick_result.position);
     }
 
     fn handleCompletionResponse(self: *LspConnection, arena: Allocator, resp: ?std.json.Value) !void {
@@ -464,4 +495,12 @@ pub fn uriExtractPath(uri: []const u8) ?[]const u8 {
         return uri[prefix.len..];
     }
     return null;
+}
+
+pub fn pathFromUri(allocator: Allocator, uri: []const u8) ![]const u8 {
+    const prefix = "file://";
+    if (!std.mem.startsWith(u8, uri, prefix)) return error.NotUri;
+    const abs_cwd = try std.fs.cwd().realpathAlloc(allocator, ".");
+    defer allocator.free(abs_cwd);
+    return std.fs.path.relative(allocator, abs_cwd, uri[prefix.len..]);
 }

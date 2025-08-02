@@ -663,6 +663,12 @@ pub const Buffer = struct {
         }
     }
 
+    pub fn findReferences(self: *Buffer) !void {
+        for (self.lsp_connections.items) |conn| {
+            try conn.findReferences();
+        }
+    }
+
     pub fn showHover(self: *Buffer) !void {
         log.log(@This(), "show hover\n", .{});
         for (self.lsp_connections.items) |conn| {

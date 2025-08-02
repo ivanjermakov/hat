@@ -306,6 +306,8 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                         try buffer.write();
                     } else if (editor.mode == .normal and eql(u8, multi_key, " d")) {
                         try buffer.goToDefinition();
+                    } else if (editor.mode == .normal and eql(u8, multi_key, " r")) {
+                        try buffer.findReferences();
                     } else if (normal_or_select and eql(u8, multi_key, "gi")) {
                         try buffer.moveCursor(.{ .col = buffer.cursor.col });
                         try buffer.centerCursor();
