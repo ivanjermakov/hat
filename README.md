@@ -24,7 +24,7 @@ Hat is a **ha**ckable modal **t**ext editor for modern terminals.
     * [x] Indent alignment
 - [x] [LSP](https://microsoft.github.io/language-server-protocol/) support
     * [x] Go to definition
-    * [ ] Find references
+    * [x] Find references
     * [x] Diagnostics
     * [x] Completions w/ documentation
     * [x] Hover
