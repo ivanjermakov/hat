@@ -4,6 +4,7 @@ const testing = std.testing;
 const assert = std.debug.assert;
 const reg = @import("regex");
 const main = @import("main.zig");
+const core = @import("core.zig");
 const edi = @import("editor.zig");
 const ft = @import("file_type.zig");
 const ts = @import("ts.zig");
@@ -15,91 +16,10 @@ const ter = @import("terminal.zig");
 const clp = @import("clipboard.zig");
 const dt = @import("datetime.zig");
 
-pub const Cursor = struct {
-    row: i32 = 0,
-    col: i32 = 0,
-
-    pub fn applyOffset(self: Cursor, offset: Cursor) Cursor {
-        return .{ .row = self.row + offset.row, .col = self.col + offset.col };
-    }
-
-    pub fn negate(self: Cursor) Cursor {
-        return .{
-            .row = -self.row,
-            .col = -self.col,
-        };
-    }
-
-    pub fn order(self: Cursor, other: Cursor) std.math.Order {
-        if (std.meta.eql(self, other)) return .eq;
-        if (self.row == other.row) {
-            return std.math.order(self.col, other.col);
-        }
-        return std.math.order(self.row, other.row);
-    }
-
-    pub fn fromLsp(position: lsp.types.Position) Cursor {
-        return .{
-            .row = @intCast(position.line),
-            .col = @intCast(position.character),
-        };
-    }
-
-    pub fn toLsp(self: Cursor) lsp.types.Position {
-        return .{
-            .line = @intCast(self.row),
-            .character = @intCast(self.col),
-        };
-    }
-
-    pub fn toTs(self: Cursor) ts.ts.TSPoint {
-        return .{
-            .row = @intCast(self.row),
-            .column = @intCast(self.col),
-        };
-    }
-};
-
-pub const Span = struct {
-    start: Cursor,
-    end: Cursor,
-
-    pub fn inRange(self: Span, pos: Cursor) bool {
-        const start = self.start.order(pos);
-        const end = self.end.order(pos);
-        return start != .gt and end == .gt;
-    }
-
-    pub fn inRangeInclusive(self: Span, pos: Cursor) bool {
-        const start = self.start.order(pos);
-        const end = self.end.order(pos);
-        return start != .gt and end != .lt;
-    }
-
-    pub fn fromLsp(position: lsp.types.Range) Span {
-        return .{
-            .start = Cursor.fromLsp(position.start),
-            .end = Cursor.fromLsp(position.end),
-        };
-    }
-
-    pub fn toLsp(self: Span) lsp.types.Range {
-        return .{
-            .start = self.start.toLsp(),
-            .end = self.end.toLsp(),
-        };
-    }
-
-    pub fn toExclusiveEnd(self: Span, last_line_len: usize) Span {
-        var span = self;
-        if (self.end.col == last_line_len) {
-            span.end = .{ .row = self.end.row + 1, .col = 0 };
-        } else {
-            span.end = span.end.applyOffset(.{ .col = 1 });
-        }
-        return span;
-    }
-};
+const Span = core.Span;
+const Cursor = core.Cursor;
+const ByteSpan = core.ByteSpan;
+const Dimensions = core.Dimensions;
 
 pub const Buffer = struct {
     path: []const u8,
@@ -851,8 +771,8 @@ pub const Buffer = struct {
         }
     }
 
-    fn find(self: *Buffer, query: []const u8) ![]const cha.ByteSpan {
-        var spans = std.ArrayList(cha.ByteSpan).init(self.allocator);
+    fn find(self: *Buffer, query: []const u8) ![]const ByteSpan {
+        var spans = std.ArrayList(ByteSpan).init(self.allocator);
         var re = try reg.Regex.from(query, false, self.allocator);
         defer re.deinit();
 
@@ -860,7 +780,7 @@ pub const Buffer = struct {
         defer re.deinitMatchList(&matches);
         for (0..matches.items.len) |i| {
             const match = matches.items[i];
-            try spans.append(cha.ByteSpan.fromRegex(match));
+            try spans.append(ByteSpan.fromRegex(match));
         }
         return spans.toOwnedSlice();
     }
@@ -886,7 +806,7 @@ pub const Buffer = struct {
             .start = span.start,
             .end = self.posToCursor(delete_start + if (change.new_text) |new_text| new_text.len else 0),
         };
-        change.new_byte_span = cha.ByteSpan.fromBufSpan(self, change.new_span.?);
+        change.new_byte_span = ByteSpan.fromBufSpan(self, change.new_span.?);
         try self.moveCursor(change.new_span.?.end);
         self.cursor = change.new_span.?.end;
         std.debug.assert(std.meta.eql(self.cursor, change.new_span.?.end));
@@ -935,7 +855,7 @@ pub const Buffer = struct {
     fn scrollForCursor(self: *Buffer, new_buf_cursor: Cursor) void {
         const term_cursor = new_buf_cursor.applyOffset(self.offset.negate());
         // TODO: scrolling without coupling with term
-        const dims = ter.Dimensions{
+        const dims = Dimensions{
             .height = main.term.dimensions.height,
             .width = main.term.dimensions.width - ter.number_line_width,
         };

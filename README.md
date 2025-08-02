@@ -24,6 +24,7 @@ Hat is a **ha**ckable modal **t**ext editor for modern terminals.
     * [x] Indent alignment
 - [x] [LSP](https://microsoft.github.io/language-server-protocol/) support
     * [x] Go to definition
+    * [ ] Find references
     * [x] Diagnostics
     * [x] Completions w/ documentation
     * [x] Hover
@@ -41,10 +42,13 @@ Hat is a **ha**ckable modal **t**ext editor for modern terminals.
 
 | Done | Name                     | Link |
 | ---- | ------------------------ | ---- |
-| 🚧   | Git hunk markers         |      |
 | 🚧   | LSP highlight            |      |
 | 🚧   | LSP find symbol          |      |
+| 🚧   | LSP code action          |      |
+| 🚧   | LSP formatting           |      |
+| 🚧   | Git hunk markers         |      |
 | 🚧   | Tree-sitter tree actions |      |
+| 🚧   | Buffer centering         |      |
 
 ## Philosophy
 

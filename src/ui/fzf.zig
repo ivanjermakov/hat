@@ -1,8 +1,11 @@
 const std = @import("std");
+const core = @import("../core.zig");
 const ext = @import("../external.zig");
 const log = @import("../log.zig");
 const col = @import("../color.zig");
 const buf = @import("../buffer.zig");
+
+const Cursor = core.Cursor;
 
 pub fn pickFile(allocator: std.mem.Allocator) ![]const u8 {
     const files = try ext.runExternalWait(allocator, &.{ "rg", "--files" }, null);
@@ -21,7 +24,7 @@ pub fn pickFile(allocator: std.mem.Allocator) ![]const u8 {
 
 pub const FindInFilesResult = struct {
     path: []const u8,
-    position: buf.Cursor,
+    position: Cursor,
 };
 
 pub fn findInFiles(allocator: std.mem.Allocator) !FindInFilesResult {

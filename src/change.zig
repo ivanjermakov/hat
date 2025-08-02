@@ -1,15 +1,20 @@
 const std = @import("std");
+const core = @import("core.zig");
 const buf = @import("buffer.zig");
 const uni = @import("unicode.zig");
 const lsp = @import("lsp.zig");
 const reg = @import("regex");
 const ts = @import("ts.zig");
 
+const Cursor = core.Cursor;
+const Span = core.Span;
+const ByteSpan = core.ByteSpan;
+
 pub const Change = struct {
-    old_span: buf.Span,
+    old_span: Span,
     old_byte_span: ByteSpan,
     old_text: []const u21,
-    new_span: ?buf.Span = null,
+    new_span: ?Span = null,
     new_byte_span: ?ByteSpan = null,
     new_text: ?[]const u21 = null,
     allocator: std.mem.Allocator,
@@ -17,20 +22,20 @@ pub const Change = struct {
     pub fn initInsert(
         allocator: std.mem.Allocator,
         buffer: *const buf.Buffer,
-        pos: buf.Cursor,
+        pos: Cursor,
         new_text: []const u21,
     ) !Change {
         return initReplace(allocator, buffer, .{ .start = pos, .end = pos }, new_text);
     }
 
-    pub fn initDelete(allocator: std.mem.Allocator, buffer: *const buf.Buffer, span: buf.Span) !Change {
+    pub fn initDelete(allocator: std.mem.Allocator, buffer: *const buf.Buffer, span: Span) !Change {
         return initReplace(allocator, buffer, span, &.{});
     }
 
     pub fn initReplace(
         allocator: std.mem.Allocator,
         buffer: *const buf.Buffer,
-        span: buf.Span,
+        span: Span,
         new_text: []const u21,
     ) !Change {
         return .{
@@ -124,21 +129,5 @@ pub const Change = struct {
             .old_end_point = old_end_point,
             .new_end_point = new_end_point,
         };
-    }
-};
-
-pub const ByteSpan = struct {
-    start: usize,
-    end: usize,
-
-    pub fn fromBufSpan(buffer: *const buf.Buffer, span: buf.Span) ByteSpan {
-        return .{
-            .start = buffer.cursorToBytePos(span.start),
-            .end = buffer.cursorToBytePos(span.end),
-        };
-    }
-
-    pub fn fromRegex(match: reg.RegexMatch) ByteSpan {
-        return .{ .start = match.getStartAt(0).?, .end = match.getEndAt(0).? };
     }
 };

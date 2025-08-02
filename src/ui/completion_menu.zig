@@ -1,10 +1,13 @@
 const std = @import("std");
 const main = @import("../main.zig");
+const core = @import("../core.zig");
 const lsp = @import("../lsp.zig");
 const log = @import("../log.zig");
 const buf = @import("../buffer.zig");
 const uni = @import("../unicode.zig");
 const cha = @import("../change.zig");
+
+const Span = core.Span;
 
 const max_entries = 10;
 
@@ -85,7 +88,7 @@ pub const CompletionMenu = struct {
         }
 
         // TODO: replace_range might not end at cursor position
-        const prompt = try main.editor.active_buffer.rawTextAt(self.allocator, buf.Span.fromLsp(self.replace_range.?));
+        const prompt = try main.editor.active_buffer.rawTextAt(self.allocator, Span.fromLsp(self.replace_range.?));
         defer self.allocator.free(prompt);
         log.log(@This(), "prompt {s}\n", .{prompt});
 
@@ -153,7 +156,7 @@ pub const CompletionMenu = struct {
         log.log(@This(), "accept item {}: {s}, replace text: {any}\n", .{ self.active_item, item.label, item.replace_text });
         const buffer = main.editor.active_buffer;
 
-        const span = buf.Span.fromLsp(self.replace_range.?);
+        const span = Span.fromLsp(self.replace_range.?);
         const new_text = try uni.utf8FromBytes(buffer.allocator, item.replace_text);
         defer self.allocator.free(new_text);
         var change = try cha.Change.initReplace(self.allocator, buffer, span, new_text);

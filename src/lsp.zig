@@ -1,10 +1,13 @@
 const std = @import("std");
 const posix = std.posix;
 const main = @import("main.zig");
+const core = @import("core.zig");
 const fs = @import("fs.zig");
 const log = @import("log.zig");
 const buf = @import("buffer.zig");
 const lsp = @import("lsp");
+
+const Cursor = core.Cursor;
 
 const default_stringify_opts = std.json.StringifyOptions{ .emit_null_optional_fields = false };
 
@@ -373,7 +376,7 @@ pub const LspConnection = struct {
                 }
             }
             log.log(@This(), "jump to {}\n", .{loc.range.start});
-            const new_cursor = buf.Cursor.fromLsp(loc.range.start);
+            const new_cursor = Cursor.fromLsp(loc.range.start);
             try main.editor.active_buffer.moveCursor(new_cursor);
         }
     }

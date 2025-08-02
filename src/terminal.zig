@@ -5,6 +5,7 @@ const c = @cImport({
     @cInclude("locale.h");
 });
 const main = @import("main.zig");
+const core = @import("core.zig");
 const buf = @import("buffer.zig");
 const co = @import("color.zig");
 const log = @import("log.zig");
@@ -14,15 +15,9 @@ const cmp = @import("ui/completion_menu.zig");
 const cmd = @import("ui/command_line.zig");
 const uni = @import("unicode.zig");
 
-pub const Dimensions = struct {
-    width: usize,
-    height: usize,
-};
-
-pub const Area = struct {
-    pos: buf.Cursor,
-    dims: Dimensions,
-};
+const Dimensions = core.Dimensions;
+const Area = core.Area;
+const Cursor = core.Cursor;
 
 /// See section about "CSI Ps SP q" at
 /// https://invisible-island.net/xterm/ctlseqs/ctlseqs.html#h3-Functions-using-CSI-_-ordered-by-the-final-character_s_
@@ -131,7 +126,7 @@ pub const Terminal = struct {
         try self.write("\x1b[0m");
     }
 
-    fn moveCursor(self: *Terminal, cursor: buf.Cursor) !void {
+    fn moveCursor(self: *Terminal, cursor: Cursor) !void {
         try self.format("\x1b[{};{}H", .{ cursor.row + 1, cursor.col + 1 });
     }
 
@@ -278,7 +273,7 @@ pub const Terminal = struct {
 
         const buffer = main.editor.active_buffer;
         const replace_range = cmp_menu.replace_range.?;
-        const menu_pos = (buf.Cursor{
+        const menu_pos = (Cursor{
             .row = @intCast(replace_range.start.line),
             .col = @intCast(replace_range.start.character),
         })
@@ -358,7 +353,7 @@ pub const Terminal = struct {
         try self.drawDocumentation(doc_lines.items, doc_pos);
     }
 
-    fn drawDocumentation(self: *Terminal, lines: []const []const u8, pos: buf.Cursor) !void {
+    fn drawDocumentation(self: *Terminal, lines: []const []const u8, pos: Cursor) !void {
         try co.attributes.write(co.attributes.documentation_menu, self.writer.writer());
         defer self.resetAttributes() catch {};
 
