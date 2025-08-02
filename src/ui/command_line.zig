@@ -6,6 +6,8 @@ const buf = @import("../buffer.zig");
 const uni = @import("../unicode.zig");
 const cha = @import("../change.zig");
 
+const Allocator = std.mem.Allocator;
+
 pub const Command = enum {
     find,
 
@@ -20,9 +22,9 @@ pub const CommandLine = struct {
     content: std.ArrayList(u21),
     command: ?Command = null,
     cursor: usize = 0,
-    allocator: std.mem.Allocator,
+    allocator: Allocator,
 
-    pub fn init(allocator: std.mem.Allocator) CommandLine {
+    pub fn init(allocator: Allocator) CommandLine {
         return .{
             .content = std.ArrayList(u21).init(allocator),
             .allocator = allocator,

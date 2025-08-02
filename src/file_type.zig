@@ -5,6 +5,8 @@ const env = @import("env.zig");
 const ts = @import("ts.zig");
 const log = @import("log.zig");
 
+const Allocator = std.mem.Allocator;
+
 const nvim_ts_path = "$HOME/.local/share/nvim/lazy/nvim-treesitter";
 
 pub const FileTypeConfig = struct {
@@ -28,7 +30,7 @@ pub const TsConfig = struct {
         };
     }
 
-    pub fn loadLanguage(self: *const TsConfig, allocator: std.mem.Allocator) !*const fn () *ts.ts.struct_TSLanguage {
+    pub fn loadLanguage(self: *const TsConfig, allocator: Allocator) !*const fn () *ts.ts.struct_TSLanguage {
         const lib_path_exp = try env.expand(allocator, self.lib_path, std.posix.getenv);
         defer allocator.free(lib_path_exp);
 
@@ -39,13 +41,13 @@ pub const TsConfig = struct {
         return language;
     }
 
-    pub fn loadHighlightQuery(self: *const TsConfig, allocator: std.mem.Allocator) ![]const u8 {
+    pub fn loadHighlightQuery(self: *const TsConfig, allocator: Allocator) ![]const u8 {
         const query_path = try env.expand(allocator, self.highlight_query, std.posix.getenv);
         defer allocator.free(query_path);
         return try std.fs.cwd().readFileAlloc(allocator, query_path, std.math.maxInt(usize));
     }
 
-    pub fn loadIndentQuery(self: *const TsConfig, allocator: std.mem.Allocator) ![]const u8 {
+    pub fn loadIndentQuery(self: *const TsConfig, allocator: Allocator) ![]const u8 {
         const query_path = try env.expand(allocator, self.indent_query, std.posix.getenv);
         defer allocator.free(query_path);
         return try std.fs.cwd().readFileAlloc(allocator, query_path, std.math.maxInt(usize));

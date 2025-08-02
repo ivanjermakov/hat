@@ -8,6 +8,7 @@ const uni = @import("../unicode.zig");
 const cha = @import("../change.zig");
 
 const Span = core.Span;
+const Allocator = std.mem.Allocator;
 
 const max_entries = 10;
 
@@ -18,9 +19,9 @@ pub const CompletionItem = struct {
     replace_text: []const u8,
     detail: ?[]const u8,
     documentation: ?[]const u8,
-    allocator: std.mem.Allocator,
+    allocator: Allocator,
 
-    pub fn fromLsp(allocator: std.mem.Allocator, item: lsp.types.CompletionItem) !CompletionItem {
+    pub fn fromLsp(allocator: Allocator, item: lsp.types.CompletionItem) !CompletionItem {
         const text_edit = lsp.extractTextEdit(item) orelse return error.NoTextEdit;
         const documentation = if (item.documentation) |doc| switch (doc) {
             .string => |s| try allocator.dupe(u8, s),
@@ -55,9 +56,9 @@ pub const CompletionMenu = struct {
     display_items: std.ArrayList(usize),
     replace_range: ?lsp.types.Range,
     active_item: usize,
-    allocator: std.mem.Allocator,
+    allocator: Allocator,
 
-    pub fn init(allocator: std.mem.Allocator) CompletionMenu {
+    pub fn init(allocator: Allocator) CompletionMenu {
         return .{
             .completion_items = std.ArrayList(CompletionItem).init(allocator),
             .display_items = std.ArrayList(usize).init(allocator),

@@ -9,6 +9,7 @@ const ts = @import("ts.zig");
 const Cursor = core.Cursor;
 const Span = core.Span;
 const ByteSpan = core.ByteSpan;
+const Allocator = std.mem.Allocator;
 
 pub const Change = struct {
     old_span: Span,
@@ -17,10 +18,10 @@ pub const Change = struct {
     new_span: ?Span = null,
     new_byte_span: ?ByteSpan = null,
     new_text: ?[]const u21 = null,
-    allocator: std.mem.Allocator,
+    allocator: Allocator,
 
     pub fn initInsert(
-        allocator: std.mem.Allocator,
+        allocator: Allocator,
         buffer: *const buf.Buffer,
         pos: Cursor,
         new_text: []const u21,
@@ -28,12 +29,12 @@ pub const Change = struct {
         return initReplace(allocator, buffer, .{ .start = pos, .end = pos }, new_text);
     }
 
-    pub fn initDelete(allocator: std.mem.Allocator, buffer: *const buf.Buffer, span: Span) !Change {
+    pub fn initDelete(allocator: Allocator, buffer: *const buf.Buffer, span: Span) !Change {
         return initReplace(allocator, buffer, span, &.{});
     }
 
     pub fn initReplace(
-        allocator: std.mem.Allocator,
+        allocator: Allocator,
         buffer: *const buf.Buffer,
         span: Span,
         new_text: []const u21,
@@ -97,14 +98,14 @@ pub const Change = struct {
         };
     }
 
-    pub fn clone(self: *const Change, allocator: std.mem.Allocator) !Change {
+    pub fn clone(self: *const Change, allocator: Allocator) !Change {
         var cloned = self.*;
         if (self.new_text) |t| cloned.new_text = try allocator.dupe(u21, t);
         cloned.old_text = try allocator.dupe(u21, self.old_text);
         return cloned;
     }
 
-    pub fn toLsp(self: *const Change, allocator: std.mem.Allocator) !lsp.types.TextDocumentContentChangeEvent {
+    pub fn toLsp(self: *const Change, allocator: Allocator) !lsp.types.TextDocumentContentChangeEvent {
         const text = try uni.utf8ToBytes(allocator, self.new_text orelse &.{});
         return .{
             .literal_0 = .{

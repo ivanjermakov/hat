@@ -6,8 +6,9 @@ const col = @import("../color.zig");
 const buf = @import("../buffer.zig");
 
 const Cursor = core.Cursor;
+const Allocator = std.mem.Allocator;
 
-pub fn pickFile(allocator: std.mem.Allocator) ![]const u8 {
+pub fn pickFile(allocator: Allocator) ![]const u8 {
     const files = try ext.runExternalWait(allocator, &.{ "rg", "--files" }, null);
     defer allocator.free(files);
 
@@ -27,7 +28,7 @@ pub const FindInFilesResult = struct {
     position: Cursor,
 };
 
-pub fn findInFiles(allocator: std.mem.Allocator) !FindInFilesResult {
+pub fn findInFiles(allocator: Allocator) !FindInFilesResult {
     const rg_cmd = "rg -n --column --no-heading --smart-case {q}";
     var cmd = std.ArrayList([]const u8).init(allocator);
     defer cmd.deinit();
@@ -50,7 +51,7 @@ pub fn findInFiles(allocator: std.mem.Allocator) !FindInFilesResult {
     };
 }
 
-pub fn pickBuffer(allocator: std.mem.Allocator, buffers: []const *buf.Buffer) ![]const u8 {
+pub fn pickBuffer(allocator: Allocator, buffers: []const *buf.Buffer) ![]const u8 {
     var bufs = std.ArrayList(u8).init(allocator);
     for (buffers) |buffer| {
         const s = try std.fmt.allocPrint(

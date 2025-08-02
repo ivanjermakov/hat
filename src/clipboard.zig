@@ -1,7 +1,9 @@
 const std = @import("std");
 const log = @import("log.zig");
 
-pub fn write(allocator: std.mem.Allocator, text: []const u8) !void {
+const Allocator = std.mem.Allocator;
+
+pub fn write(allocator: Allocator, text: []const u8) !void {
     log.log(@This(), "copy to clipboard\n", .{});
     var child = std.process.Child.init(&.{ "xclip", "-selection", "clipboard" }, allocator);
     child.stdin_behavior = .Pipe;
@@ -16,7 +18,7 @@ pub fn write(allocator: std.mem.Allocator, text: []const u8) !void {
     if (code != 0) return error.Xclip;
 }
 
-pub fn read(allocator: std.mem.Allocator) ![]const u8 {
+pub fn read(allocator: Allocator) ![]const u8 {
     log.log(@This(), "read from clipboard\n", .{});
     var child = std.process.Child.init(&.{ "xclip", "-selection", "clipboard", "-o" }, allocator);
     child.stdout_behavior = .Pipe;

@@ -20,6 +20,7 @@ const Span = core.Span;
 const Cursor = core.Cursor;
 const ByteSpan = core.ByteSpan;
 const Dimensions = core.Dimensions;
+const Allocator = std.mem.Allocator;
 
 pub const Buffer = struct {
     path: []const u8,
@@ -62,9 +63,9 @@ pub const Buffer = struct {
     uncommitted_changes: std.ArrayList(cha.Change),
     lsp_connections: std.ArrayList(*lsp.LspConnection),
     scratch: bool = false,
-    allocator: std.mem.Allocator,
+    allocator: Allocator,
 
-    pub fn init(allocator: std.mem.Allocator, path: ?[]const u8, content_raw: []const u8) !Buffer {
+    pub fn init(allocator: Allocator, path: ?[]const u8, content_raw: []const u8) !Buffer {
         var raw = std.ArrayList(u8).init(allocator);
         try raw.appendSlice(content_raw);
         // make sure last line always ends with newline
@@ -652,7 +653,7 @@ pub const Buffer = struct {
         return self.content.items[start .. start + self.lineLength(row)];
     }
 
-    pub fn rawTextAt(self: *const Buffer, allocator: std.mem.Allocator, span: Span) ![]const u8 {
+    pub fn rawTextAt(self: *const Buffer, allocator: Allocator, span: Span) ![]const u8 {
         return try uni.utf8ToBytes(allocator, self.textAt(span));
     }
 

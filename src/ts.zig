@@ -8,6 +8,8 @@ const ts_c = @cImport({
     @cInclude("tree_sitter/api.h");
 });
 
+const Allocator = std.mem.Allocator;
+
 pub const ts = ts_c;
 
 pub fn ParseResult(comptime SpanType: type) type {
@@ -16,9 +18,9 @@ pub fn ParseResult(comptime SpanType: type) type {
 
         query: ?*ts.TSQuery = null,
         spans: std.ArrayList(SpanType),
-        allocator: std.mem.Allocator,
+        allocator: Allocator,
 
-        pub fn init(allocator: std.mem.Allocator, language: *ts.struct_TSLanguage, query_str: []const u8) !ParseResult(SpanType) {
+        pub fn init(allocator: Allocator, language: *ts.struct_TSLanguage, query_str: []const u8) !ParseResult(SpanType) {
             var err: ts.TSQueryError = undefined;
             const query = ts.ts_query_new(language, query_str.ptr, @intCast(query_str.len), null, &err);
             if (err > 0) return error.Query;
@@ -66,9 +68,9 @@ pub const State = struct {
     tree: ?*ts.TSTree = null,
     highlight: ParseResult(SpanAttrsTuple),
     indent: ParseResult(SpanNameTuple),
-    allocator: std.mem.Allocator,
+    allocator: Allocator,
 
-    pub fn init(allocator: std.mem.Allocator, ts_conf: ft.TsConfig) !State {
+    pub fn init(allocator: Allocator, ts_conf: ft.TsConfig) !State {
         const language = try ts_conf.loadLanguage(allocator);
         const highlight_query = try ts_conf.loadHighlightQuery(allocator);
         defer allocator.free(highlight_query);

@@ -18,6 +18,7 @@ const uni = @import("unicode.zig");
 const Dimensions = core.Dimensions;
 const Area = core.Area;
 const Cursor = core.Cursor;
+const Allocator = std.mem.Allocator;
 
 /// See section about "CSI Ps SP q" at
 /// https://invisible-island.net/xterm/ctlseqs/ctlseqs.html#h3-Functions-using-CSI-_-ordered-by-the-final-character_s_
@@ -36,9 +37,9 @@ pub const number_line_width = 5;
 pub const Terminal = struct {
     writer: std.io.BufferedWriter(8192, std.io.AnyWriter),
     dimensions: Dimensions,
-    allocator: std.mem.Allocator,
+    allocator: Allocator,
 
-    pub fn init(allocator: std.mem.Allocator, std_out_writer: std.io.AnyWriter, dimensions: Dimensions) !Terminal {
+    pub fn init(allocator: Allocator, std_out_writer: std.io.AnyWriter, dimensions: Dimensions) !Terminal {
         var self = Terminal{
             .writer = .{ .unbuffered_writer = std_out_writer },
             .dimensions = dimensions,
@@ -498,7 +499,7 @@ pub fn printBuffer(buffer: *buf.Buffer, writer: std.io.AnyWriter, highlight: ?Hi
     try buf_writer.flush();
 }
 
-pub fn parseAnsi(allocator: std.mem.Allocator, input: *std.ArrayList(u8)) !inp.Key {
+pub fn parseAnsi(allocator: Allocator, input: *std.ArrayList(u8)) !inp.Key {
     var key: inp.Key = .{};
     const code = input.orderedRemove(0);
     s: switch (code) {
@@ -565,7 +566,7 @@ pub fn parseAnsi(allocator: std.mem.Allocator, input: *std.ArrayList(u8)) !inp.K
     return key;
 }
 
-pub fn getCodes(allocator: std.mem.Allocator) !?[]const u8 {
+pub fn getCodes(allocator: Allocator) !?[]const u8 {
     if (!fs.poll(main.tty_in)) return null;
     var in_buf = std.ArrayList(u8).init(allocator);
     while (true) {
@@ -581,7 +582,7 @@ pub fn getCodes(allocator: std.mem.Allocator) !?[]const u8 {
     return try in_buf.toOwnedSlice();
 }
 
-pub fn getKeys(allocator: std.mem.Allocator, codes: []const u8) ![]inp.Key {
+pub fn getKeys(allocator: Allocator, codes: []const u8) ![]inp.Key {
     var keys = std.ArrayList(inp.Key).init(allocator);
 
     var cs = std.ArrayList(u8).init(allocator);
@@ -599,7 +600,7 @@ pub fn getKeys(allocator: std.mem.Allocator, codes: []const u8) ![]inp.Key {
     return try keys.toOwnedSlice();
 }
 
-fn ansiCodeToString(allocator: std.mem.Allocator, code: u8) ![]const u8 {
+fn ansiCodeToString(allocator: Allocator, code: u8) ![]const u8 {
     const is_printable = code >= 32 and code < 127;
     if (is_printable) {
         return std.fmt.allocPrint(allocator, "{c}", .{@as(u7, @intCast(code))});

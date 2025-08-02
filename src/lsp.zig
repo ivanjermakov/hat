@@ -8,6 +8,7 @@ const buf = @import("buffer.zig");
 const lsp = @import("lsp");
 
 const Cursor = core.Cursor;
+const Allocator = std.mem.Allocator;
 
 const default_stringify_opts = std.json.StringifyOptions{ .emit_null_optional_fields = false };
 
@@ -32,7 +33,7 @@ pub const lsp_config = [_]LspConfig{
     },
 };
 
-pub fn findLspsByFileType(allocator: std.mem.Allocator, file_type: []const u8) ![]LspConfig {
+pub fn findLspsByFileType(allocator: Allocator, file_type: []const u8) ![]LspConfig {
     var res = std.ArrayList(LspConfig).init(allocator);
     for (lsp_config) |config| {
         for (config.file_types) |ft| {
@@ -66,9 +67,9 @@ pub const LspConnection = struct {
     poll_header: ?lsp.BaseProtocolHeader,
     buffers: std.ArrayList(*buf.Buffer),
     thread: std.Thread,
-    allocator: std.mem.Allocator,
+    allocator: Allocator,
 
-    pub fn connect(allocator: std.mem.Allocator, config: LspConfig) !LspConnection {
+    pub fn connect(allocator: Allocator, config: LspConfig) !LspConnection {
         var child = std.process.Child.init(config.cmd, allocator);
         // make child process resistant to terminal signals
         child.pgid = 0;
@@ -338,7 +339,7 @@ pub const LspConnection = struct {
         defer self.allocator.free(rpc_message);
     }
 
-    fn handleInitializeResponse(self: *LspConnection, arena: std.mem.Allocator, resp: ?std.json.Value) !void {
+    fn handleInitializeResponse(self: *LspConnection, arena: Allocator, resp: ?std.json.Value) !void {
         if (resp == null or resp.? == .null) return;
         const resp_typed = try std.json.parseFromValue(lsp.types.InitializeResult, arena, resp.?, .{});
         log.log(@This(), "got init response: {}\n", .{resp_typed});
@@ -349,7 +350,7 @@ pub const LspConnection = struct {
         }
     }
 
-    fn handleDefinitionResponse(self: *LspConnection, arena: std.mem.Allocator, resp: ?std.json.Value) !void {
+    fn handleDefinitionResponse(self: *LspConnection, arena: Allocator, resp: ?std.json.Value) !void {
         _ = self;
         if (resp == null or resp.? == .null) return;
         const ResponseType = union(enum) {
@@ -381,7 +382,7 @@ pub const LspConnection = struct {
         }
     }
 
-    fn handleCompletionResponse(self: *LspConnection, arena: std.mem.Allocator, resp: ?std.json.Value) !void {
+    fn handleCompletionResponse(self: *LspConnection, arena: Allocator, resp: ?std.json.Value) !void {
         _ = self;
         if (resp == null or resp.? == .null) return;
         const ResponseType = union(enum) {
@@ -402,7 +403,7 @@ pub const LspConnection = struct {
         };
     }
 
-    fn handleHoverResponse(self: *LspConnection, arena: std.mem.Allocator, resp: ?std.json.Value) !void {
+    fn handleHoverResponse(self: *LspConnection, arena: Allocator, resp: ?std.json.Value) !void {
         _ = self;
         if (resp == null or resp.? == .null) return;
         const result = try std.json.parseFromValue(lsp.types.Hover, arena, resp.?, .{});
@@ -418,7 +419,7 @@ pub const LspConnection = struct {
         main.editor.dirty.draw = true;
     }
 
-    fn handleNotification(self: *LspConnection, arena: std.mem.Allocator, notif: lsp.JsonRPCMessage.Notification) !void {
+    fn handleNotification(self: *LspConnection, arena: Allocator, notif: lsp.JsonRPCMessage.Notification) !void {
         _ = self;
         // log.log(@This(), "notification: {s}\n", .{notif.method});
         if (std.mem.eql(u8, notif.method, "window/logMessage")) {
