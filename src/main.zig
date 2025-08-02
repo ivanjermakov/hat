@@ -77,27 +77,26 @@ pub fn main() !void {
         defer allocator.free(file_content);
         var buffer = try buf.Buffer.init(allocator, path, file_content);
         defer buffer.deinit();
-        try buffer.reparse();
         try pri.printBuffer(
             &buffer,
             std_out.writer().any(),
             try pri.HighlightConfig.fromArgs(args),
         );
         return;
-    } else {
-        term = try ter.Terminal.init(allocator, std_out.writer().any(), try ter.terminalSize());
-        defer term.deinit();
-
-        editor = try edi.Editor.init(allocator);
-        defer editor.deinit();
-
-        const path = if (args.path) |path| try allocator.dupe(u8, path) else fzf.pickFile(allocator) catch return;
-        defer allocator.free(path);
-
-        try editor.openBuffer(path);
-        try startEditor(allocator);
-        defer editor.disconnect() catch {};
     }
+
+    term = try ter.Terminal.init(allocator, std_out.writer().any(), try ter.terminalSize());
+    defer term.deinit();
+
+    editor = try edi.Editor.init(allocator);
+    defer editor.deinit();
+
+    const path = if (args.path) |path| try allocator.dupe(u8, path) else fzf.pickFile(allocator) catch return;
+    defer allocator.free(path);
+
+    try editor.openBuffer(path);
+    try startEditor(allocator);
+    defer editor.disconnect() catch {};
 }
 
 fn startEditor(allocator: std.mem.Allocator) !void {

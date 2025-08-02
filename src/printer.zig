@@ -4,6 +4,7 @@ const core = @import("core.zig");
 const buf = @import("buffer.zig");
 const ter = @import("terminal.zig");
 const co = @import("color.zig");
+const log = @import("log.zig");
 
 pub const HighlightConfig = struct {
     term_height: usize,

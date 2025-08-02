@@ -136,7 +136,7 @@ pub const SpanAttrsTuple = struct {
     pub fn init(span: Span, capture_name: []const u8) ?SpanAttrsTuple {
         return .{
             .span = span,
-            .attrs = if (findAttrs(capture_name)) |as| as else col.attributes.text,
+            .attrs = if (findAttrs(capture_name)) |as| as else return null,
         };
     }
 
