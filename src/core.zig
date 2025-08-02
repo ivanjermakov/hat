@@ -107,14 +107,16 @@ pub const ByteSpan = struct {
 };
 
 pub const Layout = struct {
-};
-
-pub const Dimensions = struct {
-    width: usize,
-    height: usize,
+    number_line: Area,
+    buffer: Area,
 };
 
 pub const Area = struct {
     pos: Cursor,
     dims: Dimensions,
+};
+
+pub const Dimensions = struct {
+    width: usize,
+    height: usize,
 };

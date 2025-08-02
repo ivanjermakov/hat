@@ -855,11 +855,9 @@ pub const Buffer = struct {
 
     fn scrollForCursor(self: *Buffer, new_buf_cursor: Cursor) void {
         const term_cursor = new_buf_cursor.applyOffset(self.offset.negate());
-        // TODO: scrolling without coupling with term
-        const dims = Dimensions{
-            .height = main.term.dimensions.height,
-            .width = main.term.dimensions.width - ter.number_line_width,
-        };
+        // TODO: scrolling without coupling with term, store buf dimensions in buffer
+        const layout = ter.computeLayout(main.term.dimensions);
+        const dims = layout.buffer.dims;
         if (term_cursor.row < 0 and new_buf_cursor.row >= 0) {
             self.offset.row += term_cursor.row;
             main.editor.dirty.draw = true;

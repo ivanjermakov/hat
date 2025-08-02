@@ -18,6 +18,7 @@ const uni = @import("unicode.zig");
 const Dimensions = core.Dimensions;
 const Area = core.Area;
 const Cursor = core.Cursor;
+const Layout = core.Layout;
 const Allocator = std.mem.Allocator;
 
 /// See section about "CSI Ps SP q" at
@@ -31,8 +32,6 @@ pub const cursor_type = union {
     pub const blinking_bar = "\x1b[5 q";
     pub const steady_bar = "\x1b[6 q";
 };
-
-pub const number_line_width = 5;
 
 pub const Terminal = struct {
     writer: std.io.BufferedWriter(8192, std.io.AnyWriter),
@@ -71,12 +70,9 @@ pub const Terminal = struct {
     pub fn draw(self: *Terminal) !void {
         try self.clear();
         const buffer = main.editor.active_buffer;
+        const layout = computeLayout(self.dimensions);
 
-        const buf_area = Area{
-            .pos = .{ .row = 0, .col = number_line_width },
-            .dims = .{ .height = self.dimensions.height, .width = self.dimensions.width - number_line_width },
-        };
-        try self.drawBuffer(buffer, buf_area);
+        try self.drawBuffer(buffer, layout.buffer);
 
         const cmp_menu = &main.editor.completion_menu;
         try self.drawCompletionMenu(cmp_menu);
@@ -91,16 +87,13 @@ pub const Terminal = struct {
 
     pub fn updateCursor(self: *Terminal) !void {
         const buffer = main.editor.active_buffer;
+        const layout = computeLayout(self.dimensions);
 
-        const num_line_area = Area{
-            .pos = .{},
-            .dims = .{ .height = self.dimensions.height, .width = number_line_width },
-        };
-        try self.drawNumberLine(buffer, num_line_area);
+        try self.drawNumberLine(buffer, layout.number_line);
 
         try self.moveCursor(buffer.cursor
             .applyOffset(buffer.offset.negate())
-            .applyOffset(.{ .col = number_line_width }));
+            .applyOffset(layout.buffer.pos));
 
         switch (main.editor.mode) {
             .normal => _ = try self.write(cursor_type.steady_block),
@@ -171,7 +164,7 @@ pub const Terminal = struct {
                     display_num,
                     10,
                     .lower,
-                    .{ .width = number_line_width - 1, .alignment = alignment },
+                    .{ .width = area.dims.width - 1, .alignment = alignment },
                     self.writer.writer(),
                 );
             }
@@ -412,6 +405,27 @@ pub fn terminalSize() !Dimensions {
     return .{
         .width = w.col,
         .height = w.row,
+    };
+}
+
+pub fn computeLayout(term_dims: Dimensions) Layout {
+    const number_line_width = 5;
+
+    return .{
+        .number_line = .{
+            .pos = .{},
+            .dims = .{
+                .height = term_dims.height,
+                .width = number_line_width,
+            },
+        },
+        .buffer = .{
+            .pos = .{ .col = number_line_width },
+            .dims = .{
+                .height = term_dims.height,
+                .width = term_dims.width - number_line_width,
+            },
+        },
     };
 }
 
