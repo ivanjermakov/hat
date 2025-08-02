@@ -404,7 +404,7 @@ pub const LspConnection = struct {
         log.log(@This(), "got reference locations: {any}\n", .{locations});
         const pick_result = fzf.pickLspLocation(self.allocator, locations) catch |e| {
             log.log(@This(), "{}\n", .{e});
-            std.debug.dumpStackTrace(@errorReturnTrace().?.*);
+            if (@errorReturnTrace()) |trace| std.debug.dumpStackTrace(trace.*);
             return;
         };
         defer self.allocator.free(pick_result.path);
