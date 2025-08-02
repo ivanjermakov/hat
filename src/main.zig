@@ -203,9 +203,9 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     try editor.dismissMessage();
 
                     // normal mode with modifiers
-                } else if (editor.mode == .normal and eql(u8, key, "c-n")) {
+                } else if (editor.mode == .normal and eql(u8, key, "<c-n>")) {
                     try editor.pickFile();
-                } else if (editor.mode == .normal and eql(u8, key, "c-f")) {
+                } else if (editor.mode == .normal and eql(u8, key, "<c-f>")) {
                     try editor.findInFiles();
                 } else if (editor.mode == .normal and eql(u8, key, "<c-e>")) {
                     try editor.pickBuffer();
