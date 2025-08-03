@@ -3,7 +3,7 @@ const main = @import("main.zig");
 const log = @import("log.zig");
 
 pub fn runExternalWait(allocator: std.mem.Allocator, cmd: []const []const u8, input: ?[]const u8) ![]const u8 {
-    if (main.log_enabled) {
+    if (log.enabled) {
         log.log(@This(), "running external command:", .{});
         for (cmd) |c| std.debug.print(" \"{s}\"", .{c});
         std.debug.print("\n", .{});

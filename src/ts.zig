@@ -102,7 +102,7 @@ pub const State = struct {
             @ptrCast(content),
             @intCast(content.len),
         );
-        // if (main.log_enabled) {
+        // if (log.enabled) {
         //     const node = ts.ts_tree_root_node(self.tree);
         //     log.log(@This(), "tree: {s}\n", .{std.mem.span(ts.ts_node_string(node))});
         // }

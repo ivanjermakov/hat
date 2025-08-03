@@ -298,7 +298,7 @@ pub const LspConnection = struct {
     }
 
     fn poll(self: *LspConnection) !?[]const []const u8 {
-        if (main.log_enabled) b: {
+        if (log.enabled) b: {
             const err = fs.readNonblock(self.allocator, self.child.stderr.?) catch break :b;
             if (err) |e| {
                 defer self.allocator.free(e);

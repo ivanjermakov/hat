@@ -2,8 +2,10 @@ const std = @import("std");
 const main = @import("main.zig");
 const dt = @import("datetime.zig");
 
+pub var enabled = false;
+
 pub fn log(comptime caller: type, comptime fmt: []const u8, args: anytype) void {
-    if (!main.log_enabled) return;
+    if (!enabled) return;
     const writer = main.std_err.writer();
 
     var now_buf: [32]u8 = undefined;

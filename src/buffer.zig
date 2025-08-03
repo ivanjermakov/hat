@@ -733,7 +733,7 @@ pub const Buffer = struct {
         const stat = try self.file.?.stat();
         const newer = stat.mtime > if (self.stat) |s| s.mtime else 0;
         if (newer) {
-            if (main.log_enabled) {
+            if (log.enabled) {
                 const time = dt.Datetime.fromSeconds(@as(f64, @floatFromInt(stat.mtime)) / std.time.ns_per_s);
                 var time_buf: [32]u8 = undefined;
                 const time_str = time.formatISO8601Buf(&time_buf, false) catch "";

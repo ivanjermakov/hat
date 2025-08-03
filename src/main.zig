@@ -33,7 +33,6 @@ pub var tty_in: std.fs.File = undefined;
 pub var editor: edi.Editor = undefined;
 pub var term: ter.Terminal = undefined;
 
-pub var log_enabled = true;
 pub var args: Args = .{};
 
 pub var main_loop_mutex: std.Thread.Mutex = .{};
@@ -69,7 +68,7 @@ pub fn main() !void {
         }
         args.path = @constCast(arg);
     }
-    log_enabled = args.log;
+    log.enabled = args.log;
     log.log(@This(), "logging enabled\n", .{});
 
     if (args.printer) {
@@ -449,7 +448,7 @@ comptime {
 
 pub fn testSetup() !void {
     const allocator = std.testing.allocator;
-    log_enabled = true;
+    log.enabled = true;
     editor = try edi.Editor.init(allocator);
     term = ter.Terminal{
         .writer = .{ .unbuffered_writer = std.io.null_writer.any() },
