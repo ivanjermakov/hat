@@ -6,6 +6,7 @@ const fs = @import("fs.zig");
 const log = @import("log.zig");
 const buf = @import("buffer.zig");
 const cha = @import("change.zig");
+const uri = @import("uri.zig");
 const fzf = @import("ui/fzf.zig");
 
 const posix = std.posix;
@@ -152,7 +153,7 @@ pub const LspConnection = struct {
             const rpc_message: lsp.JsonRPCMessage = msg_json.value;
             switch (rpc_message) {
                 .response => |resp| {
-                    // log.log(@This(), "< raw response: {s}\n", .{raw_msg_json});
+                    log.log(@This(), "< raw response: {s}\n", .{raw_msg_json});
                     const response_id = resp.id.?.number;
 
                     const response_result = b: switch (resp.result_or_error) {
@@ -402,7 +403,7 @@ pub const LspConnection = struct {
         };
         if (location) |loc| {
             if (!std.mem.eql(u8, loc.uri, main.editor.active_buffer.uri)) {
-                if (uriExtractPath(loc.uri)) |path| {
+                if (uri.extractPath(loc.uri)) |path| {
                     try main.editor.openBuffer(path);
                 }
             }
@@ -507,15 +508,15 @@ pub const LspConnection = struct {
         log.log(@This(), "workspace edit: {}\n", .{workspace_edit});
         var change_iter = workspace_edit.changes.?.map.iterator();
         while (change_iter.next()) |entry| {
-            const uri = entry.key_ptr.*;
+            const change_uri = entry.key_ptr.*;
             const text_edits = entry.value_ptr.*;
-            const path = try pathFromUri(self.allocator, uri);
+            const path = try uri.toPath(self.allocator, change_uri);
             defer self.allocator.free(path);
             try main.editor.openBuffer(path);
             const buffer = main.editor.active_buffer;
             for (text_edits) |edit| {
                 var change = try cha.Change.fromLsp(buffer.allocator, buffer, edit);
-                log.log(@This(), "change: {s}: {}\n", .{ uri, change });
+                log.log(@This(), "change: {s}: {}\n", .{ change_uri, change });
                 try buffer.appendChange(&change);
             }
             // TODO: apply another dummy edit that resets cursor position back to `old_cursor`
@@ -546,20 +547,4 @@ pub fn extractTextEdit(item: types.CompletionItem) ?types.TextEdit {
         }
     }
     return null;
-}
-
-pub fn uriExtractPath(uri: []const u8) ?[]const u8 {
-    const prefix = "file://";
-    if (std.mem.startsWith(u8, uri, prefix)) {
-        return uri[prefix.len..];
-    }
-    return null;
-}
-
-pub fn pathFromUri(allocator: Allocator, uri: []const u8) ![]const u8 {
-    const prefix = "file://";
-    if (!std.mem.startsWith(u8, uri, prefix)) return error.NotUri;
-    const abs_cwd = try std.fs.cwd().realpathAlloc(allocator, ".");
-    defer allocator.free(abs_cwd);
-    return std.fs.path.relative(allocator, abs_cwd, uri[prefix.len..]);
 }

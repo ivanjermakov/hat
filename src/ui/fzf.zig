@@ -5,6 +5,7 @@ const log = @import("../log.zig");
 const col = @import("../color.zig");
 const buf = @import("../buffer.zig");
 const lsp = @import("../lsp.zig");
+const uri = @import("../uri.zig");
 
 const Cursor = core.Cursor;
 const Allocator = std.mem.Allocator;
@@ -85,7 +86,7 @@ pub fn pickLspLocation(allocator: Allocator, locations: []const lsp.types.Locati
     var bufs = std.ArrayList(u8).init(allocator);
     for (locations) |location| {
         const start = location.range.start;
-        const path = try lsp.pathFromUri(allocator, location.uri);
+        const path = try uri.toPath(allocator, location.uri);
         defer allocator.free(path);
         const s = try std.fmt.allocPrint(
             allocator,
