@@ -70,10 +70,6 @@ pub fn main() !void {
     }
     log.enabled = args.log;
     log.info(@This(), "logging enabled\n", .{});
-    log.debug(@This(), "debug\n", .{});
-    log.info(@This(), "info\n", .{});
-    log.warn(@This(), "warn\n", .{});
-    log.err(@This(), "err\n", .{});
 
     if (args.printer) {
         const path = args.path orelse return error.NoPath;

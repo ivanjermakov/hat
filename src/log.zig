@@ -4,9 +4,10 @@ const dt = @import("datetime.zig");
 const co = @import("color.zig");
 
 pub var enabled = false;
+pub var level: Level = .debug;
 
-const Level = enum {
-    err,
+const Level = enum(u8) {
+    err = 0,
     warn,
     info,
     debug,
@@ -62,8 +63,8 @@ pub fn assertEql(comptime Caller: type, comptime T: type, actual: []const T, exp
     }
 }
 
-fn log(comptime caller: type, comptime level: Level, comptime fmt: []const u8, args: anytype) void {
-    if (!enabled) return;
+fn log(comptime caller: type, comptime lvl: Level, comptime fmt: []const u8, args: anytype) void {
+    if (!(enabled and @intFromEnum(lvl) <= @intFromEnum(level))) return;
     const writer = main.std_err.writer();
 
     var now_buf: [32]u8 = undefined;
@@ -72,7 +73,7 @@ fn log(comptime caller: type, comptime level: Level, comptime fmt: []const u8, a
     std.fmt.format(
         writer,
         "{s} {} {}{s: <16}{s} ",
-        .{ now_str, level, co.AnsiColor.magenta, callerName(caller), co.AnsiColor.reset },
+        .{ now_str, lvl, co.AnsiColor.magenta, callerName(caller), co.AnsiColor.reset },
     ) catch {};
     std.fmt.format(writer, fmt, args) catch {};
 }
