@@ -48,6 +48,13 @@ pub const Change = struct {
         };
     }
 
+    pub fn fromLsp(allocator: Allocator, buffer: *const buf.Buffer, edit: lsp.types.TextEdit) !Change {
+        const span = Span.fromLsp(edit.range);
+        const new_text = try uni.utf8FromBytes(allocator, edit.newText);
+        defer allocator.free(new_text);
+        return initReplace(allocator, buffer, span, new_text);
+    }
+
     pub fn deinit(self: *Change) void {
         self.allocator.free(self.old_text);
         if (self.new_text) |t| self.allocator.free(t);

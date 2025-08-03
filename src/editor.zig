@@ -63,6 +63,7 @@ pub const Editor = struct {
     }
 
     pub fn openBuffer(self: *Editor, path: []const u8) !void {
+        if (self.buffers.items.len > 0 and std.mem.eql(u8, self.active_buffer.path, path)) return;
         if (self.findBufferByPath(path)) |existing| {
             log.log(@This(), "opening existing buffer {s}\n", .{path});
             // reinsert to maintain recent-first order
@@ -357,7 +358,7 @@ pub const Editor = struct {
             },
             .rename => {
                 try self.active_buffer.rename(self.command_line.content.items);
-            }
+            },
         }
         self.command_line.close();
     }

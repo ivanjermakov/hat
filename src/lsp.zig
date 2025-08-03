@@ -5,6 +5,7 @@ const core = @import("core.zig");
 const fs = @import("fs.zig");
 const log = @import("log.zig");
 const buf = @import("buffer.zig");
+const cha = @import("change.zig");
 const fzf = @import("ui/fzf.zig");
 
 const posix = std.posix;
@@ -95,7 +96,7 @@ pub const LspConnection = struct {
         };
 
         try self.sendRequest("initialize", .{
-            .capabilities = lsp.types.ClientCapabilities{
+            .capabilities = types.ClientCapabilities{
                 .textDocument = .{
                     .definition = .{},
                     .references = .{},
@@ -176,6 +177,8 @@ pub const LspConnection = struct {
                         try self.handleCompletionResponse(arena.allocator(), response_result);
                     } else if (std.mem.eql(u8, method, "textDocument/hover")) {
                         try self.handleHoverResponse(arena.allocator(), response_result);
+                    } else if (std.mem.eql(u8, method, "textDocument/rename")) {
+                        try self.handleRenameResponse(arena.allocator(), response_result);
                     }
                 },
                 .notification => |notif| {
@@ -248,7 +251,7 @@ pub const LspConnection = struct {
 
     pub fn didChange(self: *LspConnection, buffer: *buf.Buffer) !void {
         if (buffer.version == 0) {
-            const changes = [_]lsp.types.TextDocumentContentChangeEvent{
+            const changes = [_]types.TextDocumentContentChangeEvent{
                 .{ .literal_1 = .{ .text = buffer.content_raw.items } },
             };
             try self.sendNotification("textDocument/didChange", .{
@@ -256,7 +259,7 @@ pub const LspConnection = struct {
                 .contentChanges = &changes,
             });
         } else {
-            var changes = try std.ArrayList(lsp.types.TextDocumentContentChangeEvent)
+            var changes = try std.ArrayList(types.TextDocumentContentChangeEvent)
                 .initCapacity(self.allocator, buffer.pending_changes.items.len);
             defer changes.deinit();
             for (buffer.pending_changes.items) |change| {
@@ -334,7 +337,7 @@ pub const LspConnection = struct {
     fn sendRequest(
         self: *LspConnection,
         comptime method: []const u8,
-        params: (lsp.types.getRequestMetadata(method).?.Params orelse ?void),
+        params: (types.getRequestMetadata(method).?.Params orelse ?void),
     ) !void {
         const request: lsp.TypedJsonRPCRequest(@TypeOf(params)) = .{
             .id = nextRequestId(),
@@ -352,7 +355,7 @@ pub const LspConnection = struct {
     fn sendNotification(
         self: *LspConnection,
         comptime method: []const u8,
-        params: (lsp.types.getNotificationMetadata(method).?.Params orelse ?void),
+        params: (types.getNotificationMetadata(method).?.Params orelse ?void),
     ) !void {
         const request: lsp.TypedJsonRPCNotification(@TypeOf(params)) = .{
             .method = method,
@@ -368,7 +371,7 @@ pub const LspConnection = struct {
 
     fn handleInitializeResponse(self: *LspConnection, arena: Allocator, resp: ?std.json.Value) !void {
         if (resp == null or resp.? == .null) return;
-        const resp_typed = try std.json.parseFromValue(lsp.types.InitializeResult, arena, resp.?, .{});
+        const resp_typed = try std.json.parseFromValue(types.InitializeResult, arena, resp.?, .{});
         log.log(@This(), "got init response: {}\n", .{resp_typed});
         try self.sendNotification("initialized", .{});
         self.status = .Initialized;
@@ -381,8 +384,8 @@ pub const LspConnection = struct {
         _ = self;
         if (resp == null or resp.? == .null) return;
         const ResponseType = union(enum) {
-            Definition: lsp.types.Definition,
-            array_of_DefinitionLink: []const lsp.types.DefinitionLink,
+            Definition: types.Definition,
+            array_of_DefinitionLink: []const types.DefinitionLink,
         };
         const resp_typed = try lsp.parser.UnionParser(ResponseType).jsonParseFromValue(arena, resp.?, .{});
         log.log(@This(), "got definition response: {}\n", .{resp_typed});
@@ -411,7 +414,7 @@ pub const LspConnection = struct {
 
     fn handleFindReferencesResponse(self: *LspConnection, arena: Allocator, resp: ?std.json.Value) !void {
         if (resp == null or resp.? == .null) return;
-        const resp_typed = try std.json.parseFromValue([]const lsp.types.Location, arena, resp.?, .{});
+        const resp_typed = try std.json.parseFromValue([]const types.Location, arena, resp.?, .{});
         const locations = resp_typed.value;
         log.log(@This(), "got reference locations: {any}\n", .{locations});
         const pick_result = fzf.pickLspLocation(self.allocator, locations) catch |e| {
@@ -429,12 +432,12 @@ pub const LspConnection = struct {
         _ = self;
         if (resp == null or resp.? == .null) return;
         const ResponseType = union(enum) {
-            array_of_CompletionItem: []const lsp.types.CompletionItem,
-            CompletionList: lsp.types.CompletionList,
+            array_of_CompletionItem: []const types.CompletionItem,
+            CompletionList: types.CompletionList,
         };
 
-        const items: []const lsp.types.CompletionItem = b: {
-            const empty = [_]lsp.types.CompletionItem{};
+        const items: []const types.CompletionItem = b: {
+            const empty = [_]types.CompletionItem{};
             const resp_typed = lsp.parser.UnionParser(ResponseType).jsonParseFromValue(arena, resp.?, .{}) catch break :b &empty;
             switch (resp_typed) {
                 .array_of_CompletionItem => |a| break :b a,
@@ -449,7 +452,7 @@ pub const LspConnection = struct {
     fn handleHoverResponse(self: *LspConnection, arena: Allocator, resp: ?std.json.Value) !void {
         _ = self;
         if (resp == null or resp.? == .null) return;
-        const result = try std.json.parseFromValue(lsp.types.Hover, arena, resp.?, .{});
+        const result = try std.json.parseFromValue(types.Hover, arena, resp.?, .{});
         const contents = switch (result.value.contents) {
             .MarkupContent => |c| c.value,
             // deprecated
@@ -462,14 +465,30 @@ pub const LspConnection = struct {
         main.editor.dirty.draw = true;
     }
 
+    fn handleRenameResponse(self: *LspConnection, arena: Allocator, resp: ?std.json.Value) !void {
+        if (resp == null or resp.? == .null) return;
+        const result = try std.json.parseFromValue(types.WorkspaceEdit, arena, resp.?, .{});
+        main.main_loop_mutex.lock();
+        // TODO: mutex wrapper reporting long running and long to acquire locks
+        var timer = try std.time.Timer.start();
+        defer {
+            main.main_loop_mutex.unlock();
+            const elapsed = timer.read();
+            if (elapsed > 1 * std.time.ns_per_ms) {
+                log.log(@This(), "main loop blocked for: {}us\n", .{elapsed / std.time.ns_per_us});
+            }
+        }
+        try self.applyWorkspaceEdit(result.value);
+    }
+
     fn handleNotification(self: *LspConnection, arena: Allocator, notif: lsp.JsonRPCMessage.Notification) !void {
         _ = self;
         // log.log(@This(), "notification: {s}\n", .{notif.method});
         if (std.mem.eql(u8, notif.method, "window/logMessage")) {
-            const params_typed = try std.json.parseFromValue(lsp.types.LogMessageParams, arena, notif.params.?, .{});
+            const params_typed = try std.json.parseFromValue(types.LogMessageParams, arena, notif.params.?, .{});
             log.log(@This(), "server log: {s}\n", .{params_typed.value.message});
         } else if (std.mem.eql(u8, notif.method, "textDocument/publishDiagnostics")) {
-            const params_typed = try std.json.parseFromValue(lsp.types.PublishDiagnosticsParams, arena, notif.params.?, .{});
+            const params_typed = try std.json.parseFromValue(types.PublishDiagnosticsParams, arena, notif.params.?, .{});
             log.log(@This(), "got {} diagnostics\n", .{params_typed.value.diagnostics.len});
             if (main.editor.findBufferByUri(params_typed.value.uri)) |target| {
                 target.diagnostics.clearRetainingCapacity();
@@ -480,6 +499,34 @@ pub const LspConnection = struct {
             }
         }
     }
+
+    fn applyWorkspaceEdit(self: *LspConnection, workspace_edit: types.WorkspaceEdit) !void {
+        const old_buffer = main.editor.active_buffer;
+        const old_cursor = old_buffer.cursor;
+        const old_offset = old_buffer.offset;
+        log.log(@This(), "workspace edit: {}\n", .{workspace_edit});
+        var change_iter = workspace_edit.changes.?.map.iterator();
+        while (change_iter.next()) |entry| {
+            const uri = entry.key_ptr.*;
+            const text_edits = entry.value_ptr.*;
+            const path = try pathFromUri(self.allocator, uri);
+            defer self.allocator.free(path);
+            try main.editor.openBuffer(path);
+            const buffer = main.editor.active_buffer;
+            for (text_edits) |edit| {
+                var change = try cha.Change.fromLsp(buffer.allocator, buffer, edit);
+                log.log(@This(), "change: {s}: {}\n", .{ uri, change });
+                try buffer.appendChange(&change);
+            }
+            // TODO: apply another dummy edit that resets cursor position back to `old_cursor`
+            // because now redoing rename jumps the cursor
+            try buffer.commitChanges();
+        }
+        main.editor.active_buffer = old_buffer;
+        main.editor.active_buffer.cursor = old_cursor;
+        main.editor.active_buffer.offset = old_offset;
+        main.editor.dirty.draw = true;
+    }
 };
 
 var request_id: i64 = 0;
@@ -488,7 +535,7 @@ fn nextRequestId() lsp.JsonRPCMessage.ID {
     return .{ .number = request_id };
 }
 
-pub fn extractTextEdit(item: lsp.types.CompletionItem) ?lsp.types.TextEdit {
+pub fn extractTextEdit(item: types.CompletionItem) ?types.TextEdit {
     if (item.textEdit) |te| {
         switch (te) {
             .InsertReplaceEdit => |ire| return .{

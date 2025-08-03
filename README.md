@@ -28,7 +28,7 @@ Hat is a **ha**ckable modal **t**ext editor for modern terminals.
     * [x] Diagnostics
     * [x] Completions w/ documentation
     * [x] Hover
-    * [ ] Rename
+    * [x] Rename
 - [x] Multi buffer
     * [x] Buffer management
     * [x] Find file

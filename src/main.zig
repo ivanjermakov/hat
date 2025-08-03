@@ -36,6 +36,8 @@ pub var term: ter.Terminal = undefined;
 pub var log_enabled = true;
 pub var args: Args = .{};
 
+pub var main_loop_mutex: std.Thread.Mutex = .{};
+
 pub fn main() !void {
     var debug_allocator: std.heap.DebugAllocator(.{ .stack_trace_frames = 10 }) = .init;
     defer _ = debug_allocator.deinit();
@@ -106,7 +108,9 @@ fn startEditor(allocator: std.mem.Allocator) !void {
     var buffer = editor.active_buffer;
 
     main_loop: while (true) {
+        main_loop_mutex.lock();
         defer {
+            main_loop_mutex.unlock();
             if (sleep_ns > perf.total) {
                 std.time.sleep(sleep_ns - perf.total);
             }
