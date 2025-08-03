@@ -521,10 +521,10 @@ pub fn getKeys(allocator: Allocator, codes: []const u8) ![]inp.Key {
 
     while (cs.items.len > 0) {
         const key = parseAnsi(allocator, &cs) catch |e| {
-            log.log(@This(), "{}\n", .{e});
+            log.debug(@This(), "{}\n", .{e});
             continue;
         };
-        log.log(@This(), "key: {}\n", .{key});
+        log.debug(@This(), "key: {}\n", .{key});
         try keys.append(key);
     }
     return try keys.toOwnedSlice();

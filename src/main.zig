@@ -69,7 +69,11 @@ pub fn main() !void {
         args.path = @constCast(arg);
     }
     log.enabled = args.log;
-    log.log(@This(), "logging enabled\n", .{});
+    log.info(@This(), "logging enabled\n", .{});
+    log.debug(@This(), "debug\n", .{});
+    log.info(@This(), "info\n", .{});
+    log.warn(@This(), "warn\n", .{});
+    log.err(@This(), "err\n", .{});
 
     if (args.printer) {
         const path = args.path orelse return error.NoPath;
@@ -349,8 +353,8 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     const removed = editor.key_queue.orderedRemove(0);
                     if (removed.printable) |p| allocator.free(p);
                 }
-                // log.log(@This(), "uncommitted: {any}\n", .{editor.dot_repeat_input_uncommitted.items});
-                // log.log(@This(), "committed: {any}\n", .{editor.dot_repeat_input.items});
+                // log.debug(@This(), "uncommitted: {any}\n", .{editor.dot_repeat_input_uncommitted.items});
+                // log.debug(@This(), "committed: {any}\n", .{editor.dot_repeat_input.items});
             }
         }
         perf.mapping = timer.lap();
@@ -401,7 +405,7 @@ fn startEditor(allocator: std.mem.Allocator) !void {
 
         perf.total = timer_total.lap();
         if (perf.total > 10 * std.time.ns_per_ms) {
-            log.log(@This(), "frame perf: \n{}", .{perf});
+            log.debug(@This(), "frame perf: \n{}", .{perf});
         }
     }
 }

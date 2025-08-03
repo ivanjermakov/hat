@@ -65,7 +65,7 @@ pub const Editor = struct {
     pub fn openBuffer(self: *Editor, path: []const u8) !void {
         if (self.buffers.items.len > 0 and std.mem.eql(u8, self.active_buffer.path, path)) return;
         if (self.findBufferByPath(path)) |existing| {
-            log.log(@This(), "opening existing buffer {s}\n", .{path});
+            log.debug(@This(), "opening existing buffer {s}\n", .{path});
             // reinsert to maintain recent-first order
             const existing_idx = std.mem.indexOfScalar(*buf.Buffer, self.buffers.items, existing).?;
             _ = self.buffers.orderedRemove(existing_idx);
@@ -74,7 +74,7 @@ pub const Editor = struct {
             main.editor.dirty.draw = true;
             return;
         }
-        log.log(@This(), "opening file at path {s}\n", .{path});
+        log.debug(@This(), "opening file at path {s}\n", .{path});
         const file = try std.fs.cwd().openFile(path, .{ .mode = .read_write });
         const file_content = try file.readToEndAlloc(self.allocator, std.math.maxInt(usize));
         defer self.allocator.free(file_content);
@@ -98,7 +98,7 @@ pub const Editor = struct {
 
             try buffer.lsp_connections.append(conn);
             try conn.buffers.append(buffer);
-            log.log(@This(), "attached buffer {s} to lsp {s}\n", .{ path, conn.config.name });
+            log.debug(@This(), "attached buffer {s} to lsp {s}\n", .{ path, conn.config.name });
             if (conn.status == .Initialized) try conn.didOpen(buffer);
         }
     }
@@ -125,7 +125,7 @@ pub const Editor = struct {
     pub fn openScratch(self: *Editor, content: ?[]const u8) !void {
         const buffer = try self.allocator.create(buf.Buffer);
         buffer.* = try buf.Buffer.init(self.allocator, null, content orelse "");
-        log.log(@This(), "opening scratch {s}\n", .{buffer.path});
+        log.debug(@This(), "opening scratch {s}\n", .{buffer.path});
 
         try self.buffers.append(buffer);
         self.active_buffer = buffer;
@@ -148,7 +148,7 @@ pub const Editor = struct {
             .insert => try self.active_buffer.clearSelection(),
         }
         if (mode != .normal) self.dotRepeatInside();
-        log.log(@This(), "mode: {}->{}\n", .{ self.mode, mode });
+        log.debug(@This(), "mode: {}->{}\n", .{ self.mode, mode });
         self.mode = mode;
         self.dirty.cursor = true;
     }
@@ -191,14 +191,14 @@ pub const Editor = struct {
     pub fn pickFile(self: *Editor) !void {
         const path = try fzf.pickFile(self.allocator);
         defer self.allocator.free(path);
-        log.log(@This(), "picked path: {s}\n", .{path});
+        log.debug(@This(), "picked path: {s}\n", .{path});
         try self.openBuffer(path);
     }
 
     pub fn findInFiles(self: *Editor) !void {
         const find_result = fzf.findInFiles(self.allocator) catch return;
         defer self.allocator.free(find_result.path);
-        log.log(@This(), "find result: {}\n", .{find_result});
+        log.debug(@This(), "find result: {}\n", .{find_result});
         try self.openBuffer(find_result.path);
         try self.active_buffer.moveCursor(find_result.position);
     }
@@ -206,7 +206,7 @@ pub const Editor = struct {
     pub fn pickBuffer(self: *Editor) !void {
         const buf_path = fzf.pickBuffer(self.allocator, self.buffers.items) catch return;
         defer self.allocator.free(buf_path);
-        log.log(@This(), "picked buffer: {s}\n", .{buf_path});
+        log.debug(@This(), "picked buffer: {s}\n", .{buf_path});
         try self.openBuffer(buf_path);
     }
 
@@ -227,13 +227,13 @@ pub const Editor = struct {
                 const conn = entry.value_ptr;
                 switch (conn.status) {
                     .Created, .Initialized => {
-                        log.log(@This(), "disconnecting lsp client\n", .{});
+                        log.debug(@This(), "disconnecting lsp client\n", .{});
                         try conn.disconnect();
                     },
                     .Disconnecting => {
                         const term = std.posix.waitpid(conn.child.id, std.posix.W.NOHANG);
                         if (conn.child.id == term.pid) {
-                            log.log(@This(), "lsp server terminated with code: {}\n", .{std.posix.W.EXITSTATUS(term.status)});
+                            log.info(@This(), "lsp server terminated with code: {}\n", .{std.posix.W.EXITSTATUS(term.status)});
                             conn.status = .Closed;
                         }
                     },
@@ -254,7 +254,7 @@ pub const Editor = struct {
     }
 
     pub fn sendMessage(self: *Editor, msg: []const u8) !void {
-        log.log(@This(), "message: {s}\n", .{msg});
+        log.debug(@This(), "message: {s}\n", .{msg});
         try main.editor.dismissMessage();
         try self.messages.append(try self.allocator.dupe(u8, msg));
         self.dirty.draw = true;
@@ -273,7 +273,7 @@ pub const Editor = struct {
             try self.sendMessage("buffer has unsaved changes");
             return;
         }
-        log.log(@This(), "closing buffer: {s}\n", .{closing_buf.path});
+        log.debug(@This(), "closing buffer: {s}\n", .{closing_buf.path});
         defer self.allocator.destroy(closing_buf);
         defer closing_buf.deinit();
         std.debug.assert(closing_buf == self.buffers.items[0]);
@@ -341,7 +341,7 @@ pub const Editor = struct {
 
     pub fn dotRepeat(self: *Editor) !void {
         if (self.dot_repeat_input.items.len > 0) {
-            log.log(@This(), "dot repeat of {any}\n", .{self.dot_repeat_input.items});
+            log.debug(@This(), "dot repeat of {any}\n", .{self.dot_repeat_input.items});
             for (self.dot_repeat_input.items) |key| {
                 try self.key_queue.append(try key.clone(self.allocator));
             }

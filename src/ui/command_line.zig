@@ -39,7 +39,7 @@ pub const CommandLine = struct {
 
     pub fn activate(self: *CommandLine, command: Command) !void {
         self.command = command;
-        log.log(@This(), "active cmd: {}\n", .{command});
+        log.debug(@This(), "active cmd: {}\n", .{command});
         main.editor.dirty.draw = true;
     }
 
@@ -48,7 +48,7 @@ pub const CommandLine = struct {
         self.content.clearRetainingCapacity();
         self.cursor = 0;
         main.editor.dirty.draw = true;
-        log.log(@This(), "cmd closed\n", .{});
+        log.debug(@This(), "cmd closed\n", .{});
     }
 
     pub fn insert(self: *CommandLine, text: []const u21) !void {

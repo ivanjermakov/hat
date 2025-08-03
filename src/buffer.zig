@@ -365,12 +365,12 @@ pub const Buffer = struct {
 
     pub fn commitChanges(self: *Buffer) !void {
         if (self.uncommitted_changes.items.len == 0) {
-            log.log(@This(), "no changes to commit\n", .{});
+            log.debug(@This(), "no changes to commit\n", .{});
             return;
         }
-        log.log(@This(), "commit {} changes\n", .{self.uncommitted_changes.items.len});
+        log.debug(@This(), "commit {} changes\n", .{self.uncommitted_changes.items.len});
         if (self.history_index == null or self.history_index.? + 1 != self.history.items.len) {
-            log.log(@This(), "history overwrite, idx: {?}\n", .{self.history_index});
+            log.debug(@This(), "history overwrite, idx: {?}\n", .{self.history_index});
             const i = if (self.history_index) |i| i + 1 else 0;
             for (self.history.items[i..]) |*chs| {
                 for (chs.items) |*ch| ch.deinit();
@@ -581,12 +581,12 @@ pub const Buffer = struct {
     }
 
     pub fn undo(self: *Buffer) !void {
-        log.log(@This(), "undo: {?}/{}\n", .{ self.history_index, self.history.items.len });
+        log.debug(@This(), "undo: {?}/{}\n", .{ self.history_index, self.history.items.len });
         if (self.history_index) |h_idx| {
             const hist_to_undo = self.history.items[h_idx].items;
             var change_iter = std.mem.reverseIterator(hist_to_undo);
             while (change_iter.next()) |change_to_undo| {
-                // log.log(@This(), "undo change: {}\n", .{change_to_undo});
+                // log.debug(@This(), "undo change: {}\n", .{change_to_undo});
                 var inv_change = try change_to_undo.invert();
                 try self.applyChange(&inv_change);
                 try self.pending_changes.append(inv_change);
@@ -597,7 +597,7 @@ pub const Buffer = struct {
     }
 
     pub fn redo(self: *Buffer) !void {
-        log.log(@This(), "redo: {?}/{}\n", .{ self.history_index, self.history.items.len });
+        log.debug(@This(), "redo: {?}/{}\n", .{ self.history_index, self.history.items.len });
         const redo_idx = if (self.history_index) |idx| idx + 1 else 0;
         if (redo_idx >= self.history.items.len) return;
         const redo_hist = self.history.items[redo_idx].items;
@@ -737,7 +737,7 @@ pub const Buffer = struct {
                 const time = dt.Datetime.fromSeconds(@as(f64, @floatFromInt(stat.mtime)) / std.time.ns_per_s);
                 var time_buf: [32]u8 = undefined;
                 const time_str = time.formatISO8601Buf(&time_buf, false) catch "";
-                log.log(@This(), "mtime {} ({s})\n", .{ stat.mtime, time_str });
+                log.debug(@This(), "mtime {} ({s})\n", .{ stat.mtime, time_str });
             }
             self.stat = stat;
         }
@@ -833,7 +833,7 @@ pub const Buffer = struct {
         try self.moveCursor(change.new_span.?.end);
         self.cursor = change.new_span.?.end;
         std.debug.assert(std.meta.eql(self.cursor, change.new_span.?.end));
-        // log.log(@This(), "applied change: {}\n", .{change});
+        // log.debug(@This(), "applied change: {}\n", .{change});
 
         if (self.ts_state) |*ts_state| try ts_state.edit(change);
     }
@@ -901,7 +901,7 @@ pub const Buffer = struct {
         try main.testSetup();
         try main.editor.openScratch(content);
         const buffer = main.editor.active_buffer;
-        log.log(@This(), "created test buffer with content: \n{s}", .{buffer.content_raw.items});
+        log.debug(@This(), "created test buffer with content: \n{s}", .{buffer.content_raw.items});
         return buffer;
     }
 

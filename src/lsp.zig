@@ -163,12 +163,12 @@ pub const LspConnection = struct {
             const rpc_message: lsp.JsonRPCMessage = msg_json.value;
             switch (rpc_message) {
                 .response => |resp| {
-                    // log.log(@This(), "< raw response: {s}\n", .{raw_msg_json});
+                    // log.debug(@This(), "< raw response: {s}\n", .{raw_msg_json});
                     const response_id = resp.id.?.number;
 
                     const response_result = b: switch (resp.result_or_error) {
                         .@"error" => {
-                            log.log(@This(), "Lsp error: {}\n", .{resp.result_or_error.@"error"});
+                            log.debug(@This(), "Lsp error: {}\n", .{resp.result_or_error.@"error"});
                             return;
                         },
                         .result => |r| break :b r,
@@ -196,7 +196,7 @@ pub const LspConnection = struct {
                     try self.handleNotification(arena.allocator(), notif);
                 },
                 .request => {
-                    // log.log(@This(), "< raw request: {s}\n", .{raw_msg_json});
+                    // log.debug(@This(), "< raw request: {s}\n", .{raw_msg_json});
                 },
             }
         }
@@ -302,7 +302,7 @@ pub const LspConnection = struct {
             const err = fs.readNonblock(self.allocator, self.child.stderr.?) catch break :b;
             if (err) |e| {
                 defer self.allocator.free(e);
-                log.log(@This(), "err: {s}\n", .{e});
+                log.err(@This(), "{s}\n", .{e});
             }
         }
 
@@ -317,7 +317,7 @@ pub const LspConnection = struct {
             const reader = read_stream.reader();
 
             const header = if (self.poll_header) |header| header else lsp.BaseProtocolHeader.parse(reader) catch |e| {
-                log.log(@This(), "parse header error: {}\n", .{e});
+                log.debug(@This(), "parse header error: {}\n", .{e});
                 break;
             };
             const available: i32 = @as(i32, @intCast(self.poll_buf.items.len)) - @as(i32, @intCast(reader.context.pos));
@@ -358,7 +358,7 @@ pub const LspConnection = struct {
             .params = params,
         };
         const json_message = try std.json.stringifyAlloc(self.allocator, request, default_stringify_opts);
-        // log.log(@This(), "> raw request: {s}\n", .{json_message});
+        // log.debug(@This(), "> raw request: {s}\n", .{json_message});
         const rpc_message = try std.fmt.allocPrint(self.allocator, "Content-Length: {}\r\n\r\n{s}", .{ json_message.len, json_message });
         _ = try self.child.stdin.?.write(rpc_message);
         defer self.allocator.free(rpc_message);
@@ -376,7 +376,7 @@ pub const LspConnection = struct {
         };
         const json_message = try std.json.stringifyAlloc(self.allocator, request, default_stringify_opts);
         defer self.allocator.free(json_message);
-        // log.log(@This(), "> raw notification: {s}\n", .{json_message});
+        // log.debug(@This(), "> raw notification: {s}\n", .{json_message});
         const rpc_message = try std.fmt.allocPrint(self.allocator, "Content-Length: {}\r\n\r\n{s}", .{ json_message.len, json_message });
         _ = try self.child.stdin.?.write(rpc_message);
         defer self.allocator.free(rpc_message);
@@ -394,7 +394,7 @@ pub const LspConnection = struct {
         };
         const json_message = try std.json.stringifyAlloc(self.allocator, request, default_stringify_opts);
         defer self.allocator.free(json_message);
-        // log.log(@This(), "> raw response: {s}\n", .{json_message});
+        // log.debug(@This(), "> raw response: {s}\n", .{json_message});
         const rpc_message = try std.fmt.allocPrint(self.allocator, "Content-Length: {}\r\n\r\n{s}", .{ json_message.len, json_message });
         _ = try self.child.stdin.?.write(rpc_message);
         defer self.allocator.free(rpc_message);
@@ -403,7 +403,7 @@ pub const LspConnection = struct {
     fn handleInitializeResponse(self: *LspConnection, arena: Allocator, resp: ?std.json.Value) !void {
         if (resp == null or resp.? == .null) return;
         const resp_typed = try std.json.parseFromValue(types.InitializeResult, arena, resp.?, .{});
-        log.log(@This(), "got init response: {}\n", .{resp_typed});
+        log.debug(@This(), "got init response: {}\n", .{resp_typed});
         try self.sendNotification("initialized", .{});
         self.status = .Initialized;
         for (self.buffers.items) |buffer| {
@@ -419,7 +419,7 @@ pub const LspConnection = struct {
             array_of_DefinitionLink: []const types.DefinitionLink,
         };
         const resp_typed = try lsp.parser.UnionParser(ResponseType).jsonParseFromValue(arena, resp.?, .{});
-        log.log(@This(), "got definition response: {}\n", .{resp_typed});
+        log.debug(@This(), "got definition response: {}\n", .{resp_typed});
 
         const location = b: switch (resp_typed.Definition) {
             .Location => |location| {
@@ -427,7 +427,7 @@ pub const LspConnection = struct {
             },
             .array_of_Location => |locations| {
                 if (locations.len == 0) break :b null;
-                if (locations.len > 1) log.log(@This(), "TODO: multiple locations\n", .{});
+                if (locations.len > 1) log.debug(@This(), "TODO: multiple locations\n", .{});
                 break :b locations[0];
             },
         };
@@ -437,7 +437,7 @@ pub const LspConnection = struct {
                     try main.editor.openBuffer(path);
                 }
             }
-            log.log(@This(), "jump to {}\n", .{loc.range.start});
+            log.debug(@This(), "jump to {}\n", .{loc.range.start});
             const new_cursor = Cursor.fromLsp(loc.range.start);
             try main.editor.active_buffer.moveCursor(new_cursor);
         }
@@ -447,14 +447,14 @@ pub const LspConnection = struct {
         if (resp == null or resp.? == .null) return;
         const resp_typed = try std.json.parseFromValue([]const types.Location, arena, resp.?, .{});
         const locations = resp_typed.value;
-        log.log(@This(), "got reference locations: {any}\n", .{locations});
+        log.debug(@This(), "got reference locations: {any}\n", .{locations});
         const pick_result = fzf.pickLspLocation(self.allocator, locations) catch |e| {
-            log.log(@This(), "{}\n", .{e});
+            log.err(@This(), "{}\n", .{e});
             if (@errorReturnTrace()) |trace| std.debug.dumpStackTrace(trace.*);
             return;
         };
         defer self.allocator.free(pick_result.path);
-        log.log(@This(), "picked reference: {}\n", .{pick_result});
+        log.debug(@This(), "picked reference: {}\n", .{pick_result});
         try main.editor.openBuffer(pick_result.path);
         try main.editor.active_buffer.moveCursor(pick_result.position);
     }
@@ -476,7 +476,7 @@ pub const LspConnection = struct {
             }
         };
         main.editor.completion_menu.updateItems(items) catch |e| {
-            log.log(@This(), "cmp menu update failed: {}\n", .{e});
+            log.debug(@This(), "cmp menu update failed: {}\n", .{e});
         };
     }
 
@@ -492,7 +492,7 @@ pub const LspConnection = struct {
 
         main.editor.resetHover();
         main.editor.hover_contents = try main.editor.allocator.dupe(u8, contents);
-        log.log(@This(), "hover content: {s}\n", .{contents});
+        log.debug(@This(), "hover content: {s}\n", .{contents});
         main.editor.dirty.draw = true;
     }
 
@@ -506,7 +506,7 @@ pub const LspConnection = struct {
             main.main_loop_mutex.unlock();
             const elapsed = timer.read();
             if (elapsed > 1 * std.time.ns_per_ms) {
-                log.log(@This(), "main loop blocked for: {}us\n", .{elapsed / std.time.ns_per_us});
+                log.debug(@This(), "main loop blocked for: {}us\n", .{elapsed / std.time.ns_per_us});
             }
         }
         try self.applyWorkspaceEdit(result.value);
@@ -514,13 +514,13 @@ pub const LspConnection = struct {
 
     fn handleNotification(self: *LspConnection, arena: Allocator, notif: lsp.JsonRPCMessage.Notification) !void {
         _ = self;
-        // log.log(@This(), "notification: {s}\n", .{notif.method});
+        // log.debug(@This(), "notification: {s}\n", .{notif.method});
         if (std.mem.eql(u8, notif.method, "window/logMessage")) {
             const params_typed = try std.json.parseFromValue(types.LogMessageParams, arena, notif.params.?, .{});
-            log.log(@This(), "server log: {s}\n", .{params_typed.value.message});
+            log.debug(@This(), "server log: {s}\n", .{params_typed.value.message});
         } else if (std.mem.eql(u8, notif.method, "textDocument/publishDiagnostics")) {
             const params_typed = try std.json.parseFromValue(types.PublishDiagnosticsParams, arena, notif.params.?, .{});
-            log.log(@This(), "got {} diagnostics\n", .{params_typed.value.diagnostics.len});
+            log.debug(@This(), "got {} diagnostics\n", .{params_typed.value.diagnostics.len});
             if (main.editor.findBufferByUri(params_typed.value.uri)) |target| {
                 target.diagnostics.clearRetainingCapacity();
                 try target.diagnostics.appendSlice(params_typed.value.diagnostics);
@@ -535,7 +535,7 @@ pub const LspConnection = struct {
         const old_buffer = main.editor.active_buffer;
         const old_cursor = old_buffer.cursor;
         const old_offset = old_buffer.offset;
-        log.log(@This(), "workspace edit: {}\n", .{workspace_edit});
+        log.debug(@This(), "workspace edit: {}\n", .{workspace_edit});
         var change_iter = workspace_edit.changes.?.map.iterator();
         while (change_iter.next()) |entry| {
             const change_uri = entry.key_ptr.*;
@@ -546,7 +546,7 @@ pub const LspConnection = struct {
             const buffer = main.editor.active_buffer;
             for (text_edits) |edit| {
                 var change = try cha.Change.fromLsp(buffer.allocator, buffer, edit);
-                log.log(@This(), "change: {s}: {}\n", .{ change_uri, change });
+                log.debug(@This(), "change: {s}: {}\n", .{ change_uri, change });
                 try buffer.appendChange(&change);
             }
             // TODO: apply another dummy edit that resets cursor position back to `old_cursor`

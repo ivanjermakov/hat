@@ -69,7 +69,7 @@ pub const CompletionMenu = struct {
     }
 
     pub fn updateItems(self: *CompletionMenu, lsp_items: []const lsp.types.CompletionItem) !void {
-        log.log(@This(), "got {} completion items\n", .{lsp_items.len});
+        log.debug(@This(), "got {} completion items\n", .{lsp_items.len});
         if (lsp_items.len == 0) {
             self.reset();
             return;
@@ -91,7 +91,7 @@ pub const CompletionMenu = struct {
         // TODO: replace_range might not end at cursor position
         const prompt = try main.editor.active_buffer.rawTextAt(self.allocator, Span.fromLsp(self.replace_range.?));
         defer self.allocator.free(prompt);
-        log.log(@This(), "prompt {s}\n", .{prompt});
+        log.debug(@This(), "prompt {s}\n", .{prompt});
 
         self.display_items.clearRetainingCapacity();
         for (0..self.completion_items.items.len) |i| {
@@ -105,7 +105,7 @@ pub const CompletionMenu = struct {
 
         if (log.enabled) {
             if (self.display_items.items.len > 0) {
-                log.log(@This(), "menu:", .{});
+                log.debug(@This(), "menu:", .{});
                 for (self.display_items.items) |i| {
                     const item = self.completion_items.items[i];
                     std.debug.print(" {s}", .{item.label});
@@ -154,7 +154,7 @@ pub const CompletionMenu = struct {
     pub fn accept(self: *CompletionMenu) !void {
         defer self.reset();
         const item = self.completion_items.items[self.display_items.items[self.active_item]];
-        log.log(@This(), "accept item {}: {s}, replace text: {any}\n", .{ self.active_item, item.label, item.replace_text });
+        log.debug(@This(), "accept item {}: {s}, replace text: {any}\n", .{ self.active_item, item.label, item.replace_text });
         const buffer = main.editor.active_buffer;
 
         const span = Span.fromLsp(self.replace_range.?);

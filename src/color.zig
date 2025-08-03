@@ -20,6 +20,40 @@ pub const RgbColor = struct {
     }
 };
 
+pub const AnsiColor = enum(u8) {
+    black = 0,
+    red,
+    green,
+    yellow,
+    blue,
+    magenta,
+    cyan,
+    white,
+    bright_black,
+    bright_red,
+    bright_green,
+    bright_yellow,
+    bright_blue,
+    bright_magenta,
+    bright_cyan,
+    bright_white,
+
+    pub const reset = "\x1b[0m";
+
+    pub fn format(
+        self: AnsiColor,
+        comptime fmt: []const u8,
+        options: std.fmt.FormatOptions,
+        writer: anytype,
+    ) !void {
+        _ = fmt;
+        _ = options;
+
+        const escapeCode = "\x1b[38;5;";
+        try std.fmt.format(writer, "{s}{}{s}", .{ escapeCode, @intFromEnum(self), "m" });
+    }
+};
+
 pub const color = enum {
     pub const black = RgbColor.fromHex(0x000000);
     pub const gray1 = RgbColor.fromHex(0x1b1b1d);

@@ -34,7 +34,7 @@ pub const TsConfig = struct {
         const lib_path_exp = try env.expand(allocator, self.lib_path, std.posix.getenv);
         defer allocator.free(lib_path_exp);
 
-        log.log(@This(), "loading TS language: {s} {s}\n", .{ lib_path_exp, self.lib_symbol });
+        log.debug(@This(), "loading TS language: {s} {s}\n", .{ lib_path_exp, self.lib_symbol });
         var language_lib = try dl.open(lib_path_exp);
         var language: *const fn () *ts.ts.struct_TSLanguage = undefined;
         language = language_lib.lookup(@TypeOf(language), @ptrCast(self.lib_symbol)) orelse return error.NoSymbol;

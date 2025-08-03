@@ -104,7 +104,7 @@ pub const State = struct {
         );
         // if (log.enabled) {
         //     const node = ts.ts_tree_root_node(self.tree);
-        //     log.log(@This(), "tree: {s}\n", .{std.mem.span(ts.ts_node_string(node))});
+        //     log.debug(@This(), "tree: {s}\n", .{std.mem.span(ts.ts_node_string(node))});
         // }
         try self.highlight.makeSpans(self.tree.?);
         try self.indent.makeSpans(self.tree.?);

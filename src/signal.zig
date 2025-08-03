@@ -39,13 +39,13 @@ const sig_handle = .{
 
 fn handleSigInt(sig: c_int) callconv(.C) void {
     _ = sig;
-    log.log(@This(), "handling SIGINT\n", .{});
+    log.info(@This(), "handling SIGINT\n", .{});
     main.editor.sendMessage("press q to close buffer") catch {};
 }
 
 fn handleSigTstp(sig: c_int) callconv(.C) void {
     _ = sig;
-    log.log(@This(), "handling SIGTSTP\n", .{});
+    log.info(@This(), "handling SIGTSTP\n", .{});
     reset(sig_handle.tstp);
     defer std.posix.raise(sig_handle.tstp.sig) catch {};
 
@@ -54,7 +54,7 @@ fn handleSigTstp(sig: c_int) callconv(.C) void {
 
 fn handleSigCont(sig: c_int) callconv(.C) void {
     _ = sig;
-    log.log(@This(), "handling SIGCONT\n", .{});
+    log.info(@This(), "handling SIGCONT\n", .{});
     register(sig_handle.tstp);
 
     main.term.setup() catch {};
@@ -63,7 +63,7 @@ fn handleSigCont(sig: c_int) callconv(.C) void {
 
 fn handleSigWinch(sig: c_int) callconv(.C) void {
     _ = sig;
-    log.log(@This(), "handling SIGWINCH\n", .{});
+    log.info(@This(), "handling SIGWINCH\n", .{});
     main.term.dimensions = ter.terminalSize() catch return;
     main.editor.dirty.draw = true;
 }

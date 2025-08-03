@@ -4,7 +4,7 @@ const log = @import("log.zig");
 
 pub fn runExternalWait(allocator: std.mem.Allocator, cmd: []const []const u8, input: ?[]const u8) ![]const u8 {
     if (log.enabled) {
-        log.log(@This(), "running external command:", .{});
+        log.debug(@This(), "running external command:", .{});
         for (cmd) |c| std.debug.print(" \"{s}\"", .{c});
         std.debug.print("\n", .{});
     }
@@ -25,7 +25,7 @@ pub fn runExternalWait(allocator: std.mem.Allocator, cmd: []const []const u8, in
     try main.term.switchBuf(true);
 
     const code = (try child.wait()).Exited;
-    log.log(@This(), "external command exit code: {}\n", .{code});
+    log.debug(@This(), "external command exit code: {}\n", .{code});
     main.editor.dirty.draw = true;
 
     return res;
