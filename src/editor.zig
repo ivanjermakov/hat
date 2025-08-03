@@ -355,6 +355,9 @@ pub const Editor = struct {
                 self.find_query = try self.allocator.dupe(u21, self.command_line.content.items);
                 try self.active_buffer.findNext(self.find_query.?, true);
             },
+            .rename => {
+                try self.active_buffer.rename(self.command_line.content.items);
+            }
         }
         self.command_line.close();
     }

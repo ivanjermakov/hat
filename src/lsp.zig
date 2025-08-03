@@ -110,6 +110,9 @@ pub const LspConnection = struct {
                     .hover = .{
                         .contentFormat = &.{ .plaintext, .markdown },
                     },
+                    .rename = .{
+                        .prepareSupport = true,
+                    },
                 },
             },
         });
@@ -214,6 +217,15 @@ pub const LspConnection = struct {
         try self.sendRequest("textDocument/hover", .{
             .textDocument = .{ .uri = buffer.uri },
             .position = buffer.cursor.toLsp(),
+        });
+    }
+
+    pub fn rename(self: *LspConnection, new_name: []const u8) !void {
+        const buffer = main.editor.active_buffer;
+        try self.sendRequest("textDocument/rename", .{
+            .textDocument = .{ .uri = buffer.uri },
+            .position = buffer.cursor.toLsp(),
+            .newName = new_name,
         });
     }
 

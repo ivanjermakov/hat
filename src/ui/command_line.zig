@@ -10,10 +10,12 @@ const Allocator = std.mem.Allocator;
 
 pub const Command = enum {
     find,
+    rename,
 
     pub fn prefix(self: Command) []const u8 {
         return switch (self) {
             .find => "find: ",
+            .rename => "rename: ",
         };
     }
 };

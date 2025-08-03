@@ -670,9 +670,25 @@ pub const Buffer = struct {
     }
 
     pub fn showHover(self: *Buffer) !void {
-        log.log(@This(), "show hover\n", .{});
         for (self.lsp_connections.items) |conn| {
             try conn.hover();
+        }
+    }
+
+    pub fn renamePrompt(self: *Buffer) !void {
+        const cmd = &main.editor.command_line;
+        const line = self.lineContent(@intCast(self.cursor.row));
+        const name_span = tokenSpan(line, @intCast(self.cursor.col)) orelse return;
+        try cmd.activate(.rename);
+        try cmd.content.appendSlice(line[name_span.start..name_span.end]);
+        cmd.cursor = cmd.content.items.len;
+    }
+
+    pub fn rename(self: *Buffer, new_text: []const u21) !void {
+        for (self.lsp_connections.items) |conn| {
+            const new_text_b = try uni.utf8ToBytes(self.allocator, new_text);
+            defer self.allocator.free(new_text_b);
+            try conn.rename(new_text_b);
         }
     }
 
@@ -940,6 +956,29 @@ fn tokenEnd(line: []const u21, pos: usize) ?usize {
         }
     }
     return null;
+}
+
+/// Find token span that contains `pos`
+fn tokenSpan(line: []const u21, pos: usize) ?ByteSpan {
+    if (!isToken(line[pos])) return null;
+    var col = pos;
+    var span: ByteSpan = .{ .start = col, .end = col + 1 };
+    while (col < line.len) {
+        defer col += 1;
+        if (!isToken(line[col])) {
+            span.end = col;
+            break;
+        }
+    }
+    col = pos;
+    while (col > 0) {
+        defer col -= 1;
+        if (!isToken(line[col])) {
+            span.start = col + 1;
+            break;
+        }
+    }
+    return span;
 }
 
 const Boundary = enum {
