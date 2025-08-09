@@ -224,7 +224,7 @@ pub const Terminal = struct {
                 }
 
                 if (buffer.selection) |selection| {
-                    if (selection.inRangeInclusive(.{ .row = buffer_row, .col = buffer_col })) {
+                    if (selection.inRange(.{ .row = buffer_row, .col = buffer_col })) {
                         try co.attributes.write(co.attributes.selection, attrs_stream.writer());
                     }
                 }

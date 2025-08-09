@@ -49,6 +49,8 @@ pub const Cursor = struct {
     }
 };
 
+/// End position is exclusive
+/// To include \n, .end = .{.row = row + 1, .col = 0}
 pub const Span = struct {
     start: Cursor,
     end: Cursor,
@@ -57,12 +59,6 @@ pub const Span = struct {
         const start = self.start.order(pos);
         const end = self.end.order(pos);
         return start != .gt and end == .gt;
-    }
-
-    pub fn inRangeInclusive(self: Span, pos: Cursor) bool {
-        const start = self.start.order(pos);
-        const end = self.end.order(pos);
-        return start != .gt and end != .lt;
     }
 
     pub fn fromLsp(position: lsp.types.Range) Span {
@@ -77,16 +73,6 @@ pub const Span = struct {
             .start = self.start.toLsp(),
             .end = self.end.toLsp(),
         };
-    }
-
-    pub fn toExclusiveEnd(self: Span, last_line_len: usize) Span {
-        var span = self;
-        if (self.end.col == last_line_len) {
-            span.end = .{ .row = self.end.row + 1, .col = 0 };
-        } else {
-            span.end = span.end.applyOffset(.{ .col = 1 });
-        }
-        return span;
     }
 };
 
