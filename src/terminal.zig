@@ -90,6 +90,7 @@ pub const Terminal = struct {
         const layout = computeLayout(self.dimensions);
 
         try self.drawNumberLine(buffer, layout.number_line);
+        if (main.editor.command_line.command == null) try self.drawMessage();
 
         try self.moveCursor(buffer.cursor
             .applyOffset(buffer.offset.negate())

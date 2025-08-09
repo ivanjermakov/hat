@@ -359,6 +359,10 @@ pub const Editor = struct {
             .rename => {
                 try self.active_buffer.rename(self.command_line.content.items);
             },
+            .pipe => {
+                try self.active_buffer.pipe(self.command_line.content.items);
+                try self.enterMode(.normal);
+            },
         }
         self.command_line.close();
     }

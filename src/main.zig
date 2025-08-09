@@ -258,6 +258,8 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     try buffer.changeInsertFromClipboard();
                 } else if (normal_or_select and eql(u8, key, "z")) {
                     try buffer.centerCursor();
+                } else if (normal_or_select and eql(u8, key, ":")) {
+                    try buffer.pipePrompt();
 
                     // normal mode
                 } else if (normal_or_select and (eql(u8, key, "q") or eql(u8, key, "Q"))) {

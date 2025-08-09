@@ -11,7 +11,7 @@ const Cursor = core.Cursor;
 const Allocator = std.mem.Allocator;
 
 pub fn pickFile(allocator: Allocator) ![]const u8 {
-    const files = try ext.runExternalWait(allocator, &.{ "rg", "--files" }, null);
+    const files = try ext.runExternalWait(allocator, &.{ "rg", "--files" }, null, null);
     defer allocator.free(files);
 
     var cmd = std.ArrayList([]const u8).init(allocator);
@@ -19,7 +19,7 @@ pub fn pickFile(allocator: Allocator) ![]const u8 {
     try cmd.append("--preview");
     try cmd.append("hat --printer {}");
     defer cmd.deinit();
-    const out = try ext.runExternalWait(allocator, cmd.items, files);
+    const out = try ext.runExternalWait(allocator, cmd.items, files, null);
     defer allocator.free(out);
     if (out.len == 0) return error.EmptyOut;
     return try allocator.dupe(u8, std.mem.trim(u8, out, "\n"));
@@ -40,7 +40,7 @@ pub fn findInFiles(allocator: Allocator) !FindResult {
     try cmd.appendSlice(&.{ "--bind", std.fmt.comptimePrint("start:reload:{s}", .{rg_cmd}) });
     try cmd.appendSlice(&.{ "--bind", std.fmt.comptimePrint("change:reload:sleep 0.1; {s} || true", .{rg_cmd}) });
     try cmd.appendSlice(&.{ "--delimiter", ":" });
-    const out = try ext.runExternalWait(allocator, cmd.items, null);
+    const out = try ext.runExternalWait(allocator, cmd.items, null, null);
     defer allocator.free(out);
     if (out.len == 0) return error.EmptyOut;
     var iter = std.mem.splitScalar(u8, out, ':');
@@ -74,7 +74,7 @@ pub fn pickBuffer(allocator: Allocator, buffers: []const *buf.Buffer) ![]const u
     try cmd.append("hat --printer --term-height=$FZF_PREVIEW_LINES --highlight-line={2} {1}");
     try cmd.appendSlice(&.{ "--delimiter", ":" });
 
-    const out = try ext.runExternalWait(allocator, cmd.items, bufs_str);
+    const out = try ext.runExternalWait(allocator, cmd.items, bufs_str, null);
     defer allocator.free(out);
     if (out.len == 0) return error.EmptyOut;
     var iter = std.mem.splitScalar(u8, out, ':');
@@ -106,7 +106,7 @@ pub fn pickLspLocation(allocator: Allocator, locations: []const lsp.types.Locati
     try cmd.append("hat --printer --term-height=$FZF_PREVIEW_LINES --highlight-line={2} {1}");
     try cmd.appendSlice(&.{ "--delimiter", ":" });
 
-    const out = try ext.runExternalWait(allocator, cmd.items, bufs_str);
+    const out = try ext.runExternalWait(allocator, cmd.items, bufs_str, null);
     defer allocator.free(out);
     if (out.len == 0) return error.EmptyOut;
     var iter = std.mem.splitScalar(u8, out, ':');

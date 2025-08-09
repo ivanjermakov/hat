@@ -15,6 +15,7 @@ const uni = @import("unicode.zig");
 const ter = @import("terminal.zig");
 const clp = @import("clipboard.zig");
 const dt = @import("datetime.zig");
+const ext = @import("external.zig");
 
 const Span = core.Span;
 const Cursor = core.Cursor;
@@ -614,6 +615,17 @@ pub const Buffer = struct {
         return self.content.items[self.cursorToPos(span.start)..self.cursorToPos(span.end)];
     }
 
+    test "textAt full line" {
+        var buffer = try testSetup(
+            \\abc
+            \\def
+        );
+        defer main.editor.deinit();
+
+        const span = buffer.lineSpan(0);
+        try testing.expectEqualSlices(u21, buffer.textAt(span), &.{ 'a', 'b', 'c', '\n' });
+    }
+
     pub fn cursorToPos(self: *const Buffer, cursor: Cursor) usize {
         const line_start = self.lineStart(@intCast(cursor.row));
         return line_start + @as(usize, @intCast(cursor.col));
@@ -648,12 +660,22 @@ pub const Buffer = struct {
         return self.line_positions.items[row - 1];
     }
 
+    pub fn lineSpan(self: *const Buffer, row: usize) Span {
+        const start = self.lineStart(row);
+        const byte_span = .{ .start = start, .end = start + self.lineLength(row) };
+        return .{
+            .start = .{ .row = @intCast(row), .col = @intCast(byte_span.start) },
+            .end = .{ .row = @intCast(row + 1), .col = @intCast(byte_span.start) },
+        };
+    }
+
     pub fn lineContent(self: *const Buffer, row: usize) []const u21 {
         const start = self.lineStart(row);
         return self.content.items[start .. start + self.lineLength(row)];
     }
 
     pub fn rawTextAt(self: *const Buffer, allocator: Allocator, span: Span) ![]const u8 {
+        // TODO: slice from self.content_raw
         return try uni.utf8ToBytes(allocator, self.textAt(span));
     }
 
@@ -690,6 +712,54 @@ pub const Buffer = struct {
             defer self.allocator.free(new_text_b);
             try conn.rename(new_text_b);
         }
+    }
+
+    pub fn pipePrompt(self: *Buffer) !void {
+        _ = self;
+        const cmd = &main.editor.command_line;
+        try cmd.activate(.pipe);
+        cmd.cursor = cmd.content.items.len;
+    }
+
+    pub fn pipe(self: *Buffer, command: []const u21) !void {
+        const command_b = try uni.utf8ToBytes(self.allocator, command);
+        defer self.allocator.free(command_b);
+        log.debug(@This(), "pipe command: {s}\n", .{command_b});
+
+        const argv = try ext.toArgv(self.allocator, command_b);
+        defer self.allocator.free(argv);
+
+        const span = if (self.selection) |selection|
+            selection
+        else
+            self.lineSpan(@intCast(self.cursor.row));
+
+        const in_b = try uni.utf8ToBytes(self.allocator, self.textAt(span));
+        defer self.allocator.free(in_b);
+
+        var exit_code: u8 = undefined;
+        const out_b = ext.runExternalWait(self.allocator, argv, in_b, &exit_code) catch |e| {
+            log.err(@This(), "{}\n", .{e});
+            if (@errorReturnTrace()) |trace| std.debug.dumpStackTrace(trace.*);
+            return;
+        };
+        defer self.allocator.free(out_b);
+        if (exit_code != 0) {
+            try main.editor.sendMessage("external command failed");
+            return;
+        }
+        log.debug(@This(), "pipe output: {s}\n", .{out_b});
+
+        if (std.mem.eql(u8, in_b, out_b)) {
+            log.debug(@This(), "input unchanged\n", .{});
+            return;
+        }
+
+        const out = try uni.utf8FromBytes(self.allocator, out_b);
+        defer self.allocator.free(out);
+        var change = try cha.Change.initReplace(self.allocator, self, span, out);
+        try self.appendChange(&change);
+        try self.commitChanges();
     }
 
     pub fn copySelectionToClipboard(self: *Buffer) !void {
