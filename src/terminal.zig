@@ -77,7 +77,7 @@ pub const Terminal = struct {
         const cmp_menu = &main.editor.completion_menu;
         try self.drawCompletionMenu(cmp_menu);
 
-        if (main.editor.hover_contents) |hover| try self.drawHover(hover);
+        if (main.editor.hover_contents) |hover| try self.drawHover(hover, layout.buffer);
         if (main.editor.command_line.command == null) try self.drawMessage();
         try self.updateCursor();
         if (main.editor.command_line.command != null) try self.drawCmd(&main.editor.command_line);
@@ -323,11 +323,11 @@ pub const Terminal = struct {
             }
 
             const doc_pos = menu_pos.applyOffset(.{ .col = menu_width });
-            try self.drawDocumentation(doc_lines.items, doc_pos);
+            try self.drawOverlay(doc_lines.items, doc_pos);
         }
     }
 
-    fn drawHover(self: *Terminal, text: []const u8) !void {
+    fn drawHover(self: *Terminal, text: []const u8, area: Area) !void {
         var doc_lines = std.ArrayList([]const u8).init(self.allocator);
         defer doc_lines.deinit();
         var doc_iter = std.mem.splitScalar(u8, text, '\n');
@@ -340,16 +340,21 @@ pub const Terminal = struct {
         for (doc_lines.items) |line| {
             if (line.len > longest_line) longest_line = line.len;
         }
-        var doc_pos = buffer.cursor.applyOffset(buffer.offset.negate()).applyOffset(.{ .row = 1 });
+        var doc_pos = buffer.cursor
+            .applyOffset(buffer.offset.negate())
+            .applyOffset(area.pos)
+            .applyOffset(.{ .row = 1 });
         const doc_width = @min(max_doc_width, longest_line);
         if (doc_pos.col + doc_width > self.dimensions.width) {
             doc_pos.col = @max(0, @as(i32, @intCast(self.dimensions.width)) - doc_width);
         }
-        try self.drawDocumentation(doc_lines.items, doc_pos);
+        try self.drawOverlay(doc_lines.items, doc_pos);
     }
 
-    fn drawDocumentation(self: *Terminal, lines: []const []const u8, pos: Cursor) !void {
-        try co.attributes.write(co.attributes.documentation_menu, self.writer.writer());
+    /// Draw a box on top of the editor's content, containing `lines`
+    /// Box width is min(longest line, available area)
+    fn drawOverlay(self: *Terminal, lines: []const []const u8, pos: Cursor) !void {
+        try co.attributes.write(co.attributes.overlay, self.writer.writer());
         defer self.resetAttributes() catch {};
 
         const max_doc_width = 90;
