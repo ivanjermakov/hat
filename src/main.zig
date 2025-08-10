@@ -293,6 +293,10 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     if (editor.find_query) |q| try buffer.findNext(q, true);
                 } else if (editor.mode == .normal and eql(u8, key, "N")) {
                     if (editor.find_query) |q| try buffer.findNext(q, false);
+                } else if (editor.mode == .normal and eql(u8, key, "x")) {
+                    try buffer.findNextDiagnostic(true);
+                } else if (editor.mode == .normal and eql(u8, key, "X")) {
+                    try buffer.findNextDiagnostic(false);
 
                     // insert mode
                 } else if (editor.mode == .insert and eql(u8, key, "<delete>")) {

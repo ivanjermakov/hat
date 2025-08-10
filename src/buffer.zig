@@ -766,6 +766,32 @@ pub const Buffer = struct {
         }
     }
 
+    pub fn findNextDiagnostic(self: *Buffer, forward: bool) !void {
+        const diagnostic: lsp.types.Diagnostic = b: for (self.diagnostics.items, 0..) |_, i_| {
+            const i = if (forward) i_ else self.diagnostics.items.len - i_ - 1;
+            const diagnostic = self.diagnostics.items[i];
+            const ord = self.cursor.order(Span.fromLsp(diagnostic.range).start);
+            if (forward) {
+                if (ord == .lt) break :b diagnostic;
+            } else {
+                if (ord == .gt) break :b diagnostic;
+            }
+        } else {
+            if (self.diagnostics.items.len > 0) {
+                break :b self.diagnostics.items[if (forward) 0 else self.diagnostics.items.len - 1];
+            } else {
+                try main.editor.sendMessage("no diagnostics");
+                return;
+            }
+        };
+
+        try self.moveCursor(Span.fromLsp(diagnostic.range).start);
+        try self.centerCursor();
+        main.editor.resetHover();
+        main.editor.hover_contents = try main.editor.allocator.dupe(u8, diagnostic.message);
+        main.editor.dirty.draw = true;
+    }
+
     fn find(self: *Buffer, query: []const u8) ![]const ByteSpan {
         var spans = std.ArrayList(ByteSpan).init(self.allocator);
         var re = try reg.Regex.from(query, false, self.allocator);
