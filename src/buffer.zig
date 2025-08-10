@@ -254,21 +254,6 @@ pub const Buffer = struct {
         main.editor.resetHover();
     }
 
-    test "moveCursor" {
-        var buffer = try testSetup(
-            \\abc
-            \\def
-            \\ghijk
-        );
-        defer main.editor.deinit();
-
-        try buffer.moveCursor(.{ .col = 1 });
-        try testing.expectEqual(Cursor{ .col = 1 }, buffer.cursor);
-
-        try buffer.moveCursor(Cursor{ .row = 2, .col = 2 });
-        try testing.expectEqual(Cursor{ .row = 2, .col = 2 }, buffer.cursor);
-    }
-
     pub fn centerCursor(self: *Buffer) !void {
         const old_offset_row = self.offset.row;
         const dims = main.term.dimensions;
@@ -292,20 +277,6 @@ pub const Buffer = struct {
             }
             main.editor.dotRepeatInside();
         }
-    }
-
-    test "moveToNextWord plain words" {
-        var buffer = try testSetup(
-            \\one two three
-        );
-        defer main.editor.deinit();
-
-        buffer.cursor = .{ .row = 0, .col = 0 };
-        try buffer.moveToNextWord();
-        try testing.expectEqual(
-            Span{ .start = .{}, .end = .{ .col = 5 } },
-            buffer.selection,
-        );
     }
 
     /// TODO: search for next word in preceding lines
@@ -428,59 +399,6 @@ pub const Buffer = struct {
             var change = try cha.Change.initDelete(self.allocator, self, selection);
             try self.appendChange(&change);
         }
-    }
-
-    test "changeSelectionDelete same line" {
-        var buffer = try testSetup(
-            \\abc
-        );
-        defer main.editor.deinit();
-
-        buffer.cursor = .{ .row = 0, .col = 1 };
-        try main.editor.enterMode(.select);
-        try buffer.changeSelectionDelete();
-
-        try buffer.commitChanges();
-        try buffer.updateRaw();
-        try testing.expectEqualStrings("ac\n", buffer.content_raw.items);
-    }
-
-    test "changeSelectionDelete line to end" {
-        var buffer = try testSetup(
-            \\abc
-            \\def
-        );
-        defer main.editor.deinit();
-
-        try buffer.moveCursor(.{ .row = 0, .col = 1 });
-        try main.editor.enterMode(.select);
-        try buffer.moveCursor(.{ .row = 0, .col = 3 });
-        try buffer.changeSelectionDelete();
-
-        try buffer.commitChanges();
-        try buffer.updateRaw();
-        try testing.expectEqualStrings("adef\n", buffer.content_raw.items);
-    }
-
-    test "changeSelectionDelete multiple lines" {
-        var buffer = try testSetup(
-            \\abc
-            \\def
-            \\ghijk
-        );
-        defer main.editor.deinit();
-
-        try buffer.moveCursor(.{ .row = 0, .col = 1 });
-        try main.editor.enterMode(.select);
-        try buffer.moveCursor(Cursor{ .row = 2, .col = 2 });
-
-        try testing.expectEqual(Cursor{ .row = 0, .col = 1 }, buffer.selection.?.start);
-        try testing.expectEqual(Cursor{ .row = 2, .col = 3 }, buffer.selection.?.end);
-        try buffer.changeSelectionDelete();
-
-        try buffer.commitChanges();
-        try buffer.updateRaw();
-        try testing.expectEqualStrings("ajk\n", buffer.content_raw.items);
     }
 
     pub fn changeInsertLineBelow(self: *Buffer, row: i32) !void {
@@ -612,17 +530,6 @@ pub const Buffer = struct {
 
     pub fn textAt(self: *const Buffer, span: Span) []const u21 {
         return self.content.items[self.cursorToPos(span.start)..self.cursorToPos(span.end)];
-    }
-
-    test "textAt full line" {
-        var buffer = try testSetup(
-            \\abc
-            \\def
-        );
-        defer main.editor.deinit();
-
-        const span = buffer.lineSpan(0);
-        try testing.expectEqualSlices(u21, buffer.textAt(span), &.{ 'a', 'b', 'c', '\n' });
     }
 
     pub fn cursorToPos(self: *const Buffer, cursor: Cursor) usize {
@@ -959,23 +866,6 @@ pub const Buffer = struct {
             }
         }
     }
-
-    fn testSetup(content: []const u8) !*Buffer {
-        try main.testSetup();
-        try main.editor.openScratch(content);
-        const buffer = main.editor.active_buffer;
-        log.debug(@This(), "created test buffer with content: \n{s}", .{buffer.content_raw.items});
-        return buffer;
-    }
-
-    test "test buffer" {
-        const buffer = try testSetup(
-            \\abc
-        );
-        defer main.editor.deinit();
-
-        try testing.expectEqualStrings("abc\n", buffer.content_raw.items);
-    }
 };
 
 fn nextWordStart(line: []const u21, pos: usize) ?usize {
@@ -1099,4 +989,114 @@ var scratch_id: usize = 0;
 fn nextScratchId() usize {
     scratch_id += 1;
     return scratch_id;
+}
+
+fn testSetup(content: []const u8) !*Buffer {
+    try main.testSetup();
+    try main.editor.openScratch(content);
+    const buffer = main.editor.active_buffer;
+    log.debug(@This(), "created test buffer with content: \n{s}", .{buffer.content_raw.items});
+    return buffer;
+}
+
+test "test buffer" {
+    const buffer = try testSetup(
+        \\abc
+    );
+    defer main.editor.deinit();
+
+    try testing.expectEqualStrings("abc\n", buffer.content_raw.items);
+}
+
+test "moveCursor" {
+    var buffer = try testSetup(
+        \\abc
+        \\def
+        \\ghijk
+    );
+    defer main.editor.deinit();
+
+    try buffer.moveCursor(.{ .col = 1 });
+    try testing.expectEqual(Cursor{ .col = 1 }, buffer.cursor);
+
+    try buffer.moveCursor(Cursor{ .row = 2, .col = 2 });
+    try testing.expectEqual(Cursor{ .row = 2, .col = 2 }, buffer.cursor);
+}
+
+test "moveToNextWord plain words" {
+    var buffer = try testSetup(
+        \\one two three
+    );
+    defer main.editor.deinit();
+
+    buffer.cursor = .{ .row = 0, .col = 0 };
+    try buffer.moveToNextWord();
+    try testing.expectEqual(
+        Span{ .start = .{}, .end = .{ .col = 5 } },
+        buffer.selection,
+    );
+}
+
+test "changeSelectionDelete same line" {
+    var buffer = try testSetup(
+        \\abc
+    );
+    defer main.editor.deinit();
+
+    buffer.cursor = .{ .row = 0, .col = 1 };
+    try main.editor.enterMode(.select);
+    try buffer.changeSelectionDelete();
+
+    try buffer.commitChanges();
+    try buffer.updateRaw();
+    try testing.expectEqualStrings("ac\n", buffer.content_raw.items);
+}
+
+test "changeSelectionDelete line to end" {
+    var buffer = try testSetup(
+        \\abc
+        \\def
+    );
+    defer main.editor.deinit();
+
+    try buffer.moveCursor(.{ .row = 0, .col = 1 });
+    try main.editor.enterMode(.select);
+    try buffer.moveCursor(.{ .row = 0, .col = 3 });
+    try buffer.changeSelectionDelete();
+
+    try buffer.commitChanges();
+    try buffer.updateRaw();
+    try testing.expectEqualStrings("adef\n", buffer.content_raw.items);
+}
+
+test "changeSelectionDelete multiple lines" {
+    var buffer = try testSetup(
+        \\abc
+        \\def
+        \\ghijk
+    );
+    defer main.editor.deinit();
+
+    try buffer.moveCursor(.{ .row = 0, .col = 1 });
+    try main.editor.enterMode(.select);
+    try buffer.moveCursor(Cursor{ .row = 2, .col = 2 });
+
+    try testing.expectEqual(Cursor{ .row = 0, .col = 1 }, buffer.selection.?.start);
+    try testing.expectEqual(Cursor{ .row = 2, .col = 3 }, buffer.selection.?.end);
+    try buffer.changeSelectionDelete();
+
+    try buffer.commitChanges();
+    try buffer.updateRaw();
+    try testing.expectEqualStrings("ajk\n", buffer.content_raw.items);
+}
+
+test "textAt full line" {
+    var buffer = try testSetup(
+        \\abc
+        \\def
+    );
+    defer main.editor.deinit();
+
+    const span = buffer.lineSpan(0);
+    try testing.expectEqualSlices(u21, buffer.textAt(span), &.{ 'a', 'b', 'c', '\n' });
 }
