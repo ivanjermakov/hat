@@ -543,7 +543,7 @@ pub fn getKeys(allocator: Allocator, codes: []const u8) ![]inp.Key {
             log.debug(@This(), "{}\n", .{e});
             continue;
         };
-        log.debug(@This(), "key: {}\n", .{key});
+        log.debug(@This(), "key: \"{}\"\n", .{key});
         try keys.append(key);
     }
     return try keys.toOwnedSlice();

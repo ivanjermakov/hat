@@ -2,6 +2,7 @@ const std = @import("std");
 const dl = std.DynLib;
 const builtin = @import("builtin");
 
+const core = @import("core.zig");
 const buf = @import("buffer.zig");
 const co = @import("color.zig");
 const edi = @import("editor.zig");
@@ -133,7 +134,9 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                 const key = try std.fmt.allocPrint(allocator, "{}", .{raw_key});
                 defer allocator.free(key);
 
-                if (key.len == 1 and std.ascii.isDigit(key[0])) {
+                const normal_or_select = editor.mode.normalOrSelect();
+
+                if (normal_or_select and key.len == 1 and std.ascii.isDigit(key[0])) {
                     const d = try std.fmt.parseInt(usize, key, 10);
                     repeat_count = (if (repeat_count) |rc| rc * 10 else 0) + d;
                     const removed = editor.key_queue.orderedRemove(0);
@@ -146,10 +149,11 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     else => editor.dotRepeatInside(),
                 }
                 const multiple_key = editor.key_queue.items.len > 1;
-                const normal_or_select = editor.mode.normalOrSelect();
                 const cmp_menu_active = editor.mode == .insert and
                     editor.completion_menu.display_items.items.len > 0;
                 const cmd_active = editor.command_line.command != null;
+                var repeat_or_1: i32 = 1;
+                if (repeat_count) |rc| repeat_or_1 = @intCast(rc);
 
                 // command line menu
                 if (cmd_active) {
@@ -231,22 +235,20 @@ fn startEditor(allocator: std.mem.Allocator) !void {
 
                     // normal or select mode
                 } else if (normal_or_select and eql(u8, key, "i")) {
-                    try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = -1 }));
+                    try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = -1 * repeat_or_1 }));
                 } else if (normal_or_select and eql(u8, key, "k")) {
-                    try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = 1 }));
+                    try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = 1 * repeat_or_1 }));
                 } else if (normal_or_select and eql(u8, key, "j")) {
-                    try buffer.moveCursor(buffer.cursor.applyOffset(.{ .col = -1 }));
+                    try buffer.moveCursor(buffer.cursor.applyOffset(.{ .col = -1 * repeat_or_1 }));
                 } else if (normal_or_select and eql(u8, key, "l")) {
-                    try buffer.moveCursor(buffer.cursor.applyOffset(.{ .col = 1 }));
+                    try buffer.moveCursor(buffer.cursor.applyOffset(.{ .col = 1 * repeat_or_1 }));
                 } else if (normal_or_select and eql(u8, key, "I")) {
-                    for (0..@divFloor(term.dimensions.height, 2)) |_| {
-                        try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = -1 }));
-                    }
+                    const half_screen = @divFloor(@as(i32, @intCast(term.dimensions.height)), 2);
+                    try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = -1 * repeat_or_1 * half_screen }));
                     try buffer.centerCursor();
                 } else if (normal_or_select and eql(u8, key, "K")) {
-                    for (0..@divFloor(term.dimensions.height, 2)) |_| {
-                        try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = 1 }));
-                    }
+                    const half_screen = @divFloor(@as(i32, @intCast(term.dimensions.height)), 2);
+                    try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = repeat_or_1 * half_screen }));
                     try buffer.centerCursor();
                 } else if (normal_or_select and eql(u8, key, "w")) {
                     try buffer.moveToNextWord();
