@@ -267,9 +267,9 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     const force = eql(u8, key, "Q");
                     try editor.closeBuffer(force);
                     if (editor.buffers.items.len == 0) break :main_loop;
-                } else if (editor.mode == .normal and eql(u8, key, "s")) {
+                } else if (editor.mode == .normal and eql(u8, key, "v")) {
                     try editor.enterMode(.select);
-                } else if (editor.mode == .normal and eql(u8, key, "S")) {
+                } else if (editor.mode == .normal and eql(u8, key, "V")) {
                     try editor.enterMode(.select_line);
                 } else if (editor.mode == .normal and eql(u8, key, "o")) {
                     try buffer.changeInsertLineBelow(buffer.cursor.row);
