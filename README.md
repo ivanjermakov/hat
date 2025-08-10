@@ -18,7 +18,7 @@ Hat is a **ha**ckable modal **t**ext editor for modern terminals.
 - [x] Text automation
     * [x] Run external command on selection
     * [x] Dot repeat last change
-    * [ ] Multi repeat
+    * [x] Multi repeat
     * [ ] Macros
 - [x] [Tree-sitter](https://tree-sitter.github.io/tree-sitter/) syntax awareness
     * [x] Syntax highlighting (24 bit color)

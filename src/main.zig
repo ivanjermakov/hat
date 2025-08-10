@@ -106,6 +106,7 @@ fn startEditor(allocator: std.mem.Allocator) !void {
     var timer_total = try std.time.Timer.start();
     var perf = std.mem.zeroes(PerfInfo);
     var buffer = editor.active_buffer;
+    var repeat_count: ?usize = null;
 
     main_loop: while (true) {
         main_loop_mutex.lock();
@@ -128,6 +129,17 @@ fn startEditor(allocator: std.mem.Allocator) !void {
             editor.dirty.input = false;
             editor.dotRepeatExecuted();
             while (editor.key_queue.items.len > 0) {
+                const raw_key = editor.key_queue.items[0];
+                const key = try std.fmt.allocPrint(allocator, "{}", .{raw_key});
+                defer allocator.free(key);
+
+                if (key.len == 1 and std.ascii.isDigit(key[0])) {
+                    const d = try std.fmt.parseInt(usize, key, 10);
+                    repeat_count = (if (repeat_count) |rc| rc * 10 else 0) + d;
+                    const removed = editor.key_queue.orderedRemove(0);
+                    if (removed.printable) |pr| allocator.free(pr);
+                }
+
                 var keys_consumed: usize = 1;
                 switch (editor.mode) {
                     .normal => editor.dotRepeatOutside(),
@@ -138,9 +150,6 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                 const cmp_menu_active = editor.mode == .insert and
                     editor.completion_menu.display_items.items.len > 0;
                 const cmd_active = editor.command_line.command != null;
-
-                const key = try std.fmt.allocPrint(allocator, "{}", .{editor.key_queue.items[0]});
-                defer allocator.free(key);
 
                 // command line menu
                 if (cmd_active) {
@@ -204,6 +213,7 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                 } else if (eql(u8, key, "<escape>")) {
                     try editor.enterMode(.normal);
                     try editor.dismissMessage();
+                    repeat_count = null;
 
                     // normal mode with modifiers
                 } else if (editor.mode == .normal and eql(u8, key, "<c-n>")) {
@@ -345,6 +355,7 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                         // no multi-key matches, drop first key as it will never match and try again
                         const removed = editor.key_queue.orderedRemove(0);
                         if (removed.printable) |p| allocator.free(p);
+                        repeat_count = null;
                         continue;
                     }
                 } else {
@@ -361,6 +372,7 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     }
                     const removed = editor.key_queue.orderedRemove(0);
                     if (removed.printable) |p| allocator.free(p);
+                    repeat_count = null;
                 }
                 // log.debug(@This(), "uncommitted: {any}\n", .{editor.dot_repeat_input_uncommitted.items});
                 // log.debug(@This(), "committed: {any}\n", .{editor.dot_repeat_input.items});
