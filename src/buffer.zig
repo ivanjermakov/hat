@@ -701,7 +701,7 @@ pub const Buffer = struct {
 
     pub fn syncFs(self: *Buffer) !bool {
         if (self.scratch) return false;
-        const stat = try self.file.?.stat();
+        const stat = try std.fs.cwd().statFile(self.path);
         const newer = stat.mtime > if (self.stat) |s| s.mtime else 0;
         if (newer) {
             if (log.enabled) {
@@ -726,6 +726,7 @@ pub const Buffer = struct {
         var change = try cha.Change.initReplace(self.allocator, self, self.fullSpan(), file_content_uni);
         try self.appendChange(&change);
         try self.commitChanges();
+        self.file_history_index = self.history_index;
 
         // TODO: attempt to keep cursor at the same semantic place
         try self.moveCursor(old_cursor);
