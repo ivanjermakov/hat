@@ -1,14 +1,14 @@
 const std = @import("std");
-const main = @import("../main.zig");
-const core = @import("../core.zig");
-const lsp = @import("../lsp.zig");
-const log = @import("../log.zig");
-const buf = @import("../buffer.zig");
-const uni = @import("../unicode.zig");
-const cha = @import("../change.zig");
-
-const Span = core.Span;
 const Allocator = std.mem.Allocator;
+
+const buf = @import("../buffer.zig");
+const cha = @import("../change.zig");
+const core = @import("../core.zig");
+const Span = core.Span;
+const log = @import("../log.zig");
+const lsp = @import("../lsp.zig");
+const main = @import("../main.zig");
+const uni = @import("../unicode.zig");
 
 const max_entries = 10;
 

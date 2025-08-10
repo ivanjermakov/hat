@@ -1,14 +1,14 @@
 const std = @import("std");
+const Allocator = std.mem.Allocator;
+
+const buf = @import("../buffer.zig");
+const col = @import("../color.zig");
 const core = @import("../core.zig");
+const Cursor = core.Cursor;
 const ext = @import("../external.zig");
 const log = @import("../log.zig");
-const col = @import("../color.zig");
-const buf = @import("../buffer.zig");
 const lsp = @import("../lsp.zig");
 const uri = @import("../uri.zig");
-
-const Cursor = core.Cursor;
-const Allocator = std.mem.Allocator;
 
 pub fn pickFile(allocator: Allocator) ![]const u8 {
     const files = try ext.runExternalWait(allocator, &.{ "rg", "--files" }, null, null);

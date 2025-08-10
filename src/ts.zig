@@ -1,14 +1,15 @@
 const std = @import("std");
+const Allocator = std.mem.Allocator;
+
+const buf = @import("buffer.zig");
+const cha = @import("change.zig");
 const col = @import("color.zig");
 const ft = @import("file_type.zig");
 const log = @import("log.zig");
-const cha = @import("change.zig");
-const buf = @import("buffer.zig");
+
 const ts_c = @cImport({
     @cInclude("tree_sitter/api.h");
 });
-
-const Allocator = std.mem.Allocator;
 
 pub const ts = ts_c;
 

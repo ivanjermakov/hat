@@ -1,11 +1,11 @@
 const std = @import("std");
 const dl = std.DynLib;
-const main = @import("main.zig");
-const env = @import("env.zig");
-const ts = @import("ts.zig");
-const log = @import("log.zig");
-
 const Allocator = std.mem.Allocator;
+
+const env = @import("env.zig");
+const log = @import("log.zig");
+const main = @import("main.zig");
+const ts = @import("ts.zig");
 
 const nvim_ts_path = "$HOME/.local/share/nvim/lazy/nvim-treesitter";
 

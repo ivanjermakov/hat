@@ -1,4 +1,5 @@
 const std = @import("std");
+
 const reg = @import("regex");
 
 /// Given string str, expand env variables

@@ -1,15 +1,16 @@
 const std = @import("std");
 const builtin = @import("builtin");
-const main = @import("main.zig");
+
 const buf = @import("buffer.zig");
-const cmp = @import("ui/completion_menu.zig");
-const cmd = @import("ui/command_line.zig");
-const fzf = @import("ui/fzf.zig");
+const inp = @import("input.zig");
 const log = @import("log.zig");
 const lsp = @import("lsp.zig");
-const inp = @import("input.zig");
-const uni = @import("unicode.zig");
+const main = @import("main.zig");
 const ter = @import("terminal.zig");
+const cmd = @import("ui/command_line.zig");
+const cmp = @import("ui/completion_menu.zig");
+const fzf = @import("ui/fzf.zig");
+const uni = @import("unicode.zig");
 
 pub const Dirty = struct {
     input: bool = false,

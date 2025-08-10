@@ -1,7 +1,7 @@
 const std = @import("std");
-const log = @import("log.zig");
-
 const Allocator = std.mem.Allocator;
+
+const log = @import("log.zig");
 
 pub fn write(allocator: Allocator, text: []const u8) !void {
     log.debug(@This(), "copy to clipboard\n", .{});

@@ -1,12 +1,12 @@
 const std = @import("std");
-const main = @import("../main.zig");
-const lsp = @import("../lsp.zig");
-const log = @import("../log.zig");
-const buf = @import("../buffer.zig");
-const uni = @import("../unicode.zig");
-const cha = @import("../change.zig");
-
 const Allocator = std.mem.Allocator;
+
+const buf = @import("../buffer.zig");
+const cha = @import("../change.zig");
+const log = @import("../log.zig");
+const lsp = @import("../lsp.zig");
+const main = @import("../main.zig");
+const uni = @import("../unicode.zig");
 
 pub const Command = enum {
     find,

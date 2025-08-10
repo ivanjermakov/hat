@@ -1,7 +1,8 @@
 const std = @import("std");
-const main = @import("main.zig");
-const dt = @import("datetime.zig");
+
 const co = @import("color.zig");
+const dt = @import("datetime.zig");
+const main = @import("main.zig");
 
 pub var enabled = false;
 pub var level: Level = .debug;

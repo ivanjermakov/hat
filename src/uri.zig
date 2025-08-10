@@ -1,5 +1,4 @@
 const std = @import("std");
-
 const Allocator = std.mem.Allocator;
 
 pub fn extractPath(uri: []const u8) ?[]const u8 {

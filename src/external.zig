@@ -1,9 +1,9 @@
 const std = @import("std");
-const main = @import("main.zig");
-const log = @import("log.zig");
-
 const Allocator = std.mem.Allocator;
 const testing = std.testing;
+
+const log = @import("log.zig");
+const main = @import("main.zig");
 
 pub fn runExternalWait(
     allocator: std.mem.Allocator,

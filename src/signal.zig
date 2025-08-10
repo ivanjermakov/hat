@@ -1,4 +1,5 @@
 const std = @import("std");
+
 const log = @import("log.zig");
 const main = @import("main.zig");
 const ter = @import("terminal.zig");

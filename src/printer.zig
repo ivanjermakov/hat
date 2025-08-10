@@ -1,10 +1,11 @@
 const std = @import("std");
-const main = @import("main.zig");
-const core = @import("core.zig");
+
 const buf = @import("buffer.zig");
-const ter = @import("terminal.zig");
 const co = @import("color.zig");
+const core = @import("core.zig");
 const log = @import("log.zig");
+const main = @import("main.zig");
+const ter = @import("terminal.zig");
 
 pub const HighlightConfig = struct {
     term_height: usize,

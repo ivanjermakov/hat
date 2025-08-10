@@ -1,22 +1,21 @@
 const std = @import("std");
-const lsp = @import("lsp");
-const main = @import("main.zig");
-const core = @import("core.zig");
-const fs = @import("fs.zig");
-const log = @import("log.zig");
-const buf = @import("buffer.zig");
-const cha = @import("change.zig");
-const uri = @import("uri.zig");
-const fzf = @import("ui/fzf.zig");
-
 const posix = std.posix;
-
-const Cursor = core.Cursor;
 const Allocator = std.mem.Allocator;
 
-const default_stringify_opts = std.json.StringifyOptions{ .emit_null_optional_fields = false };
-
+const lsp = @import("lsp");
 pub const types = lsp.types;
+
+const buf = @import("buffer.zig");
+const cha = @import("change.zig");
+const core = @import("core.zig");
+const Cursor = core.Cursor;
+const fs = @import("fs.zig");
+const log = @import("log.zig");
+const main = @import("main.zig");
+const fzf = @import("ui/fzf.zig");
+const uri = @import("uri.zig");
+
+const default_stringify_opts = std.json.StringifyOptions{ .emit_null_optional_fields = false };
 
 pub const LspConfig = struct {
     name: []const u8,

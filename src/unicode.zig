@@ -1,5 +1,4 @@
 const std = @import("std");
-
 const Allocator = std.mem.Allocator;
 
 pub fn utf8FromBytes(allocator: Allocator, bytes: []const u8) ![]const u21 {

@@ -1,6 +1,7 @@
 const std = @import("std");
-const main = @import("main.zig");
+
 const log = @import("log.zig");
+const main = @import("main.zig");
 
 pub const KeyCode = enum {
     up,

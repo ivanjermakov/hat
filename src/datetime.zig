@@ -11,7 +11,6 @@ const math = std.math;
 const ascii = std.ascii;
 const Allocator = std.mem.Allocator;
 const Order = std.math.Order;
-
 const testing = std.testing;
 const assert = std.debug.assert;
 
@@ -77,7 +76,6 @@ pub fn isLeapDay(year: u32, month: u32, day: u32) bool {
     return isLeapYear(year) and month == 2 and day == 29;
 }
 
-
 // Number of days before Jan 1st of year
 pub fn daysBeforeYear(year: u32) u32 {
     const y: u32 = year - 1;
@@ -108,7 +106,6 @@ fn ymd2ord(year: u16, month: u8, day: u8) u32 {
     assert(day >= 1 and day <= daysInMonth(year, month));
     return daysBeforeYear(year) + daysBeforeMonth(year, month) + day;
 }
-
 
 // Calculate the number of days of the first monday for week 1 iso calendar
 // for the given year since 01-Jan-0001
@@ -1516,4 +1513,3 @@ test "time-write-iso-hms" {
 
     try testing.expectEqualSlices(u8, "T02:36:26", fbs.getWritten());
 }
-

@@ -1,19 +1,20 @@
 const std = @import("std");
-const builtin = @import("builtin");
 const dl = std.DynLib;
-const edi = @import("editor.zig");
-const inp = @import("input.zig");
-const ft = @import("file_type.zig");
+const builtin = @import("builtin");
+
 const buf = @import("buffer.zig");
 const co = @import("color.zig");
-const ter = @import("terminal.zig");
-const pri = @import("printer.zig");
-const lsp = @import("lsp.zig");
-const log = @import("log.zig");
-const uni = @import("unicode.zig");
-const fzf = @import("ui/fzf.zig");
+const edi = @import("editor.zig");
 const env = @import("env.zig");
+const ft = @import("file_type.zig");
+const inp = @import("input.zig");
+const log = @import("log.zig");
+const lsp = @import("lsp.zig");
+const pri = @import("printer.zig");
 const sig = @import("signal.zig");
+const ter = @import("terminal.zig");
+const fzf = @import("ui/fzf.zig");
+const uni = @import("unicode.zig");
 
 pub const Args = struct {
     path: ?[]const u8 = null,

@@ -1,15 +1,16 @@
 const std = @import("std");
-const core = @import("core.zig");
-const buf = @import("buffer.zig");
-const uni = @import("unicode.zig");
-const lsp = @import("lsp.zig");
-const reg = @import("regex");
-const ts = @import("ts.zig");
+const Allocator = std.mem.Allocator;
 
+const reg = @import("regex");
+
+const buf = @import("buffer.zig");
+const core = @import("core.zig");
 const Cursor = core.Cursor;
 const Span = core.Span;
 const ByteSpan = core.ByteSpan;
-const Allocator = std.mem.Allocator;
+const lsp = @import("lsp.zig");
+const ts = @import("ts.zig");
+const uni = @import("unicode.zig");
 
 pub const Change = struct {
     old_span: Span,

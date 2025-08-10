@@ -1,26 +1,26 @@
 const std = @import("std");
 const posix = std.posix;
-const c = @cImport({
-    @cInclude("termios.h");
-    @cInclude("locale.h");
-});
-const main = @import("main.zig");
-const core = @import("core.zig");
+const Allocator = std.mem.Allocator;
+
 const buf = @import("buffer.zig");
 const co = @import("color.zig");
-const log = @import("log.zig");
-const fs = @import("fs.zig");
-const inp = @import("input.zig");
-const cmp = @import("ui/completion_menu.zig");
-const cmd = @import("ui/command_line.zig");
-const uni = @import("unicode.zig");
-
+const core = @import("core.zig");
 const Dimensions = core.Dimensions;
 const Area = core.Area;
 const Cursor = core.Cursor;
 const Layout = core.Layout;
-const Allocator = std.mem.Allocator;
+const fs = @import("fs.zig");
+const inp = @import("input.zig");
+const log = @import("log.zig");
+const main = @import("main.zig");
+const cmd = @import("ui/command_line.zig");
+const cmp = @import("ui/completion_menu.zig");
+const uni = @import("unicode.zig");
 
+const c = @cImport({
+    @cInclude("termios.h");
+    @cInclude("locale.h");
+});
 /// See section about "CSI Ps SP q" at
 /// https://invisible-island.net/xterm/ctlseqs/ctlseqs.html#h3-Functions-using-CSI-_-ordered-by-the-final-character_s_
 pub const cursor_type = union {

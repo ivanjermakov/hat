@@ -1,27 +1,28 @@
 const std = @import("std");
-const builtin = @import("builtin");
 const testing = std.testing;
 const assert = std.debug.assert;
-const reg = @import("regex");
-const main = @import("main.zig");
-const core = @import("core.zig");
-const edi = @import("editor.zig");
-const ft = @import("file_type.zig");
-const ts = @import("ts.zig");
-const log = @import("log.zig");
-const lsp = @import("lsp.zig");
-const cha = @import("change.zig");
-const uni = @import("unicode.zig");
-const ter = @import("terminal.zig");
-const clp = @import("clipboard.zig");
-const dt = @import("datetime.zig");
-const ext = @import("external.zig");
+const Allocator = std.mem.Allocator;
+const builtin = @import("builtin");
 
+const reg = @import("regex");
+
+const cha = @import("change.zig");
+const clp = @import("clipboard.zig");
+const core = @import("core.zig");
 const Span = core.Span;
 const Cursor = core.Cursor;
 const ByteSpan = core.ByteSpan;
 const Dimensions = core.Dimensions;
-const Allocator = std.mem.Allocator;
+const dt = @import("datetime.zig");
+const edi = @import("editor.zig");
+const ext = @import("external.zig");
+const ft = @import("file_type.zig");
+const log = @import("log.zig");
+const lsp = @import("lsp.zig");
+const main = @import("main.zig");
+const ter = @import("terminal.zig");
+const ts = @import("ts.zig");
+const uni = @import("unicode.zig");
 
 pub const Buffer = struct {
     path: []const u8,
