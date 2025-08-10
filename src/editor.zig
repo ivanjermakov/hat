@@ -65,6 +65,7 @@ pub const Editor = struct {
 
     pub fn openBuffer(self: *Editor, path: []const u8) !void {
         if (self.buffers.items.len > 0 and std.mem.eql(u8, self.active_buffer.path, path)) return;
+        defer self.resetHover();
         if (self.findBufferByPath(path)) |existing| {
             log.debug(@This(), "opening existing buffer {s}\n", .{path});
             // reinsert to maintain recent-first order
@@ -124,11 +125,12 @@ pub const Editor = struct {
     }
 
     pub fn openScratch(self: *Editor, content: ?[]const u8) !void {
+        defer self.resetHover();
         const buffer = try self.allocator.create(buf.Buffer);
         buffer.* = try buf.Buffer.init(self.allocator, null, content orelse "");
         log.debug(@This(), "opening scratch {s}\n", .{buffer.path});
 
-        try self.buffers.append(buffer);
+        try self.buffers.insert(0, buffer);
         self.active_buffer = buffer;
         main.editor.dirty.draw = true;
     }

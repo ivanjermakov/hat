@@ -213,7 +213,11 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                 } else if (editor.mode == .normal and eql(u8, key, "<c-e>")) {
                     try editor.pickBuffer();
                 } else if (editor.mode == .normal and eql(u8, key, "<c-d>")) {
-                    try buffer.showHover();
+                    if (editor.hover_contents) |hover| {
+                        try editor.openScratch(hover);
+                    } else {
+                        try buffer.showHover();
+                    }
 
                     // normal or select mode
                 } else if (normal_or_select and eql(u8, key, "i")) {

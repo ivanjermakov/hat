@@ -436,10 +436,10 @@ pub fn computeLayout(term_dims: Dimensions) Layout {
 }
 
 pub fn parseAnsi(allocator: Allocator, input: *std.ArrayList(u8)) !inp.Key {
-    // log.debug(@This(), "codes: {any}\n", .{input.items});
+    log.debug(@This(), "codes: {any}\n", .{input.items});
     var key: inp.Key = .{};
     const code = input.orderedRemove(0);
-    s: switch (code) {
+    switch (code) {
         0x00...0x08, 0x0e, 0x10...0x19 => {
             // offset 96 converts \x1 to 'a', \x2 to 'b', and so on
             // TODO: might not be printable
@@ -458,34 +458,32 @@ pub fn parseAnsi(allocator: Allocator, input: *std.ArrayList(u8)) !inp.Key {
                         'A' => {
                             _ = input.orderedRemove(0);
                             key.code = .up;
-                            break :s;
                         },
                         'B' => {
                             _ = input.orderedRemove(0);
                             key.code = .down;
-                            break :s;
                         },
                         'C' => {
                             _ = input.orderedRemove(0);
                             key.code = .right;
-                            break :s;
                         },
                         'D' => {
                             _ = input.orderedRemove(0);
                             key.code = .left;
-                            break :s;
                         },
                         '3' => {
                             _ = input.orderedRemove(0);
                             if (input.items.len > 0 and input.items[0] == '~') _ = input.orderedRemove(0);
                             key.code = .delete;
-                            break :s;
                         },
                         else => return error.TodoCsi,
                     }
                 }
-            }
-            if (input.items.len > 0 and input.items[0] == 'O') {
+            } else if (input.items.len > 0 and isPrintableAscii(input.items[0])) {
+                key.printable = try allocator.dupe(u8, &.{input.items[0]});
+                key.modifiers |= @intFromEnum(inp.Modifier.alt);
+                _ = input.orderedRemove(0);
+            } else if (input.items.len > 0 and input.items[0] == 'O') {
                 if (input.items.len > 1 and input.items[1] >= 'P' and input.items[1] <= 'S') {
                     switch (input.items[1]) {
                         'P' => key.code = .f1,
@@ -496,11 +494,10 @@ pub fn parseAnsi(allocator: Allocator, input: *std.ArrayList(u8)) !inp.Key {
                     }
                     _ = input.orderedRemove(0);
                     _ = input.orderedRemove(0);
-                    break :s;
                 }
+            } else {
+                key.code = .escape;
             }
-            key.code = .escape;
-            break :s;
         },
         else => {
             var printable = std.ArrayList(u8).init(allocator);
