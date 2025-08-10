@@ -436,6 +436,7 @@ pub fn computeLayout(term_dims: Dimensions) Layout {
 }
 
 pub fn parseAnsi(allocator: Allocator, input: *std.ArrayList(u8)) !inp.Key {
+    // log.debug(@This(), "codes: {any}\n", .{input.items});
     var key: inp.Key = .{};
     const code = input.orderedRemove(0);
     s: switch (code) {
@@ -449,6 +450,7 @@ pub fn parseAnsi(allocator: Allocator, input: *std.ArrayList(u8)) !inp.Key {
         0x7f => key.code = .backspace,
         0x0d => key.printable = try allocator.dupe(u8, &.{'\n'}),
         0x1b => {
+            // ANSI escape sequences \e[
             if (input.items.len > 0 and input.items[0] == '[') {
                 _ = input.orderedRemove(0);
                 if (input.items.len > 0) {
@@ -481,6 +483,20 @@ pub fn parseAnsi(allocator: Allocator, input: *std.ArrayList(u8)) !inp.Key {
                         },
                         else => return error.TodoCsi,
                     }
+                }
+            }
+            if (input.items.len > 0 and input.items[0] == 'O') {
+                if (input.items.len > 1 and input.items[1] >= 'P' and input.items[1] <= 'S') {
+                    switch (input.items[1]) {
+                        'P' => key.code = .f1,
+                        'Q' => key.code = .f2,
+                        'R' => key.code = .f3,
+                        'S' => key.code = .f4,
+                        else => unreachable,
+                    }
+                    _ = input.orderedRemove(0);
+                    _ = input.orderedRemove(0);
+                    break :s;
                 }
             }
             key.code = .escape;

@@ -12,6 +12,10 @@ pub const KeyCode = enum {
     delete,
     tab,
     escape,
+    f1,
+    f2,
+    f3,
+    f4,
 };
 
 pub const Modifier = enum(u8) {
