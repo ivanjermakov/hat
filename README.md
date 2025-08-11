@@ -52,7 +52,7 @@ Hat is a **ha**ckable modal **t**ext editor for modern terminals.
 | 🚧   | Persistent macros        |      |
 | 🚧   | Git hunk markers         |      |
 | 🚧   | Tree-sitter tree actions |      |
-| 🚧   | Buffer centering         |      |
+| ✔️   | Buffer centering         |      |
 
 ## Philosophy
 
