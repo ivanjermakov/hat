@@ -140,7 +140,7 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     const d = try std.fmt.parseInt(usize, key, 10);
                     repeat_count = (if (repeat_count) |rc| rc * 10 else 0) + d;
                     const removed = editor.key_queue.orderedRemove(0);
-                    if (removed.printable) |pr| allocator.free(pr);
+                    removed.deinit();
                 }
 
                 var keys_consumed: usize = 1;
@@ -321,12 +321,9 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     try buffer.changeDeletePrevChar();
                 } else if (multiple_key) {
                     keys_consumed = 2;
+                    const key2 = editor.key_queue.items[1];
                     // no need for more than 2 keys for now
-                    const multi_key = try std.fmt.allocPrint(
-                        allocator,
-                        "{}{}",
-                        .{ editor.key_queue.items[0], editor.key_queue.items[1] },
-                    );
+                    const multi_key = try std.fmt.allocPrint(allocator, "{s}{}", .{ key, key2 });
                     defer allocator.free(multi_key);
 
                     if (editor.mode == .normal and eql(u8, multi_key, " w")) {
@@ -356,7 +353,7 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     } else {
                         // no multi-key matches, drop first key as it will never match and try again
                         const removed = editor.key_queue.orderedRemove(0);
-                        if (removed.printable) |p| allocator.free(p);
+                        removed.deinit();
                         repeat_count = null;
                         continue;
                     }
@@ -373,7 +370,7 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                         else => {},
                     }
                     const removed = editor.key_queue.orderedRemove(0);
-                    if (removed.printable) |p| allocator.free(p);
+                    removed.deinit();
                     repeat_count = null;
                 }
                 // log.debug(@This(), "uncommitted: {any}\n", .{editor.dot_repeat_input_uncommitted.items});

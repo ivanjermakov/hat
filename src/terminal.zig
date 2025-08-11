@@ -437,7 +437,7 @@ pub fn computeLayout(term_dims: Dimensions) Layout {
 
 pub fn parseAnsi(allocator: Allocator, input: *std.ArrayList(u8)) !inp.Key {
     log.debug(@This(), "codes: {any}\n", .{input.items});
-    var key: inp.Key = .{};
+    var key: inp.Key = .{ .allocator = allocator };
     const code = input.orderedRemove(0);
     switch (code) {
         0x00...0x08, 0x0e, 0x10...0x19 => {

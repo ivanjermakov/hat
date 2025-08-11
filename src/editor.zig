@@ -179,13 +179,13 @@ pub const Editor = struct {
 
         self.resetHover();
 
-        for (self.key_queue.items) |key| if (key.printable) |p| self.allocator.free(p);
+        for (self.key_queue.items) |key| key.deinit();
         self.key_queue.deinit();
 
-        for (self.dot_repeat_input.items) |key| if (key.printable) |p| self.allocator.free(p);
+        for (self.dot_repeat_input.items) |key| key.deinit();
         self.dot_repeat_input.deinit();
 
-        for (self.dot_repeat_input_uncommitted.items) |key| if (key.printable) |p| self.allocator.free(p);
+        for (self.dot_repeat_input_uncommitted.items) |key| key.deinit();
         self.dot_repeat_input_uncommitted.deinit();
 
         if (self.find_query) |fq| self.allocator.free(fq);
@@ -334,7 +334,7 @@ pub const Editor = struct {
     pub fn dotRepeatCommit(self: *Editor) !void {
         std.debug.assert(self.dot_repeat_state == .commit_ready);
 
-        for (self.dot_repeat_input.items) |key| if (key.printable) |p| self.allocator.free(p);
+        for (self.dot_repeat_input.items) |key| key.deinit();
         self.dot_repeat_input.clearRetainingCapacity();
 
         try self.dot_repeat_input.appendSlice(self.dot_repeat_input_uncommitted.items);

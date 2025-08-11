@@ -3,6 +3,8 @@ const std = @import("std");
 const log = @import("log.zig");
 const main = @import("main.zig");
 
+const Allocator = std.mem.Allocator;
+
 pub const KeyCode = enum {
     up,
     down,
@@ -48,6 +50,7 @@ pub const Key = struct {
     code: ?KeyCode = null,
     /// Bit mask of Modifier enum
     modifiers: u4 = 0,
+    allocator: Allocator,
 
     pub fn clone(self: *const Key, allocator: std.mem.Allocator) !Key {
         var k = self.*;
@@ -93,32 +96,38 @@ pub const Key = struct {
         if (in_brackets) try writer.writeAll(">");
     }
 
-    fn expectKeyFormat(key: Key, expected: []const u8) !void {
-        const allocator = std.testing.allocator;
-        const actual = try std.fmt.allocPrint(allocator, "{}", .{key});
-        defer allocator.free(actual);
-        try std.testing.expectEqualStrings(actual, expected);
-    }
-
-    test "key format" {
-        try expectKeyFormat(Key{}, "");
-        try expectKeyFormat(Key{ .printable = "a" }, "a");
-        try expectKeyFormat(Key{ .printable = "A" }, "A");
-        try expectKeyFormat(Key{ .printable = "ф" }, "ф");
-        try expectKeyFormat(Key{ .printable = "1" }, "1");
-        try expectKeyFormat(Key{ .printable = "a", .modifiers = @intFromEnum(Modifier.control) }, "<c-a>");
-        try expectKeyFormat(Key{ .printable = "A", .modifiers = @intFromEnum(Modifier.control) }, "<c-A>");
-        try expectKeyFormat(Key{ .code = .left }, "<left>");
-        try expectKeyFormat(Key{ .code = .left, .modifiers = @intFromEnum(Modifier.control) }, "<c-left>");
-        try expectKeyFormat(
-            Key{
-                .code = .left,
-                .modifiers = @intFromEnum(Modifier.control) |
-                    @intFromEnum(Modifier.shift) |
-                    @intFromEnum(Modifier.alt) |
-                    @intFromEnum(Modifier.meta),
-            },
-            "<m-c-s-d-left>",
-        );
+    pub fn deinit(self: *const Key) void {
+        if (self.printable) |p| self.allocator.free(p);
     }
 };
+
+test "key format" {
+    const a = std.testing.allocator;
+    try expectKeyFormat(Key{ .allocator = a }, "");
+    try expectKeyFormat(Key{ .allocator = a, .printable = "a" }, "a");
+    try expectKeyFormat(Key{ .allocator = a, .printable = "A" }, "A");
+    try expectKeyFormat(Key{ .allocator = a, .printable = "ф" }, "ф");
+    try expectKeyFormat(Key{ .allocator = a, .printable = "1" }, "1");
+    try expectKeyFormat(Key{ .allocator = a, .printable = "a", .modifiers = @intFromEnum(Modifier.control) }, "<c-a>");
+    try expectKeyFormat(Key{ .allocator = a, .printable = "A", .modifiers = @intFromEnum(Modifier.control) }, "<c-A>");
+    try expectKeyFormat(Key{ .allocator = a, .code = .left }, "<left>");
+    try expectKeyFormat(Key{ .allocator = a, .code = .left, .modifiers = @intFromEnum(Modifier.control) }, "<c-left>");
+    try expectKeyFormat(
+        Key{
+            .allocator = a,
+            .code = .left,
+            .modifiers = @intFromEnum(Modifier.control) |
+                @intFromEnum(Modifier.shift) |
+                @intFromEnum(Modifier.alt) |
+                @intFromEnum(Modifier.meta),
+        },
+        "<m-c-s-d-left>",
+    );
+}
+
+fn expectKeyFormat(key: Key, expected: []const u8) !void {
+    const allocator = std.testing.allocator;
+    const actual = try std.fmt.allocPrint(allocator, "{}", .{key});
+    defer allocator.free(actual);
+    try std.testing.expectEqualStrings(actual, expected);
+}
