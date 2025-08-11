@@ -44,6 +44,8 @@ pub const Editor = struct {
     dot_repeat_input_uncommitted: std.ArrayList(inp.Key),
     dot_repeat_state: DotRepeat = .outside,
     find_query: ?[]const u21 = null,
+    recording_macro: ?u8 = null,
+    macros: std.AutoHashMap(u8, std.ArrayList(inp.Key)),
     allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator) !Editor {
@@ -58,6 +60,7 @@ pub const Editor = struct {
             .key_queue = std.ArrayList(inp.Key).init(allocator),
             .dot_repeat_input = std.ArrayList(inp.Key).init(allocator),
             .dot_repeat_input_uncommitted = std.ArrayList(inp.Key).init(allocator),
+            .macros = std.AutoHashMap(u8, std.ArrayList(inp.Key)).init(allocator),
             .allocator = allocator,
         };
         return editor;
@@ -189,6 +192,15 @@ pub const Editor = struct {
         self.dot_repeat_input_uncommitted.deinit();
 
         if (self.find_query) |fq| self.allocator.free(fq);
+
+        {
+            var iter = self.macros.valueIterator();
+            while (iter.next()) |keys| {
+                for (keys.items) |key| key.deinit();
+                keys.deinit();
+            }
+            self.macros.deinit();
+        }
     }
 
     pub fn pickFile(self: *Editor) !void {
@@ -247,6 +259,60 @@ pub const Editor = struct {
                 }
             }
             std.Thread.sleep(main.sleep_ns);
+        }
+    }
+
+    pub fn startMacro(self: *Editor, name: u8) !void {
+        if (self.recording_macro) |m| {
+            try self.sendMessageFmt("already recording @{c}", .{m});
+            return;
+        }
+        self.recording_macro = name;
+        try self.sendMessageFmt("recording @{c}", .{name});
+    }
+
+    pub fn recordMacro(self: *Editor) !void {
+        if (self.recording_macro) |name| {
+            var macro = self.macros.getPtr(name).?;
+            // drop first two keys since these mean "start recording"
+            for (0..2) |_| {
+                const rm = macro.orderedRemove(0);
+                rm.deinit();
+            }
+            try self.sendMessageFmt("recorded @{c}", .{name});
+            if (log.enabled) {
+                var keys_str = std.ArrayList(u8).init(self.allocator);
+                defer keys_str.deinit();
+                for (macro.items) |key| {
+                    try std.fmt.format(keys_str.writer(), "{}", .{key});
+                }
+                log.debug(@This(), "@{c}: \"{s}\"\n", .{ name, keys_str.items });
+            }
+            self.recording_macro = null;
+        }
+    }
+
+    pub fn recordMacroKey(self: *Editor, key: inp.Key) !void {
+        if (self.recording_macro) |name| {
+            const gop = try self.macros.getOrPut(name);
+            if (!gop.found_existing) gop.value_ptr.* = std.ArrayList(inp.Key).init(self.allocator);
+            try gop.value_ptr.append(try key.clone(self.allocator));
+        }
+    }
+
+    pub fn replayMacro(self: *Editor, name: u8) !void {
+        if (self.recording_macro) |m| {
+            // replaying macros while recording a macro is a tricky case, skip it
+            log.warn(@This(), "attempt to replay macro @{c} while recording @{}\n", .{ name, m });
+            return;
+        }
+        if (self.macros.get(name)) |macro| {
+            log.debug(@This(), "replaying macro @{c}\n", .{name});
+            for (macro.items) |key| {
+                try self.key_queue.append(try key.clone(self.allocator));
+            }
+        } else {
+            try self.sendMessageFmt("no macro @{c}", .{name});
         }
     }
 

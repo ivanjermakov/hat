@@ -140,6 +140,7 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     const d = try std.fmt.parseInt(usize, key, 10);
                     repeat_count = (if (repeat_count) |rc| rc * 10 else 0) + d;
                     const removed = editor.key_queue.orderedRemove(0);
+                    try editor.recordMacroKey(removed);
                     removed.deinit();
                 }
 
@@ -313,6 +314,8 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     try buffer.findNextDiagnostic(true);
                 } else if (editor.mode == .normal and eql(u8, key, "X")) {
                     try buffer.findNextDiagnostic(false);
+                } else if (editor.mode == .normal and eql(u8, key, "r") and editor.recording_macro != null) {
+                    try editor.recordMacro();
 
                     // insert mode
                 } else if (editor.mode == .insert and eql(u8, key, "<delete>")) {
@@ -334,6 +337,12 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                         try buffer.findReferences();
                     } else if (editor.mode == .normal and eql(u8, multi_key, " n")) {
                         try buffer.renamePrompt();
+                    } else if (editor.mode == .normal and eql(u8, key, "r") and editor.key_queue.items[1].printable != null) {
+                        const macro_name = key2.printable.?[0];
+                        try editor.startMacro(macro_name);
+                    } else if (editor.mode == .normal and eql(u8, key, "@") and editor.key_queue.items[1].printable != null) {
+                        const macro_name = key2.printable.?[0];
+                        try editor.replayMacro(macro_name);
                     } else if (normal_or_select and eql(u8, multi_key, "gi")) {
                         try buffer.moveCursor(.{ .col = buffer.cursor.col });
                         try buffer.centerCursor();
@@ -351,11 +360,8 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     } else if (normal_or_select and eql(u8, multi_key, "gj")) {
                         try buffer.moveCursor(.{ .row = buffer.cursor.row, .col = 0 });
                     } else {
-                        // no multi-key matches, drop first key as it will never match and try again
-                        const removed = editor.key_queue.orderedRemove(0);
-                        removed.deinit();
-                        repeat_count = null;
-                        continue;
+                        // no multi-key matches, drop first key as it will never match
+                        keys_consumed = 1;
                     }
                 } else {
                     // no mapping matches, wait for more keys
@@ -370,6 +376,7 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                         else => {},
                     }
                     const removed = editor.key_queue.orderedRemove(0);
+                    try editor.recordMacroKey(removed);
                     removed.deinit();
                     repeat_count = null;
                 }
@@ -451,7 +458,7 @@ const PerfInfo = struct {
 
         try std.fmt.format(
             writer,
-            "total: {}\n  input: {}\n  parse: {}\n  mapping: {}\n  did_change: {}\n  draw: {}\n  commit: {}\n  sync: {}\n",
+            "total: {}, input: {}, parse: {}, mapping: {}, did_change: {}, draw: {}, commit: {}, sync: {}\n",
             .{
                 self.total / std.time.ns_per_us,
                 self.input / std.time.ns_per_us,
