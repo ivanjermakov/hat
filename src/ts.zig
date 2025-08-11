@@ -71,7 +71,7 @@ pub const State = struct {
     parser: ?*ts.TSParser = null,
     tree: ?*ts.TSTree = null,
     highlight: ParseResult(AttrsSpan),
-    indent: ParseResult(SpanNameTuple),
+    indent: ParseResult(IndentSpanTuple),
     allocator: Allocator,
 
     pub fn init(allocator: Allocator, ts_conf: ft.TsConfig) !State {
@@ -85,7 +85,7 @@ pub const State = struct {
             .parser = ts.ts_parser_new(),
             .allocator = allocator,
             .highlight = try ParseResult(AttrsSpan).init(allocator, language(), highlight_query),
-            .indent = try ParseResult(SpanNameTuple).init(allocator, language(), indent_query),
+            .indent = try ParseResult(IndentSpanTuple).init(allocator, language(), indent_query),
         };
         _ = ts.ts_parser_set_language(self.parser, language());
         return self;
@@ -164,11 +164,11 @@ pub const syntax_highlight = std.StaticStringMap([]const col.Attr).initComptime(
     .{ "comment", col.attributes.comment },
 });
 
-pub const SpanNameTuple = struct {
+pub const IndentSpanTuple = struct {
     span: ByteSpan,
     name: []const u8,
 
-    pub fn init(span: ByteSpan, capture_name: []const u8) ?SpanNameTuple {
+    pub fn init(span: ByteSpan, capture_name: []const u8) ?IndentSpanTuple {
         if (!std.mem.eql(u8, capture_name, "indent.begin")) return null;
         return .{ .span = span, .name = capture_name };
     }
