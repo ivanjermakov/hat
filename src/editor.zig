@@ -30,7 +30,7 @@ pub const Config = struct {
     /// Imaginary width of a buffer that should be aligned (padded on the left).
     /// `null` means "no centering".
     /// If >`term_width`, padding is 0,
-    /// If <`term_width`, left padding is `(centering_width-term_width)/2`
+    /// If <`term_width`, left padding is `(term_width-centering_width)/2`
     centering_width: ?usize = null,
 };
 
