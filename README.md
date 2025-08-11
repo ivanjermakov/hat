@@ -11,8 +11,8 @@ Hat is a **ha**ckable modal **t**ext editor for modern terminals.
 ## Core functionality
 
 - [x] Modal text editing
-    * [x] Unlimited undo/redo
     * [x] Normal, select, select line, and insert modes
+    * [x] Unlimited undo/redo
     * [x] System clipboard copy & paste (using `xclip`)
     * [x] Find in buffer
 - [x] Text automation
@@ -47,6 +47,8 @@ Hat is a **ha**ckable modal **t**ext editor for modern terminals.
 | 🚧   | LSP find symbol          |      |
 | 🚧   | LSP code action          |      |
 | 🚧   | LSP formatting           |      |
+| 🚧   | Persistent undo          |      |
+| 🚧   | Persistent macros        |      |
 | 🚧   | Git hunk markers         |      |
 | 🚧   | Tree-sitter tree actions |      |
 | 🚧   | Buffer centering         |      |
@@ -55,17 +57,16 @@ Hat is a **ha**ckable modal **t**ext editor for modern terminals.
 
 - Based on [suckless](https://suckless.org/philosophy/) and
 [unix](https://en.wikipedia.org/wiki/Unix_philosophy) philosophies
-- Software should do not more and not less than what users need
+- Software should do not more and not less than what the user needs
     * Every feature is implemented in the most simple and straightforward form: keep it simple, fast, and clear
 - Software is made for users capable of reading and customizing its source code
     * Source code can be read by users in one evening
     * External configuration is not necessary and discouraged
     * User manual documentation is not necessary, _hacking_ documentation is encouraged (via [HACKING.md](HACKING.md))
-- Software is meant to be distributed as source code, compiled by users
+- Software is distributed as source code, compiled by the user
 - Software is not meant to be developed forever and its final state should be described by its feature set from
 the beginning
-    * Once every feature is implemented, software can be considered complete
-- Software is extended either by users directly or by applying
+- Software is extended either by the user directly or by applying
 [source code patches](https://en.wikipedia.org/wiki/Patch_(computing)#Source_code_patching), distributed as diff files
     * It is encouraged to share your extensions with others who can find it useful
 
