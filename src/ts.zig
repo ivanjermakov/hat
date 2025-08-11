@@ -76,9 +76,9 @@ pub const State = struct {
 
     pub fn init(allocator: Allocator, ts_conf: ft.TsConfig) !State {
         const language = try ts_conf.loadLanguage(allocator);
-        const highlight_query = try ts_conf.loadHighlightQuery(allocator);
+        const highlight_query = try ft.TsConfig.loadQuery(allocator, ts_conf.highlight_query);
         defer allocator.free(highlight_query);
-        const indent_query = try ts_conf.loadIndentQuery(allocator);
+        const indent_query = try ft.TsConfig.loadQuery(allocator, ts_conf.indent_query);
         defer allocator.free(indent_query);
 
         const self = State{

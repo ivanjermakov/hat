@@ -41,14 +41,8 @@ pub const TsConfig = struct {
         return language;
     }
 
-    pub fn loadHighlightQuery(self: *const TsConfig, allocator: Allocator) ![]const u8 {
-        const query_path = try env.expand(allocator, self.highlight_query, std.posix.getenv);
-        defer allocator.free(query_path);
-        return try std.fs.cwd().readFileAlloc(allocator, query_path, std.math.maxInt(usize));
-    }
-
-    pub fn loadIndentQuery(self: *const TsConfig, allocator: Allocator) ![]const u8 {
-        const query_path = try env.expand(allocator, self.indent_query, std.posix.getenv);
+    pub fn loadQuery(allocator: Allocator, path: []const u8) ![]const u8 {
+        const query_path = try env.expand(allocator, path, std.posix.getenv);
         defer allocator.free(query_path);
         return try std.fs.cwd().readFileAlloc(allocator, query_path, std.math.maxInt(usize));
     }
