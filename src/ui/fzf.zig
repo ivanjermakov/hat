@@ -24,6 +24,17 @@ pub fn pickFile(allocator: Allocator) ![]const u8 {
 pub const FindResult = struct {
     path: []const u8,
     position: Cursor,
+
+    pub fn init(allocator: Allocator, fzf_out: []const u8) !FindResult {
+        var iter = std.mem.splitScalar(u8, fzf_out, ':');
+        return .{
+            .path = try allocator.dupe(u8, iter.next().?),
+            .position = .{
+                .row = try std.fmt.parseInt(i32, iter.next().?, 10) - 1,
+                .col = try std.fmt.parseInt(i32, iter.next().?, 10) - 1,
+            },
+        };
+    }
 };
 
 pub fn findInFiles(allocator: Allocator) !FindResult {
@@ -37,14 +48,7 @@ pub fn findInFiles(allocator: Allocator) !FindResult {
     const out = try ext.runExternalWait(allocator, cmd, null, null);
     defer allocator.free(out);
     if (out.len == 0) return error.EmptyOut;
-    var iter = std.mem.splitScalar(u8, out, ':');
-    return .{
-        .path = try allocator.dupe(u8, iter.next().?),
-        .position = .{
-            .row = try std.fmt.parseInt(i32, iter.next().?, 10) - 1,
-            .col = try std.fmt.parseInt(i32, iter.next().?, 10) - 1,
-        },
-    };
+    return .init(allocator, out);
 }
 
 pub fn pickBuffer(allocator: Allocator, buffers: []const *buf.Buffer) ![]const u8 {
@@ -88,14 +92,7 @@ pub fn pickLspLocation(allocator: Allocator, locations: []const lsp.types.Locati
     const out = try ext.runExternalWait(allocator, fzf_cmd_with_preview, bufs_str, null);
     defer allocator.free(out);
     if (out.len == 0) return error.EmptyOut;
-    var iter = std.mem.splitScalar(u8, out, ':');
-    return .{
-        .path = try allocator.dupe(u8, iter.next().?),
-        .position = .{
-            .row = try std.fmt.parseInt(i32, iter.next().?, 10) - 1,
-            .col = try std.fmt.parseInt(i32, iter.next().?, 10) - 1,
-        },
-    };
+    return .init(allocator, out);
 }
 
 const fzf_cmd_with_preview: []const []const u8 = fzf_command ++ .{
