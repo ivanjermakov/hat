@@ -9,7 +9,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # TODO os: [ubuntu-22.04, macos-latest, windows-latest]
         os: [ubuntu-22.04]
     runs-on: ${{ matrix.os }}
     steps:

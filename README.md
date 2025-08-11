@@ -36,13 +36,14 @@ Hat is a **ha**ckable modal **t**ext editor for modern terminals.
     * [x] Find in files
 - [x] Scratch buffers
 - [x] Unicode support
-- [ ] Cross-platform (Linux, Windows, MacOS)
 - [x] `--printer` mode
 
 ## Functionality available in patches
 
 | Done | Name                     | Link |
 | ---- | ------------------------ | ---- |
+| 🚧   | Windows support          |      |
+| 🚧   | MacOS support            |      |
 | 🚧   | LSP highlight            |      |
 | 🚧   | LSP find symbol          |      |
 | 🚧   | LSP code action          |      |
@@ -70,3 +71,30 @@ the beginning
 [source code patches](https://en.wikipedia.org/wiki/Patch_(computing)#Source_code_patching), distributed as diff files
     * It is encouraged to share your extensions with others who can find it useful
 
+## Install
+
+Hat should work out of the box on any
+[`std.posix`-compliant](https://github.com/ziglang/zig/blob/master/lib/std/posix.zig) operating system with satisfied
+dependencies and correct tree-sitter configuration (see `file_type` in [file_type.zig](src/file_type.zig))).
+
+### Dependencies
+
+- [Zig](https://ziglang.org) (version >= `minimum_zig_version` in [build.zig.zon](build.zig.zon))
+- [tree-sitter](https://tree-sitter.github.io/tree-sitter/)
+- [pcre2](https://github.com/PCRE2Project/pcre2)
+
+### Build
+
+For development build:
+
+```bash
+zig build
+```
+
+For release build:
+
+```bash
+zig build --release=fast
+```
+
+Once built, executable can be found at `zig-out/bin`. For more info, see `zig build --help`.
