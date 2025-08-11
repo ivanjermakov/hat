@@ -67,7 +67,7 @@ pub fn ParseResult(comptime SpanType: type) type {
 pub const State = struct {
     parser: ?*ts.TSParser = null,
     tree: ?*ts.TSTree = null,
-    highlight: ParseResult(SpanAttrsTuple),
+    highlight: ParseResult(AttrsSpan),
     indent: ParseResult(SpanNameTuple),
     allocator: Allocator,
 
@@ -81,7 +81,7 @@ pub const State = struct {
         const self = State{
             .parser = ts.ts_parser_new(),
             .allocator = allocator,
-            .highlight = try ParseResult(SpanAttrsTuple).init(allocator, language(), highlight_query),
+            .highlight = try ParseResult(AttrsSpan).init(allocator, language(), highlight_query),
             .indent = try ParseResult(SpanNameTuple).init(allocator, language(), indent_query),
         };
         _ = ts.ts_parser_set_language(self.parser, language());
@@ -128,13 +128,13 @@ pub const Span = struct {
     }
 };
 
-pub const SpanAttrsTuple = struct {
+pub const AttrsSpan = struct {
     span: Span,
     attrs: []const col.Attr,
 
     /// Capture name is a dot-separated list of ts node types, forming hierarchy, e.g. `identifier.type`
     /// @see https://tree-sitter.github.io/tree-sitter/using-parsers/queries/2-operators.html#capturing-nodes
-    pub fn init(span: Span, capture_name: []const u8) ?SpanAttrsTuple {
+    pub fn init(span: Span, capture_name: []const u8) ?AttrsSpan {
         return .{
             .span = span,
             .attrs = if (findAttrs(capture_name)) |as| as else return null,
