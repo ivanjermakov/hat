@@ -91,7 +91,7 @@ pub fn main() !void {
     term = try ter.Terminal.init(allocator, std_out.writer().any(), try ter.terminalSize());
     defer term.deinit();
 
-    editor = try edi.Editor.init(allocator, .{});
+    editor = try edi.Editor.init(allocator, .{ .centering_width = 140 });
     defer editor.deinit();
 
     const path = if (args.path) |path| try allocator.dupe(u8, path) else fzf.pickFile(allocator) catch return;
