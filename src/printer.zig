@@ -58,8 +58,8 @@ pub fn printBuffer(buffer: *buf.Buffer, writer: std.io.AnyWriter, highlight: ?Hi
                 const highlight_spans = ts_state.highlight.spans.items;
                 const ch_attrs: []const co.Attr = b: while (span_index < highlight_spans.len) {
                     const span = highlight_spans[span_index];
-                    if (span.span.start_byte > byte) break :b co.attributes.text;
-                    if (byte >= span.span.start_byte and byte < span.span.end_byte) {
+                    if (span.span.start > byte) break :b co.attributes.text;
+                    if (byte >= span.span.start and byte < span.span.end) {
                         break :b span.attrs;
                     }
                     span_index += 1;

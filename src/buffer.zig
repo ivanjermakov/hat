@@ -472,8 +472,8 @@ pub const Buffer = struct {
         var dedent_bytes = std.AutoHashMap(usize, void).init(self.allocator);
         defer dedent_bytes.deinit();
         for (spans) |span| {
-            try indent_bytes.put(span.span.start_byte, {});
-            try dedent_bytes.put(span.span.end_byte - 1, {});
+            try indent_bytes.put(span.span.start, {});
+            try dedent_bytes.put(span.span.end - 1, {});
         }
 
         var indent: usize = 0;

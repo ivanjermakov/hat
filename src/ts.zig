@@ -1,6 +1,7 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 
+const core = @import("core.zig");
 const buf = @import("buffer.zig");
 const cha = @import("change.zig");
 const col = @import("color.zig");
@@ -12,6 +13,8 @@ const ts_c = @cImport({
 });
 
 pub const ts = ts_c;
+
+const ByteSpan = core.ByteSpan;
 
 pub fn ParseResult(comptime SpanType: type) type {
     return struct {
@@ -52,9 +55,9 @@ pub fn ParseResult(comptime SpanType: type) type {
                     var capture_name_len: u32 = undefined;
                     const capture_name = ts.ts_query_capture_name_for_id(self.query.?, capture.index, &capture_name_len);
                     const node_type = capture_name[0..capture_name_len];
-                    const span: Span = .{
-                        .start_byte = ts.ts_node_start_byte(capture.node),
-                        .end_byte = ts.ts_node_end_byte(capture.node),
+                    const span: ByteSpan = .{
+                        .start = ts.ts_node_start_byte(capture.node),
+                        .end = ts.ts_node_end_byte(capture.node),
                     };
                     const tuple = SpanType.init(span, node_type);
                     if (tuple) |t| try self.spans.append(t);
@@ -119,22 +122,13 @@ pub const State = struct {
     }
 };
 
-pub const Span = struct {
-    start_byte: usize,
-    end_byte: usize,
-
-    pub fn len(self: Span) usize {
-        return self.end_byte - self.start_byte;
-    }
-};
-
 pub const AttrsSpan = struct {
-    span: Span,
+    span: ByteSpan,
     attrs: []const col.Attr,
 
     /// Capture name is a dot-separated list of ts node types, forming hierarchy, e.g. `identifier.type`
     /// @see https://tree-sitter.github.io/tree-sitter/using-parsers/queries/2-operators.html#capturing-nodes
-    pub fn init(span: Span, capture_name: []const u8) ?AttrsSpan {
+    pub fn init(span: ByteSpan, capture_name: []const u8) ?AttrsSpan {
         return .{
             .span = span,
             .attrs = if (findAttrs(capture_name)) |as| as else return null,
@@ -171,10 +165,10 @@ pub const syntax_highlight = std.StaticStringMap([]const col.Attr).initComptime(
 });
 
 pub const SpanNameTuple = struct {
-    span: Span,
+    span: ByteSpan,
     name: []const u8,
 
-    pub fn init(span: Span, capture_name: []const u8) ?SpanNameTuple {
+    pub fn init(span: ByteSpan, capture_name: []const u8) ?SpanNameTuple {
         if (!std.mem.eql(u8, capture_name, "indent.begin")) return null;
         return .{ .span = span, .name = capture_name };
     }
