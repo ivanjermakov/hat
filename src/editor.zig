@@ -26,7 +26,11 @@ pub const DotRepeat = enum {
     executing,
 };
 
+pub const Config = struct {
+};
+
 pub const Editor = struct {
+    config: Config = .{},
     /// List of buffers
     /// Must be always sorted recent-first
     buffers: std.ArrayList(*buf.Buffer),
@@ -48,8 +52,9 @@ pub const Editor = struct {
     macros: std.AutoHashMap(u8, std.ArrayList(inp.Key)),
     allocator: std.mem.Allocator,
 
-    pub fn init(allocator: std.mem.Allocator) !Editor {
+    pub fn init(allocator: std.mem.Allocator, config: Config) !Editor {
         const editor = Editor{
+            .config = config,
             .buffers = std.ArrayList(*buf.Buffer).init(allocator),
             .mode = .normal,
             .dirty = .{},

@@ -91,7 +91,7 @@ pub fn main() !void {
     term = try ter.Terminal.init(allocator, std_out.writer().any(), try ter.terminalSize());
     defer term.deinit();
 
-    editor = try edi.Editor.init(allocator);
+    editor = try edi.Editor.init(allocator, .{});
     defer editor.deinit();
 
     const path = if (args.path) |path| try allocator.dupe(u8, path) else fzf.pickFile(allocator) catch return;
@@ -480,7 +480,7 @@ comptime {
 pub fn testSetup() !void {
     const allocator = std.testing.allocator;
     log.enabled = true;
-    editor = try edi.Editor.init(allocator);
+    editor = try edi.Editor.init(allocator, .{});
     term = ter.Terminal{
         .writer = .{ .unbuffered_writer = std.io.null_writer.any() },
         .dimensions = .{ .width = 50, .height = 30 },
