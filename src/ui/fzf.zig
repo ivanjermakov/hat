@@ -14,12 +14,8 @@ pub fn pickFile(allocator: Allocator) ![]const u8 {
     const files = try ext.runExternalWait(allocator, &.{ "rg", "--files" }, null, null);
     defer allocator.free(files);
 
-    var cmd = std.ArrayList([]const u8).init(allocator);
-    try cmd.appendSlice(fzf_command);
-    try cmd.append("--preview");
-    try cmd.append("hat --printer {}");
-    defer cmd.deinit();
-    const out = try ext.runExternalWait(allocator, cmd.items, files, null);
+    const cmd = fzf_command ++ .{ "--preview", "hat --printer {}" };
+    const out = try ext.runExternalWait(allocator, cmd, files, null);
     defer allocator.free(out);
     if (out.len == 0) return error.EmptyOut;
     return try allocator.dupe(u8, std.mem.trim(u8, out, "\n"));
@@ -32,15 +28,13 @@ pub const FindResult = struct {
 
 pub fn findInFiles(allocator: Allocator) !FindResult {
     const rg_cmd = "rg -n --column --no-heading --smart-case {q}";
-    var cmd = std.ArrayList([]const u8).init(allocator);
-    defer cmd.deinit();
-    try cmd.appendSlice(fzf_command);
-    try cmd.append("--preview");
-    try cmd.append("hat --printer --term-height=$FZF_PREVIEW_LINES --highlight-line={2} {1}");
-    try cmd.appendSlice(&.{ "--bind", std.fmt.comptimePrint("start:reload:{s}", .{rg_cmd}) });
-    try cmd.appendSlice(&.{ "--bind", std.fmt.comptimePrint("change:reload:sleep 0.1; {s} || true", .{rg_cmd}) });
-    try cmd.appendSlice(&.{ "--delimiter", ":" });
-    const out = try ext.runExternalWait(allocator, cmd.items, null, null);
+    const cmd = fzf_cmd_with_preview ++ .{
+        "--bind",
+        std.fmt.comptimePrint("start:reload:{s}", .{rg_cmd}),
+        "--bind",
+        std.fmt.comptimePrint("change:reload:sleep 0.1; {s} || true", .{rg_cmd}),
+    };
+    const out = try ext.runExternalWait(allocator, cmd, null, null);
     defer allocator.free(out);
     if (out.len == 0) return error.EmptyOut;
     var iter = std.mem.splitScalar(u8, out, ':');
@@ -67,21 +61,13 @@ pub fn pickBuffer(allocator: Allocator, buffers: []const *buf.Buffer) ![]const u
     const bufs_str = try bufs.toOwnedSlice();
     defer allocator.free(bufs_str);
 
-    var cmd = std.ArrayList([]const u8).init(allocator);
-    defer cmd.deinit();
-    try cmd.appendSlice(fzf_command);
-    try cmd.append("--preview");
-    try cmd.append("hat --printer --term-height=$FZF_PREVIEW_LINES --highlight-line={2} {1}");
-    try cmd.appendSlice(&.{ "--delimiter", ":" });
-
-    const out = try ext.runExternalWait(allocator, cmd.items, bufs_str, null);
+    const out = try ext.runExternalWait(allocator, fzf_cmd_with_preview, bufs_str, null);
     defer allocator.free(out);
     if (out.len == 0) return error.EmptyOut;
     var iter = std.mem.splitScalar(u8, out, ':');
     return try allocator.dupe(u8, iter.next().?);
 }
 
-/// TODO: dry
 pub fn pickLspLocation(allocator: Allocator, locations: []const lsp.types.Location) !FindResult {
     var bufs = std.ArrayList(u8).init(allocator);
     for (locations) |location| {
@@ -99,14 +85,7 @@ pub fn pickLspLocation(allocator: Allocator, locations: []const lsp.types.Locati
     const bufs_str = try bufs.toOwnedSlice();
     defer allocator.free(bufs_str);
 
-    var cmd = std.ArrayList([]const u8).init(allocator);
-    defer cmd.deinit();
-    try cmd.appendSlice(fzf_command);
-    try cmd.append("--preview");
-    try cmd.append("hat --printer --term-height=$FZF_PREVIEW_LINES --highlight-line={2} {1}");
-    try cmd.appendSlice(&.{ "--delimiter", ":" });
-
-    const out = try ext.runExternalWait(allocator, cmd.items, bufs_str, null);
+    const out = try ext.runExternalWait(allocator, fzf_cmd_with_preview, bufs_str, null);
     defer allocator.free(out);
     if (out.len == 0) return error.EmptyOut;
     var iter = std.mem.splitScalar(u8, out, ':');
@@ -118,6 +97,13 @@ pub fn pickLspLocation(allocator: Allocator, locations: []const lsp.types.Locati
         },
     };
 }
+
+const fzf_cmd_with_preview: []const []const u8 = fzf_command ++ .{
+    "--preview",
+    "hat --printer --term-height=$FZF_PREVIEW_LINES --highlight-line={2} {1}",
+    "--delimiter",
+    ":",
+};
 
 const fzf_command: []const []const u8 = &.{
     "fzf",
