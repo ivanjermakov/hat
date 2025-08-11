@@ -40,19 +40,19 @@ Hat is a **ha**ckable modal **t**ext editor for modern terminals.
 
 ## Functionality available in patches
 
-| Done | Name                     | Link |
-| ---- | ------------------------ | ---- |
-| 🚧   | Windows support          |      |
-| 🚧   | MacOS support            |      |
-| 🚧   | LSP highlight            |      |
-| 🚧   | LSP find symbol          |      |
-| 🚧   | LSP code action          |      |
-| 🚧   | LSP formatting           |      |
-| 🚧   | Persistent undo          |      |
-| 🚧   | Persistent macros        |      |
-| 🚧   | Git hunk markers         |      |
-| 🚧   | Tree-sitter tree actions |      |
-| ✔️   | Buffer centering         |      |
+| Done | Name                     | Link                                                  |
+| ---- | ------------------------ | ----------------------------------------------------- |
+| 🚧   | Windows support          |                                                       |
+| 🚧   | MacOS support            |                                                       |
+| 🚧   | LSP highlight            |                                                       |
+| 🚧   | LSP find symbol          |                                                       |
+| 🚧   | LSP code action          |                                                       |
+| 🚧   | LSP formatting           |                                                       |
+| 🚧   | Persistent undo          |                                                       |
+| 🚧   | Persistent macros        |                                                       |
+| 🚧   | Git hunk markers         |                                                       |
+| 🚧   | Tree-sitter tree actions |                                                       |
+| ✔️   | Buffer centering         | [patch/buffer-centering](/patch/buffer-centering)     |
 
 ## Philosophy
 
