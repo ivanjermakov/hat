@@ -1,0 +1,81 @@
+diff --git c/src/core.zig w/src/core.zig
+index 17f68e6..955a94c 100644
+--- c/src/core.zig
++++ w/src/core.zig
+@@ -95,6 +95,7 @@ pub const ByteSpan = struct {
+ };
+ 
+ pub const Layout = struct {
++    left_padding: Area,
+     number_line: Area,
+     buffer: Area,
+ };
+diff --git c/src/editor.zig w/src/editor.zig
+index 21fc180..ccc0be4 100644
+--- c/src/editor.zig
++++ w/src/editor.zig
+@@ -27,6 +27,11 @@ pub const DotRepeat = enum {
+ };
+ 
+ pub const Config = struct {
++    /// Imaginary width of a buffer that should be aligned (padded on the left).
++    /// `null` means "no centering".
++    /// If >`term_width`, padding is 0,
++    /// If <`term_width`, left padding is `(centering_width-term_width)/2`
++    centering_width: ?usize = null,
+ };
+ 
+ pub const Editor = struct {
+diff --git c/src/main.zig w/src/main.zig
+index 285f63d..d868f77 100644
+--- c/src/main.zig
++++ w/src/main.zig
+@@ -91,7 +91,7 @@ pub fn main() !void {
+     term = try ter.Terminal.init(allocator, std_out.writer().any(), try ter.terminalSize());
+     defer term.deinit();
+ 
+-    editor = try edi.Editor.init(allocator, .{});
++    editor = try edi.Editor.init(allocator, .{ .centering_width = 140 });
+     defer editor.deinit();
+ 
+     const path = if (args.path) |path| try allocator.dupe(u8, path) else fzf.pickFile(allocator) catch return;
+diff --git c/src/terminal.zig w/src/terminal.zig
+index d8863b0..1cc7ea3 100644
+--- c/src/terminal.zig
++++ w/src/terminal.zig
+@@ -416,20 +416,32 @@ pub fn terminalSize() !Dimensions {
+ 
+ pub fn computeLayout(term_dims: Dimensions) Layout {
+     const number_line_width = 5;
++    const padding_width = if (main.editor.config.centering_width) |cw|
++        if (term_dims.width > cw) @divFloor(term_dims.width - cw, 2) else 0
++    else
++        0;
++    const occupied_width = padding_width + number_line_width;
+ 
+     return .{
+-        .number_line = .{
++        .left_padding = .{
+             .pos = .{},
++            .dims = .{
++                .height = term_dims.height,
++                .width = padding_width,
++            },
++        },
++        .number_line = .{
++            .pos = .{ .col = @intCast(padding_width) },
+             .dims = .{
+                 .height = term_dims.height,
+                 .width = number_line_width,
+             },
+         },
+         .buffer = .{
+-            .pos = .{ .col = number_line_width },
++            .pos = .{ .col = @intCast(occupied_width) },
+             .dims = .{
+                 .height = term_dims.height,
+-                .width = term_dims.width - number_line_width,
++                .width = term_dims.width - occupied_width,
+             },
+         },
+     };
