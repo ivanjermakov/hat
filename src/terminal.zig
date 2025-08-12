@@ -416,32 +416,20 @@ pub fn terminalSize() !Dimensions {
 
 pub fn computeLayout(term_dims: Dimensions) Layout {
     const number_line_width = 5;
-    const padding_width = if (main.editor.config.centering_width) |cw|
-        if (term_dims.width > cw) @divFloor(term_dims.width - cw, 2) else 0
-    else
-        0;
-    const occupied_width = padding_width + number_line_width;
 
     return .{
-        .left_padding = .{
-            .pos = .{},
-            .dims = .{
-                .height = term_dims.height,
-                .width = padding_width,
-            },
-        },
         .number_line = .{
-            .pos = .{ .col = @intCast(padding_width) },
+            .pos = .{},
             .dims = .{
                 .height = term_dims.height,
                 .width = number_line_width,
             },
         },
         .buffer = .{
-            .pos = .{ .col = @intCast(occupied_width) },
+            .pos = .{ .col = number_line_width },
             .dims = .{
                 .height = term_dims.height,
-                .width = term_dims.width - occupied_width,
+                .width = term_dims.width - number_line_width,
             },
         },
     };
