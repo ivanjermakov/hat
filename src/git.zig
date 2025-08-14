@@ -23,8 +23,21 @@ pub fn gitRoot(allocator: Allocator, file_path: []const u8) !?[]const u8 {
     return null;
 }
 
+pub fn show(allocator: Allocator, file_path: []const u8) !?[]const u8 {
+    var path_arg = std.ArrayList(u8).init(allocator);
+    defer path_arg.deinit();
+    try path_arg.appendSlice(":");
+    try path_arg.appendSlice(file_path);
+    const args = .{ "git", "--no-pager", "show", path_arg.items };
+    var exit_code: u8 = undefined;
+    const content = try ext.runExternalWait(allocator, &args, null, &exit_code);
+    errdefer allocator.free(content);
+    if (exit_code != 0) return error.GitError;
+    return content;
+}
+
 pub fn diffHunks(allocator: Allocator, file_before: []const u8, file_after: []const u8) !?[]const Hunk {
-    const args = .{ "git", "diff", "--unified=0", "--no-color", file_before, file_after };
+    const args = .{ "git", "--no-pager", "diff", "--unified=0", "--no-color", file_before, file_after };
     var exit_code: u8 = undefined;
     const diff = try ext.runExternalWait(allocator, &args, null, &exit_code);
     if (exit_code == 0) return null;
@@ -69,10 +82,14 @@ pub fn parseDiff(allocator: Allocator, diff: []const u8) ![]const Hunk {
         }
         const stats_line = hunk[std.mem.indexOf(u8, hunk, "+").?..std.mem.indexOf(u8, hunk, "\n").?];
         const stats = stats_line[0..std.mem.indexOf(u8, stats_line, " ").?];
-        const comma_idx = std.mem.indexOf(u8, stats, ",").?;
-        const start_line = try std.fmt.parseInt(usize, stats[1..comma_idx], 10);
-        const len = try std.fmt.parseInt(usize, stats[comma_idx + 1 ..], 10);
-        try hunks.append(.{ .type = .fromCounts(adds, deletes), .line = start_line, .len = len });
+        if (std.mem.indexOf(u8, stats, ",")) |comma_idx| {
+            const start_line = try std.fmt.parseInt(usize, stats[1..comma_idx], 10);
+            const len = try std.fmt.parseInt(usize, stats[comma_idx + 1 ..], 10);
+            try hunks.append(.{ .type = .fromCounts(adds, deletes), .line = start_line, .len = len });
+        } else {
+            const start_line = try std.fmt.parseInt(usize, stats[1..], 10);
+            try hunks.append(.{ .type = .fromCounts(adds, deletes), .line = start_line, .len = 0 });
+        }
     }
     return hunks.toOwnedSlice();
 }
@@ -102,4 +119,24 @@ test "parseDiff" {
     try std.testing.expectEqualDeep(hunks[0], Hunk{ .type = .delete, .line = 0, .len = 0 });
     try std.testing.expectEqualDeep(hunks[1], Hunk{ .type = .modify, .line = 2, .len = 2 });
     try std.testing.expectEqualDeep(hunks[2], Hunk{ .type = .add, .line = 7, .len = 2 });
+}
+
+test "parseDiff blank lines" {
+    const allocator = std.testing.allocator;
+    const out =
+        \\diff --git 1/tmp/a 2/tmp/b
+        \\index 285f63d..96f799d 100644
+        \\--- 1/tmp/hat_staged
+        \\+++ 2/src/main.zig
+        \\@@ -34,0 +35 @@ pub var tty_in: std.fs.File = undefined;
+        \\+
+        \\@@ -37 +37,0 @@ pub var term: ter.Terminal = undefined;
+        \\-
+    ;
+    const hunks = try parseDiff(allocator, out);
+    defer allocator.free(hunks);
+
+    try std.testing.expectEqual(hunks.len, 2);
+    try std.testing.expectEqualDeep(hunks[0], Hunk{ .type = .add, .line = 35, .len = 0 });
+    try std.testing.expectEqualDeep(hunks[1], Hunk{ .type = .delete, .line = 37, .len = 0 });
 }

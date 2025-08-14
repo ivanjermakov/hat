@@ -130,6 +130,7 @@ pub const Buffer = struct {
         try self.updateRaw();
         if (self.ts_state) |*ts_state| try ts_state.reparse(self.content_raw.items);
         try self.updateLinePositions();
+        try self.updateGitHunks();
     }
 
     pub fn updateContent(self: *Buffer) !void {
@@ -524,7 +525,20 @@ pub const Buffer = struct {
     pub fn updateGitHunks(self: *Buffer) !void {
         if (self.git_root == null) return;
         self.git_hunks.clearRetainingCapacity();
-        try self.git_hunks.appendSlice(git.diffHunks(self.allocator, "/tmp/a", "/tmp/b") catch {});
+        if (git.show(self.allocator, self.path) catch return) |show| {
+            defer self.allocator.free(show);
+            const tmp_path = "/tmp/hat_staged";
+            {
+                const tmp_file = try std.fs.cwd().createFile(tmp_path, .{ .truncate = true });
+                defer tmp_file.close();
+                try tmp_file.writeAll(show);
+            }
+            if (git.diffHunks(self.allocator, tmp_path, self.path) catch return) |hunks| {
+                defer self.allocator.free(hunks);
+                log.debug(@This(), "git hunks: {any}\n", .{hunks});
+                try self.git_hunks.appendSlice(hunks);
+            }
+        }
     }
 
     pub fn undo(self: *Buffer) !void {
