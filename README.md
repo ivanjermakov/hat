@@ -40,20 +40,20 @@ Hat is a **ha**ckable modal **t**ext editor for modern terminals.
 
 ## Functionality available in patches
 
-| Done | Name                      | Link                                                  |
-| ---- | ------------------------  | ----------------------------------------------------- |
-| 🚧   | Windows support           |                                                       |
-| 🚧   | MacOS support             |                                                       |
-| 🚧   | LSP highlight             |                                                       |
-| 🚧   | LSP code action           |                                                       |
-| 🚧   | LSP formatting            |                                                       |
-| 🚧   | Persistent undo           |                                                       |
-| 🚧   | Persistent macros         |                                                       |
-| ✔️   | Git hunk markers          | [patch/git-signs](/patch/git-signs)                   |
-| ✔️   | Tree-sitter symbol picker | [patch/ts-symbol-picker](/patch/ts-symbol-picker)     |
-| 🚧   | Tree-sitter tree actions  |                                                       |
-| ✔️   | Buffer centering          | [patch/buffer-centering](/patch/buffer-centering)     |
-| 🚧   | Autosave                  |                                                       |
+| Done | Name                      | Link                                                  | Branch                                                            |
+| ---- | ------------------------  | ----------------------------------------------------- | ----------------------------------------------------------------- |
+| 🚧   | Windows support           |                                                       |                                                                   |
+| 🚧   | MacOS support             |                                                       |                                                                   |
+| 🚧   | LSP highlight             |                                                       |                                                                   |
+| 🚧   | LSP code action           |                                                       |                                                                   |
+| 🚧   | LSP formatting            |                                                       |                                                                   |
+| 🚧   | Persistent undo           |                                                       |                                                                   |
+| 🚧   | Persistent macros         |                                                       |                                                                   |
+| ✔️   | Git hunk markers          | [patch/git-signs](/patch/git-signs)                   | [link](https://github.com/ivanjermakov/hat/tree/git-signs)        |
+| ✔️   | Tree-sitter symbol picker | [patch/ts-symbol-picker](/patch/ts-symbol-picker)     | [link](https://github.com/ivanjermakov/hat/tree/ts-symbol-picker) |
+| 🚧   | Tree-sitter tree actions  |                                                       |                                                                   |
+| ✔️   | Buffer centering          | [patch/buffer-centering](/patch/buffer-centering)     | [link](https://github.com/ivanjermakov/hat/tree/buffer-centering) |
+| 🚧   | Autosave                  |                                                       |                                                                   |
 
 ## Philosophy
 
@@ -76,7 +76,7 @@ the beginning
 
 Hat should work out of the box on any
 [`std.posix`-compliant](https://github.com/ziglang/zig/blob/master/lib/std/posix.zig) operating system with satisfied
-dependencies and correct tree-sitter configuration (see `file_type` in [file_type.zig](src/file_type.zig))).
+dependencies and correct tree-sitter configuration (see `file_type` in [file_type.zig](src/file_type.zig)).
 
 ### Dependencies
 
