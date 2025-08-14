@@ -527,13 +527,19 @@ pub const Buffer = struct {
         self.git_hunks.clearRetainingCapacity();
         if (git.show(self.allocator, self.path) catch return) |show| {
             defer self.allocator.free(show);
-            const tmp_path = "/tmp/hat_staged";
+            const staged_path = "/tmp/hat_staged";
             {
-                const tmp_file = try std.fs.cwd().createFile(tmp_path, .{ .truncate = true });
-                defer tmp_file.close();
-                try tmp_file.writeAll(show);
+                const tmp = try std.fs.cwd().createFile(staged_path, .{ .truncate = true });
+                defer tmp.close();
+                try tmp.writeAll(show);
             }
-            if (git.diffHunks(self.allocator, tmp_path, self.path) catch return) |hunks| {
+            const current_path = "/tmp/hat_current";
+            {
+                const tmp = try std.fs.cwd().createFile(current_path, .{ .truncate = true });
+                defer tmp.close();
+                try tmp.writeAll(self.content_raw.items);
+            }
+            if (git.diffHunks(self.allocator, staged_path, current_path) catch return) |hunks| {
                 defer self.allocator.free(hunks);
                 log.debug(@This(), "git hunks: {any}\n", .{hunks});
                 try self.git_hunks.appendSlice(hunks);
