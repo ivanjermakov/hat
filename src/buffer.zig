@@ -24,10 +24,13 @@ const ter = @import("terminal.zig");
 const ts = @import("ts.zig");
 const uni = @import("unicode.zig");
 const dia = @import("ui/diagnostic.zig");
+const git = @import("git.zig");
 
 pub const Buffer = struct {
     path: []const u8,
     uri: []const u8,
+    git_root: ?[]const u8,
+    git_hunks: std.ArrayList(git.Hunk),
     file: ?std.fs.File,
     stat: ?std.fs.File.Stat = null,
     /// Incremented on every content change
@@ -89,11 +92,17 @@ pub const Buffer = struct {
         const abs_path = std.fs.realpathAlloc(allocator, buf_path) catch null;
         defer if (abs_path) |a| allocator.free(a);
         const uri = try std.fmt.allocPrint(allocator, "file://{s}", .{abs_path orelse buf_path});
+
+        const git_root = git.gitRoot(allocator, buf_path) catch null;
+        log.debug(@This(), "git root: {?s}\n", .{git_root});
+
         var self = Buffer{
             .path = buf_path,
             .file = file,
             .file_type = file_type,
             .uri = uri,
+            .git_root = git_root,
+            .git_hunks = std.ArrayList(git.Hunk).init(allocator),
             .content = std.ArrayList(u21).init(allocator),
             .content_raw = raw,
             .diagnostics = std.ArrayList(dia.Diagnostic).init(allocator),
@@ -137,6 +146,8 @@ pub const Buffer = struct {
         self.lsp_connections.deinit();
 
         self.allocator.free(self.uri);
+        if (self.git_root) |gr| self.allocator.free(gr);
+        self.git_hunks.deinit();
         self.allocator.free(self.path);
 
         if (self.ts_state) |*ts_state| ts_state.deinit();
@@ -508,6 +519,12 @@ pub const Buffer = struct {
             }
             try self.indents.append(indent);
         }
+    }
+
+    pub fn updateGitHunks(self: *Buffer) !void {
+        if (self.git_root == null) return;
+        self.git_hunks.clearRetainingCapacity();
+        try self.git_hunks.appendSlice(git.diffHunks(self.allocator, "/tmp/a", "/tmp/b") catch {});
     }
 
     pub fn undo(self: *Buffer) !void {
