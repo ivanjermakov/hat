@@ -49,7 +49,7 @@ Hat is a **ha**ckable modal **t**ext editor for modern terminals.
 | 🚧   | LSP formatting            |                                                       |
 | 🚧   | Persistent undo           |                                                       |
 | 🚧   | Persistent macros         |                                                       |
-| 🚧   | Git hunk markers          |                                                       |
+| ✔️   | Git hunk markers          | [patch/git-signs](/patch/git-signs)                   |
 | ✔️   | Tree-sitter symbol picker | [patch/ts-symbol-picker](/patch/ts-symbol-picker)     |
 | 🚧   | Tree-sitter tree actions  |                                                       |
 | ✔️   | Buffer centering          | [patch/buffer-centering](/patch/buffer-centering)     |
