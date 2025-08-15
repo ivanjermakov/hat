@@ -11,6 +11,8 @@ const cmd = @import("ui/command_line.zig");
 const cmp = @import("ui/completion_menu.zig");
 const fzf = @import("ui/fzf.zig");
 const uni = @import("unicode.zig");
+const ur = @import("uri.zig");
+const cha = @import("change.zig");
 
 pub const Dirty = struct {
     input: bool = false,
@@ -26,8 +28,7 @@ pub const DotRepeat = enum {
     executing,
 };
 
-pub const Config = struct {
-};
+pub const Config = struct {};
 
 pub const Editor = struct {
     config: Config = .{},
@@ -439,6 +440,34 @@ pub const Editor = struct {
             },
         }
         self.command_line.close();
+    }
+
+    pub fn applyWorkspaceEdit(self: *Editor, workspace_edit: lsp.types.WorkspaceEdit) !void {
+        const old_buffer = self.active_buffer;
+        const old_cursor = old_buffer.cursor;
+        const old_offset = old_buffer.offset;
+        log.debug(@This(), "workspace edit: {}\n", .{workspace_edit});
+        var change_iter = workspace_edit.changes.?.map.iterator();
+        while (change_iter.next()) |entry| {
+            const change_uri = entry.key_ptr.*;
+            const text_edits = entry.value_ptr.*;
+            const path = try ur.toPath(self.allocator, change_uri);
+            defer self.allocator.free(path);
+            try self.openBuffer(path);
+            const buffer = self.active_buffer;
+            for (text_edits) |edit| {
+                var change = try cha.Change.fromLsp(buffer.allocator, buffer, edit);
+                log.debug(@This(), "change: {s}: {}\n", .{ change_uri, change });
+                try buffer.appendChange(&change);
+            }
+            // TODO: apply another dummy edit that resets cursor position back to `old_cursor`
+            // because now redoing rename jumps the cursor
+            try buffer.commitChanges();
+        }
+        self.active_buffer = old_buffer;
+        self.active_buffer.cursor = old_cursor;
+        self.active_buffer.offset = old_offset;
+        self.dirty.draw = true;
     }
 };
 

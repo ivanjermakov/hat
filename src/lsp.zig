@@ -496,6 +496,7 @@ pub const LspConnection = struct {
     }
 
     fn handleRenameResponse(self: *LspConnection, arena: Allocator, resp: ?std.json.Value) !void {
+        _ = self;
         if (resp == null or resp.? == .null) return;
         const result = try std.json.parseFromValue(types.WorkspaceEdit, arena, resp.?, .{});
         main.main_loop_mutex.lock();
@@ -508,7 +509,7 @@ pub const LspConnection = struct {
                 log.debug(@This(), "main loop blocked for: {}us\n", .{elapsed / std.time.ns_per_us});
             }
         }
-        try self.applyWorkspaceEdit(result.value);
+        try main.editor.applyWorkspaceEdit(result.value);
     }
 
     fn handleNotification(self: *LspConnection, arena: Allocator, notif: lsp.JsonRPCMessage.Notification) !void {
@@ -528,34 +529,6 @@ pub const LspConnection = struct {
                 }
             }
         }
-    }
-
-    fn applyWorkspaceEdit(self: *LspConnection, workspace_edit: types.WorkspaceEdit) !void {
-        const old_buffer = main.editor.active_buffer;
-        const old_cursor = old_buffer.cursor;
-        const old_offset = old_buffer.offset;
-        log.debug(@This(), "workspace edit: {}\n", .{workspace_edit});
-        var change_iter = workspace_edit.changes.?.map.iterator();
-        while (change_iter.next()) |entry| {
-            const change_uri = entry.key_ptr.*;
-            const text_edits = entry.value_ptr.*;
-            const path = try uri.toPath(self.allocator, change_uri);
-            defer self.allocator.free(path);
-            try main.editor.openBuffer(path);
-            const buffer = main.editor.active_buffer;
-            for (text_edits) |edit| {
-                var change = try cha.Change.fromLsp(buffer.allocator, buffer, edit);
-                log.debug(@This(), "change: {s}: {}\n", .{ change_uri, change });
-                try buffer.appendChange(&change);
-            }
-            // TODO: apply another dummy edit that resets cursor position back to `old_cursor`
-            // because now redoing rename jumps the cursor
-            try buffer.commitChanges();
-        }
-        main.editor.active_buffer = old_buffer;
-        main.editor.active_buffer.cursor = old_cursor;
-        main.editor.active_buffer.offset = old_offset;
-        main.editor.dirty.draw = true;
     }
 };
 
