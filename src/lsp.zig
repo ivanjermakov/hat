@@ -13,6 +13,7 @@ const fs = @import("fs.zig");
 const log = @import("log.zig");
 const main = @import("main.zig");
 const fzf = @import("ui/fzf.zig");
+const dia = @import("ui/diagnostic.zig");
 const uri = @import("uri.zig");
 
 const default_stringify_opts = std.json.StringifyOptions{ .emit_null_optional_fields = false };
@@ -522,8 +523,10 @@ pub const LspConnection = struct {
             const params_typed = try std.json.parseFromValue(types.PublishDiagnosticsParams, arena, notif.params.?, .{});
             log.debug(@This(), "got {} diagnostics\n", .{params_typed.value.diagnostics.len});
             if (main.editor.findBufferByUri(params_typed.value.uri)) |target| {
-                target.diagnostics.clearRetainingCapacity();
-                try target.diagnostics.appendSlice(params_typed.value.diagnostics);
+                target.clearDiagnostics();
+                for (params_typed.value.diagnostics) |diagnostic| {
+                    try target.diagnostics.append(try dia.Diagnostic.fromLsp(target.allocator, diagnostic));
+                }
                 if (target == main.editor.active_buffer) {
                     main.editor.dirty.draw = true;
                 }

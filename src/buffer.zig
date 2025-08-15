@@ -23,6 +23,7 @@ const main = @import("main.zig");
 const ter = @import("terminal.zig");
 const ts = @import("ts.zig");
 const uni = @import("unicode.zig");
+const dia = @import("ui/diagnostic.zig");
 
 pub const Buffer = struct {
     path: []const u8,
@@ -36,7 +37,7 @@ pub const Buffer = struct {
     content_raw: std.ArrayList(u8),
     ts_state: ?ts.State = null,
     selection: ?Span = null,
-    diagnostics: std.ArrayList(lsp.types.Diagnostic),
+    diagnostics: std.ArrayList(dia.Diagnostic),
     /// Cursor position in local buffer character space
     cursor: Cursor = .{},
     /// Cursor's preferred col
@@ -95,7 +96,7 @@ pub const Buffer = struct {
             .uri = uri,
             .content = std.ArrayList(u21).init(allocator),
             .content_raw = raw,
-            .diagnostics = std.ArrayList(lsp.types.Diagnostic).init(allocator),
+            .diagnostics = std.ArrayList(dia.Diagnostic).init(allocator),
             .line_positions = std.ArrayList(usize).init(allocator),
             .line_byte_positions = std.ArrayList(usize).init(allocator),
             .indents = std.ArrayList(usize).init(allocator),
@@ -144,7 +145,9 @@ pub const Buffer = struct {
         self.content.deinit();
         self.content_raw.deinit();
 
+        self.clearDiagnostics();
         self.diagnostics.deinit();
+
         self.line_positions.deinit();
         self.line_byte_positions.deinit();
         self.indents.deinit();
@@ -437,6 +440,11 @@ pub const Buffer = struct {
         if (self.selection == null) return;
         self.selection = null;
         main.editor.dirty.draw = true;
+    }
+
+    pub fn clearDiagnostics(self: *Buffer) void {
+        for (self.diagnostics.items) |*d| d.deinit();
+        self.diagnostics.clearRetainingCapacity();
     }
 
     pub fn updateLinePositions(self: *Buffer) !void {
@@ -769,10 +777,10 @@ pub const Buffer = struct {
     }
 
     pub fn findNextDiagnostic(self: *Buffer, forward: bool) !void {
-        const diagnostic: lsp.types.Diagnostic = b: for (self.diagnostics.items, 0..) |_, i_| {
+        const diagnostic: dia.Diagnostic = b: for (self.diagnostics.items, 0..) |_, i_| {
             const i = if (forward) i_ else self.diagnostics.items.len - i_ - 1;
             const diagnostic = self.diagnostics.items[i];
-            const ord = self.cursor.order(Span.fromLsp(diagnostic.range).start);
+            const ord = self.cursor.order(diagnostic.span.start);
             if (forward) {
                 if (ord == .lt) break :b diagnostic;
             } else {
@@ -787,7 +795,7 @@ pub const Buffer = struct {
             }
         };
 
-        try self.moveCursor(Span.fromLsp(diagnostic.range).start);
+        try self.moveCursor(diagnostic.span.start);
         try self.centerCursor();
         main.editor.resetHover();
         main.editor.hover_contents = try main.editor.allocator.dupe(u8, diagnostic.message);

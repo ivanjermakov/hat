@@ -389,7 +389,7 @@ fn startEditor(allocator: std.mem.Allocator) !void {
         buffer = editor.active_buffer;
         editor.dirty.draw = editor.dirty.draw or buffer.pending_changes.items.len > 0;
         if (buffer.pending_changes.items.len > 0) {
-            buffer.diagnostics.clearRetainingCapacity();
+            buffer.clearDiagnostics();
             try buffer.reparse();
             perf.parse = timer.lap();
             for (buffer.lsp_connections.items) |conn| {
