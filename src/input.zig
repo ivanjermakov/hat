@@ -129,5 +129,5 @@ fn expectKeyFormat(key: Key, expected: []const u8) !void {
     const allocator = std.testing.allocator;
     const actual = try std.fmt.allocPrint(allocator, "{}", .{key});
     defer allocator.free(actual);
-    try std.testing.expectEqualStrings(actual, expected);
+    try std.testing.expectEqualStrings(expected, actual);
 }

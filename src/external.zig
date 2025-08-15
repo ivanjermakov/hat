@@ -80,5 +80,5 @@ test "toArgv" {
 fn toArgvTest(cmd: []const u8, expected: []const []const u8) !void {
     const res = try toArgv(testing.allocator, cmd);
     defer testing.allocator.free(res);
-    try testing.expectEqualDeep(res, expected);
+    try testing.expectEqualDeep(expected, res);
 }

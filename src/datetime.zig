@@ -971,7 +971,7 @@ test "datetime-create-timestamp" {
     const t = Datetime.fromTimestamp(ts);
     try testing.expect(t.date.eql(try Date.create(2019, 11, 28)));
     try testing.expect(t.time.eql(try Time.create(2, 36, 26, 928000000)));
-    try testing.expectEqual(t.toTimestamp(), ts);
+    try testing.expectEqual(ts, t.toTimestamp());
 }
 
 test "datetime-from-seconds" {
@@ -980,9 +980,9 @@ test "datetime-from-seconds" {
     const ts: f64 = 1592417521.9326444;
     const t = Datetime.fromSeconds(ts);
     try testing.expect(t.date.year == 2020);
-    try testing.expectEqual(t.date, try Date.create(2020, 6, 17));
-    try testing.expectEqual(t.time, try Time.create(18, 12, 1, 932644400));
-    try testing.expectEqual(t.toSeconds(), ts);
+    try testing.expectEqual(try Date.create(2020, 6, 17), t.date);
+    try testing.expectEqual(try Time.create(18, 12, 1, 932644400), t.time);
+    try testing.expectEqual(ts, t.toSeconds());
 }
 
 test "datetime-shift" {
@@ -1021,15 +1021,15 @@ test "datetime-subtract" {
     var a = try Datetime.create(2019, 12, 2, 11, 51, 13, 466545);
     var b = try Datetime.create(2019, 12, 5, 11, 51, 13, 466545);
     var delta = a.sub(b);
-    try testing.expectEqual(delta.days, -3);
-    try testing.expectEqual(delta.totalSeconds(), -3 * time.s_per_day);
+    try testing.expectEqual(-3, delta.days);
+    try testing.expectEqual(-3 * time.s_per_day, delta.totalSeconds());
     delta = b.sub(a);
-    try testing.expectEqual(delta.days, 3);
-    try testing.expectEqual(delta.totalSeconds(), 3 * time.s_per_day);
+    try testing.expectEqual(3, delta.days);
+    try testing.expectEqual(3 * time.s_per_day, delta.totalSeconds());
 
     b = try Datetime.create(2019, 12, 2, 11, 0, 0, 466545);
     delta = a.sub(b);
-    try testing.expectEqual(delta.totalSeconds(), 13 + 51 * time.s_per_min);
+    try testing.expectEqual(13 + 51 * time.s_per_min, delta.totalSeconds());
 }
 
 test "datetime-subtract-delta" {
@@ -1052,7 +1052,7 @@ test "datetime-subtract-delta" {
 
 test "datetime-parse-modified-since" {
     const str = " Wed, 21 Oct 2015 07:28:00 GMT ";
-    try testing.expectEqual(try Datetime.parseModifiedSince(str), try Datetime.create(2015, 10, 21, 7, 28, 0, 0));
+    try testing.expectEqual(try Datetime.create(2015, 10, 21, 7, 28, 0, 0), try Datetime.parseModifiedSince(str));
 
     try testing.expectError(error.InvalidFormat, Datetime.parseModifiedSince("21/10/2015"));
 }
@@ -1097,16 +1097,16 @@ test "datetime-format-ISO8601" {
 }
 
 test "month-parse-abbr" {
-    try testing.expectEqual(try Month.parseAbbr("Jan"), .January);
-    try testing.expectEqual(try Month.parseAbbr("Oct"), .October);
-    try testing.expectEqual(try Month.parseAbbr("sep"), .September);
+    try testing.expectEqual(.January, try Month.parseAbbr("Jan"));
+    try testing.expectEqual(.October, try Month.parseAbbr("Oct"));
+    try testing.expectEqual(.September, try Month.parseAbbr("sep"));
     try testing.expectError(error.InvalidFormat, Month.parseAbbr("cra"));
 }
 
 test "month-parse" {
-    try testing.expectEqual(try Month.parseName("January"), .January);
-    try testing.expectEqual(try Month.parseName("OCTOBER"), .October);
-    try testing.expectEqual(try Month.parseName("july"), .July);
+    try testing.expectEqual(.January, try Month.parseName("January"));
+    try testing.expectEqual(.October, try Month.parseName("OCTOBER"));
+    try testing.expectEqual(.July, try Month.parseName("july"));
     try testing.expectError(error.InvalidFormat, Month.parseName("NoShaveNov"));
 }
 
@@ -1160,7 +1160,7 @@ test "iso-first-monday" {
     const years = [20]u16{ 1816, 1823, 1839, 1849, 1849, 1870, 1879, 1882, 1909, 1910, 1917, 1934, 1948, 1965, 1989, 2008, 2064, 2072, 2091, 2096 };
     const output = [20]u32{ 662915, 665470, 671315, 674969, 674969, 682641, 685924, 687023, 696886, 697250, 699805, 706014, 711124, 717340, 726104, 733041, 753495, 756421, 763358, 765185 };
     for (years, 0..) |year, i| {
-        try testing.expectEqual(daysBeforeFirstMonday(year), output[i]);
+        try testing.expectEqual(output[i], daysBeforeFirstMonday(year));
     }
 }
 
@@ -1181,54 +1181,39 @@ test "date-compare" {
 
 test "date-from-ordinal" {
     var date = Date.fromOrdinal(9921);
-    try testing.expectEqual(date.year, 28);
-    try testing.expectEqual(date.month, 2);
-    try testing.expectEqual(date.day, 29);
-    try testing.expectEqual(date.toOrdinal(), 9921);
+    try testing.expectEqual(28, date.year);
+    try testing.expectEqual(2, date.month);
+    try testing.expectEqual(29, date.day);
+    try testing.expectEqual(9921, date.toOrdinal());
 
     date = Date.fromOrdinal(737390);
-    try testing.expectEqual(date.year, 2019);
-    try testing.expectEqual(date.month, 11);
-    try testing.expectEqual(date.day, 27);
-    try testing.expectEqual(date.toOrdinal(), 737390);
+    try testing.expectEqual(2019, date.year);
+    try testing.expectEqual(11, date.month);
+    try testing.expectEqual(27, date.day);
+    try testing.expectEqual(737390, date.toOrdinal());
 
     date = Date.fromOrdinal(719163);
-    try testing.expectEqual(date.year, 1970);
-    try testing.expectEqual(date.month, 1);
-    try testing.expectEqual(date.day, 1);
-    try testing.expectEqual(date.toOrdinal(), 719163);
+    try testing.expectEqual(1970, date.year);
+    try testing.expectEqual(1, date.month);
+    try testing.expectEqual(1, date.day);
+    try testing.expectEqual(719163, date.toOrdinal());
 }
 
 test "date-from-seconds" {
     var seconds: f64 = 0;
     var date = Date.fromSeconds(seconds);
-    try testing.expectEqual(date, try Date.create(1970, 1, 1));
-    try testing.expectEqual(date.toSeconds(), seconds);
+    try testing.expectEqual(try Date.create(1970, 1, 1), date);
+    try testing.expectEqual(seconds, date.toSeconds());
 
     seconds = -@as(f64, EPOCH - 1) * time.s_per_day;
     date = Date.fromSeconds(seconds);
-    try testing.expectEqual(date, try Date.create(1, 1, 1));
-    try testing.expectEqual(date.toSeconds(), seconds);
+    try testing.expectEqual(try Date.create(1, 1, 1), date);
+    try testing.expectEqual(seconds, date.toSeconds());
 
     seconds = @as(f64, MAX_ORDINAL - EPOCH) * time.s_per_day;
     date = Date.fromSeconds(seconds);
-    try testing.expectEqual(date, try Date.create(9999, 12, 31));
-    try testing.expectEqual(date.toSeconds(), seconds);
-    //
-    //
-    //     const t = 63710928000.000;
-    //     date = Date.fromSeconds(t);
-    //     try testing.expectEqual(date.year, 2019);
-    //     try testing.expectEqual(date.month, 12);
-    //     try testing.expectEqual(date.day, 3);
-    //     try testing.expectEqual(date.toSeconds(), t);
-    //
-    //     Max check
-    //     var max_date = try Date.create(9999, 12, 31);
-    //     const tmax: f64 = @intToFloat(f64, MAX_ORDINAL-1) * time.s_per_day;
-    //     date = Date.fromSeconds(tmax);
-    //     try testing.expect(date.eql(max_date));
-    //     try testing.expectEqual(date.toSeconds(), tmax);
+    try testing.expectEqual(try Date.create(9999, 12, 31), date);
+    try testing.expectEqual(seconds, date.toSeconds());
 }
 
 test "date-day-of-year" {
@@ -1238,17 +1223,17 @@ test "date-day-of-year" {
 
 test "date-day-of-week" {
     var date = try Date.create(2019, 11, 27);
-    try testing.expectEqual(date.weekday(), 2);
-    try testing.expectEqual(date.dayOfWeek(), .Wednesday);
-    try testing.expectEqualSlices(u8, date.monthName(), "November");
-    try testing.expectEqualSlices(u8, date.weekdayName(), "Wednesday");
+    try testing.expectEqual(2, date.weekday());
+    try testing.expectEqual(.Wednesday, date.dayOfWeek());
+    try testing.expectEqualSlices(u8, "November", date.monthName());
+    try testing.expectEqualSlices(u8, "Wednesday", date.weekdayName());
     try testing.expect(!date.isWeekend());
 
     date = try Date.create(1776, 6, 4);
-    try testing.expectEqual(date.weekday(), 1);
-    try testing.expectEqual(date.dayOfWeek(), .Tuesday);
-    try testing.expectEqualSlices(u8, date.monthName(), "June");
-    try testing.expectEqualSlices(u8, date.weekdayName(), "Tuesday");
+    try testing.expectEqual(1, date.weekday());
+    try testing.expectEqual(.Tuesday, date.dayOfWeek());
+    try testing.expectEqualSlices(u8, "June", date.monthName());
+    try testing.expectEqualSlices(u8, "Tuesday", date.weekdayName());
     try testing.expect(!date.isWeekend());
 
     date = try Date.create(2019, 12, 1);
@@ -1260,15 +1245,15 @@ test "date-day-of-week" {
 test "date-shift-days" {
     var date = try Date.create(2019, 11, 27);
     var d = date.shiftDays(-2);
-    try testing.expectEqual(d.day, 25);
+    try testing.expectEqual(25, d.day);
     try testing.expectEqualSlices(u8, d.weekdayName(), "Monday");
 
     // Ahead one week
     d = date.shiftDays(7);
     try testing.expectEqualSlices(u8, d.weekdayName(), date.weekdayName());
-    try testing.expectEqual(d.month, 12);
-    try testing.expectEqualSlices(u8, d.monthName(), "December");
-    try testing.expectEqual(d.day, 4);
+    try testing.expectEqual(12, d.month);
+    try testing.expectEqualSlices(u8, "December", d.monthName());
+    try testing.expectEqual(4, d.day);
 
     d = date.shiftDays(0);
     try testing.expect(date.eql(d));
@@ -1317,8 +1302,8 @@ test "date-copy" {
 }
 
 test "date-parse-iso" {
-    try testing.expectEqual(try Date.parseIso("2018-12-15"), try Date.create(2018, 12, 15));
-    try testing.expectEqual(try Date.parseIso("2021-01-07"), try Date.create(2021, 1, 7));
+    try testing.expectEqual(try Date.create(2018, 12, 15), try Date.parseIso("2018-12-15"));
+    try testing.expectEqual(try Date.create(2021, 1, 7), try Date.parseIso("2021-01-07"));
     try testing.expectError(error.InvalidDate, Date.parseIso("2021-13-01"));
     try testing.expectError(error.InvalidFormat, Date.parseIso("20-01-01"));
     try testing.expectError(error.InvalidFormat, Date.parseIso("2000-1-1"));
@@ -1368,7 +1353,7 @@ test "date-write-iso" {
 
 test "date-isocalendar" {
     const today = try Date.create(2021, 8, 12);
-    try testing.expectEqual(today.isoCalendar(), ISOCalendar{ .year = 2021, .week = 32, .weekday = 4 });
+    try testing.expectEqual(ISOCalendar{ .year = 2021, .week = 32, .weekday = 4 }, today.isoCalendar());
 
     // Some random dates and outputs generated with python
     const dates = [15][]const u8{
@@ -1417,8 +1402,8 @@ test "date-isocalendar" {
     for (dates, 0..) |d, i| {
         const date = try Date.parseIso(d);
         const cal = date.isoCalendar();
-        try testing.expectEqual(cal, expect[i]);
-        try testing.expectEqual(date.weekOfYear(), expect[i].week);
+        try testing.expectEqual(expect[i], cal);
+        try testing.expectEqual(expect[i].week, date.weekOfYear());
     }
 }
 
