@@ -53,7 +53,7 @@ Hat is a **ha**ckable modal **t**ext editor for modern terminals.
 | ✔️   | Tree-sitter symbol picker | [patch/ts-symbol-picker](/patch/ts-symbol-picker)     | [link](https://github.com/ivanjermakov/hat/tree/ts-symbol-picker) |
 | 🚧   | Tree-sitter tree actions  |                                                       |                                                                   |
 | ✔️   | Buffer centering          | [patch/buffer-centering](/patch/buffer-centering)     | [link](https://github.com/ivanjermakov/hat/tree/buffer-centering) |
-| 🚧   | Autosave                  |                                                       |                                                                   |
+| ✔️   | Autosave                  | [patch/autosave](/patch/autosave)                     | [link](https://github.com/ivanjermakov/hat/tree/autosave)         |
 
 ## Philosophy
 
