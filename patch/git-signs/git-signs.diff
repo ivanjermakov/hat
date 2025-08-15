@@ -1,330 +1,330 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index 8eb5457..f8ac475 100644
+index f8ac475..8eb5457 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
-@@ -23,13 +23,10 @@ const main = @import("main.zig");
+@@ -23,10 +23,13 @@ const main = @import("main.zig");
  const ter = @import("terminal.zig");
  const ts = @import("ts.zig");
  const uni = @import("unicode.zig");
--const git = @import("git.zig");
++const git = @import("git.zig");
  
  pub const Buffer = struct {
      path: []const u8,
      uri: []const u8,
--    git_root: ?[]const u8,
--    git_hunks: std.ArrayList(git.Hunk),
++    git_root: ?[]const u8,
++    git_hunks: std.ArrayList(git.Hunk),
      file: ?std.fs.File,
      stat: ?std.fs.File.Stat = null,
      /// Incremented on every content change
-@@ -91,17 +88,11 @@ pub const Buffer = struct {
+@@ -88,11 +91,17 @@ pub const Buffer = struct {
          const abs_path = std.fs.realpathAlloc(allocator, buf_path) catch null;
          defer if (abs_path) |a| allocator.free(a);
          const uri = try std.fmt.allocPrint(allocator, "file://{s}", .{abs_path orelse buf_path});
--
--        const git_root = git.gitRoot(allocator, buf_path) catch null;
--        log.debug(@This(), "git root: {?s}\n", .{git_root});
--
++
++        const git_root = git.gitRoot(allocator, buf_path) catch null;
++        log.debug(@This(), "git root: {?s}\n", .{git_root});
++
          var self = Buffer{
              .path = buf_path,
              .file = file,
              .file_type = file_type,
              .uri = uri,
--            .git_root = git_root,
--            .git_hunks = std.ArrayList(git.Hunk).init(allocator),
++            .git_root = git_root,
++            .git_hunks = std.ArrayList(git.Hunk).init(allocator),
              .content = std.ArrayList(u21).init(allocator),
              .content_raw = raw,
              .diagnostics = std.ArrayList(lsp.types.Diagnostic).init(allocator),
-@@ -129,7 +120,6 @@ pub const Buffer = struct {
+@@ -120,6 +129,7 @@ pub const Buffer = struct {
          try self.updateRaw();
          if (self.ts_state) |*ts_state| try ts_state.reparse(self.content_raw.items);
          try self.updateLinePositions();
--        try self.updateGitHunks();
++        try self.updateGitHunks();
      }
  
      pub fn updateContent(self: *Buffer) !void {
-@@ -147,8 +137,6 @@ pub const Buffer = struct {
+@@ -137,6 +147,8 @@ pub const Buffer = struct {
          self.lsp_connections.deinit();
  
          self.allocator.free(self.uri);
--        if (self.git_root) |gr| self.allocator.free(gr);
--        self.git_hunks.deinit();
++        if (self.git_root) |gr| self.allocator.free(gr);
++        self.git_hunks.deinit();
          self.allocator.free(self.path);
  
          if (self.ts_state) |*ts_state| ts_state.deinit();
-@@ -513,31 +501,6 @@ pub const Buffer = struct {
+@@ -501,6 +513,31 @@ pub const Buffer = struct {
          }
      }
  
--    pub fn updateGitHunks(self: *Buffer) !void {
--        if (self.git_root == null) return;
--        self.git_hunks.clearRetainingCapacity();
--        if (git.show(self.allocator, self.path) catch return) |show| {
--            defer self.allocator.free(show);
--            const staged_path = "/tmp/hat_staged";
--            {
--                const tmp = try std.fs.cwd().createFile(staged_path, .{ .truncate = true });
--                defer tmp.close();
--                try tmp.writeAll(show);
--            }
--            const current_path = "/tmp/hat_current";
--            {
--                const tmp = try std.fs.cwd().createFile(current_path, .{ .truncate = true });
--                defer tmp.close();
--                try tmp.writeAll(self.content_raw.items);
--            }
--            if (git.diffHunks(self.allocator, staged_path, current_path) catch return) |hunks| {
--                defer self.allocator.free(hunks);
--                log.debug(@This(), "git hunks: {any}\n", .{hunks});
--                try self.git_hunks.appendSlice(hunks);
--            }
--        }
--    }
--
++    pub fn updateGitHunks(self: *Buffer) !void {
++        if (self.git_root == null) return;
++        self.git_hunks.clearRetainingCapacity();
++        if (git.show(self.allocator, self.path) catch return) |show| {
++            defer self.allocator.free(show);
++            const staged_path = "/tmp/hat_staged";
++            {
++                const tmp = try std.fs.cwd().createFile(staged_path, .{ .truncate = true });
++                defer tmp.close();
++                try tmp.writeAll(show);
++            }
++            const current_path = "/tmp/hat_current";
++            {
++                const tmp = try std.fs.cwd().createFile(current_path, .{ .truncate = true });
++                defer tmp.close();
++                try tmp.writeAll(self.content_raw.items);
++            }
++            if (git.diffHunks(self.allocator, staged_path, current_path) catch return) |hunks| {
++                defer self.allocator.free(hunks);
++                log.debug(@This(), "git hunks: {any}\n", .{hunks});
++                try self.git_hunks.appendSlice(hunks);
++            }
++        }
++    }
++
      pub fn undo(self: *Buffer) !void {
          log.debug(@This(), "undo: {?}/{}\n", .{ self.history_index, self.history.items.len });
          if (self.history_index) |h_idx| {
 diff --git a/src/color.zig b/src/color.zig
-index 5a225ea..1335218 100644
+index 1335218..5a225ea 100644
 --- a/src/color.zig
 +++ b/src/color.zig
-@@ -76,7 +76,6 @@ pub const Attr = union(enum) {
+@@ -76,6 +76,7 @@ pub const Attr = union(enum) {
      bg: RgbColor,
      underline: RgbColor,
      curly_underline,
--    bold,
++    bold,
  
      pub fn write(self: Attr, writer: anytype) !void {
          switch (self) {
-@@ -84,7 +83,6 @@ pub const Attr = union(enum) {
+@@ -83,6 +84,7 @@ pub const Attr = union(enum) {
              .bg => |c| try std.fmt.format(writer, "\x1b[48;2;{};{};{}m", .{ c.r, c.g, c.b }),
              .underline => |c| try std.fmt.format(writer, "\x1b[58;2;{};{};{}m", .{ c.r, c.g, c.b }),
              .curly_underline => _ = try writer.write("\x1b[4:3m"),
--            .bold => _ = try writer.write("\x1b[1m"),
++            .bold => _ = try writer.write("\x1b[1m"),
          }
      }
  };
-@@ -103,9 +101,6 @@ pub const attributes = enum {
+@@ -101,6 +103,9 @@ pub const attributes = enum {
      pub const message = &[_]Attr{.{ .bg = color.gray2 }};
      pub const command_line = &[_]Attr{.{ .bg = color.gray2 }};
      pub const number_line = &[_]Attr{.{ .fg = color.gray4 }};
--    pub const git_added = &[_]Attr{ .{ .fg = color.green }, .bold };
--    pub const git_modified = &[_]Attr{ .{ .fg = color.yellow }, .bold };
--    pub const git_deleted = &[_]Attr{ .{ .fg = color.red }, .bold };
++    pub const git_added = &[_]Attr{ .{ .fg = color.green }, .bold };
++    pub const git_modified = &[_]Attr{ .{ .fg = color.yellow }, .bold };
++    pub const git_deleted = &[_]Attr{ .{ .fg = color.red }, .bold };
  
      pub fn write(attrs: []const Attr, writer: anytype) !void {
          for (attrs) |attr| {
 diff --git a/src/git.zig b/src/git.zig
-deleted file mode 100644
-index 47cc91c..0000000
---- a/src/git.zig
-+++ /dev/null
-@@ -1,142 +0,0 @@
--const std = @import("std");
--const Allocator = std.mem.Allocator;
--const path = std.fs.path;
--
--const ext = @import("external.zig");
--const log = @import("log.zig");
--
--pub fn gitRoot(allocator: Allocator, file_path: []const u8) !?[]const u8 {
--    const abs_path = try std.fs.cwd().realpathAlloc(allocator, file_path);
--    defer allocator.free(abs_path);
--
--    var dir_opt: ?[]const u8 = abs_path;
--    while (dir_opt) |dir| {
--        std.posix.access(dir, std.posix.F_OK) catch break;
--        const git_dir = try path.join(allocator, &.{ dir, ".git" });
--        defer allocator.free(git_dir);
--        std.posix.access(git_dir, std.posix.F_OK) catch {
--            dir_opt = path.dirname(dir);
--            continue;
--        };
--        return try allocator.dupe(u8, dir);
--    }
--    return null;
--}
--
--pub fn show(allocator: Allocator, file_path: []const u8) !?[]const u8 {
--    var path_arg = std.ArrayList(u8).init(allocator);
--    defer path_arg.deinit();
--    try path_arg.appendSlice(":");
--    try path_arg.appendSlice(file_path);
--    const args = .{ "git", "--no-pager", "show", path_arg.items };
--    var exit_code: u8 = undefined;
--    const content = try ext.runExternalWait(allocator, &args, null, &exit_code);
--    errdefer allocator.free(content);
--    if (exit_code != 0) return error.GitError;
--    return content;
--}
--
--pub fn diffHunks(allocator: Allocator, file_before: []const u8, file_after: []const u8) !?[]const Hunk {
--    const args = .{ "git", "--no-pager", "diff", "--unified=0", "--no-color", file_before, file_after };
--    var exit_code: u8 = undefined;
--    const diff = try ext.runExternalWait(allocator, &args, null, &exit_code);
--    if (exit_code == 0) return null;
--    if (exit_code != 1) return error.GitError;
--    defer allocator.free(diff);
--    return try parseDiff(allocator, diff);
--}
--
--pub const HunkType = enum {
--    add,
--    modify,
--    delete,
--
--    pub fn fromCounts(added: usize, deleted: usize) HunkType {
--        std.debug.assert(!(added == 0 and deleted == 0));
--        if (added > 0 and deleted > 0) return .modify;
--        if (added > 0) return .add;
--        return .delete;
--    }
--};
--
--pub const Hunk = struct {
--    type: HunkType,
--    line: usize,
--    len: usize,
--};
--
--pub fn parseDiff(allocator: Allocator, diff: []const u8) ![]const Hunk {
--    var hunks = std.ArrayList(Hunk).init(allocator);
--    var hunk_iter = std.mem.splitSequence(u8, diff, "\n@@");
--    // skip file info before first hunk
--    _ = hunk_iter.next();
--    while (hunk_iter.next()) |hunk| {
--        var adds: usize = 0;
--        var deletes: usize = 0;
--        var line_iter = std.mem.splitSequence(u8, hunk, "\n");
--        while (line_iter.next()) |line| {
--            if (line.len > 0) {
--                if (line[0] == '+') adds += 1;
--                if (line[0] == '-') deletes += 1;
--            }
--        }
--        const stats_line = hunk[std.mem.indexOf(u8, hunk, "+").?..std.mem.indexOf(u8, hunk, "\n").?];
--        const stats = stats_line[0..std.mem.indexOf(u8, stats_line, " ").?];
--        if (std.mem.indexOf(u8, stats, ",")) |comma_idx| {
--            const start_line = try std.fmt.parseInt(usize, stats[1..comma_idx], 10);
--            const len = try std.fmt.parseInt(usize, stats[comma_idx + 1 ..], 10);
--            try hunks.append(.{ .type = .fromCounts(adds, deletes), .line = start_line, .len = len });
--        } else {
--            const start_line = try std.fmt.parseInt(usize, stats[1..], 10);
--            try hunks.append(.{ .type = .fromCounts(adds, deletes), .line = start_line, .len = 0 });
--        }
--    }
--    return hunks.toOwnedSlice();
--}
--
--test "parseDiff" {
--    const allocator = std.testing.allocator;
--    const out =
--        \\diff --git 1/tmp/a 2/tmp/b
--        \\index d121fe0..c308f6e 100644
--        \\--- 1/tmp/a
--        \\+++ 2/tmp/b
--        \\@@ -1 +0,0 @@
--        \\-const cha = @import("change.zig");
--        \\@@ -3,2 +2,2 @@ const clp = @import("clipboard.zig");
--        \\-const core = @import("core.zig");
--        \\-const Span = core.Span;
--        \\+const core = @import("core.ziggg");
--        \\+const Span = core.Spannn;
--        \\@@ -7,0 +7,2 @@ const Dimensions = core.Dimensions;
--        \\+const Dimensions = core.Dimensions;
--        \\+const Dimensions = core.Dimensions;
--    ;
--    const hunks = try parseDiff(allocator, out);
--    defer allocator.free(hunks);
--
--    try std.testing.expectEqual(hunks.len, 3);
--    try std.testing.expectEqualDeep(hunks[0], Hunk{ .type = .delete, .line = 0, .len = 0 });
--    try std.testing.expectEqualDeep(hunks[1], Hunk{ .type = .modify, .line = 2, .len = 2 });
--    try std.testing.expectEqualDeep(hunks[2], Hunk{ .type = .add, .line = 7, .len = 2 });
--}
--
--test "parseDiff blank lines" {
--    const allocator = std.testing.allocator;
--    const out =
--        \\diff --git 1/tmp/a 2/tmp/b
--        \\index 285f63d..96f799d 100644
--        \\--- 1/tmp/hat_staged
--        \\+++ 2/src/main.zig
--        \\@@ -34,0 +35 @@ pub var tty_in: std.fs.File = undefined;
--        \\+
--        \\@@ -37 +37,0 @@ pub var term: ter.Terminal = undefined;
--        \\-
--    ;
--    const hunks = try parseDiff(allocator, out);
--    defer allocator.free(hunks);
--
--    try std.testing.expectEqual(hunks.len, 2);
--    try std.testing.expectEqualDeep(hunks[0], Hunk{ .type = .add, .line = 35, .len = 0 });
--    try std.testing.expectEqualDeep(hunks[1], Hunk{ .type = .delete, .line = 37, .len = 0 });
--}
+new file mode 100644
+index 0000000..47cc91c
+--- /dev/null
++++ b/src/git.zig
+@@ -0,0 +1,142 @@
++const std = @import("std");
++const Allocator = std.mem.Allocator;
++const path = std.fs.path;
++
++const ext = @import("external.zig");
++const log = @import("log.zig");
++
++pub fn gitRoot(allocator: Allocator, file_path: []const u8) !?[]const u8 {
++    const abs_path = try std.fs.cwd().realpathAlloc(allocator, file_path);
++    defer allocator.free(abs_path);
++
++    var dir_opt: ?[]const u8 = abs_path;
++    while (dir_opt) |dir| {
++        std.posix.access(dir, std.posix.F_OK) catch break;
++        const git_dir = try path.join(allocator, &.{ dir, ".git" });
++        defer allocator.free(git_dir);
++        std.posix.access(git_dir, std.posix.F_OK) catch {
++            dir_opt = path.dirname(dir);
++            continue;
++        };
++        return try allocator.dupe(u8, dir);
++    }
++    return null;
++}
++
++pub fn show(allocator: Allocator, file_path: []const u8) !?[]const u8 {
++    var path_arg = std.ArrayList(u8).init(allocator);
++    defer path_arg.deinit();
++    try path_arg.appendSlice(":");
++    try path_arg.appendSlice(file_path);
++    const args = .{ "git", "--no-pager", "show", path_arg.items };
++    var exit_code: u8 = undefined;
++    const content = try ext.runExternalWait(allocator, &args, null, &exit_code);
++    errdefer allocator.free(content);
++    if (exit_code != 0) return error.GitError;
++    return content;
++}
++
++pub fn diffHunks(allocator: Allocator, file_before: []const u8, file_after: []const u8) !?[]const Hunk {
++    const args = .{ "git", "--no-pager", "diff", "--unified=0", "--no-color", file_before, file_after };
++    var exit_code: u8 = undefined;
++    const diff = try ext.runExternalWait(allocator, &args, null, &exit_code);
++    if (exit_code == 0) return null;
++    if (exit_code != 1) return error.GitError;
++    defer allocator.free(diff);
++    return try parseDiff(allocator, diff);
++}
++
++pub const HunkType = enum {
++    add,
++    modify,
++    delete,
++
++    pub fn fromCounts(added: usize, deleted: usize) HunkType {
++        std.debug.assert(!(added == 0 and deleted == 0));
++        if (added > 0 and deleted > 0) return .modify;
++        if (added > 0) return .add;
++        return .delete;
++    }
++};
++
++pub const Hunk = struct {
++    type: HunkType,
++    line: usize,
++    len: usize,
++};
++
++pub fn parseDiff(allocator: Allocator, diff: []const u8) ![]const Hunk {
++    var hunks = std.ArrayList(Hunk).init(allocator);
++    var hunk_iter = std.mem.splitSequence(u8, diff, "\n@@");
++    // skip file info before first hunk
++    _ = hunk_iter.next();
++    while (hunk_iter.next()) |hunk| {
++        var adds: usize = 0;
++        var deletes: usize = 0;
++        var line_iter = std.mem.splitSequence(u8, hunk, "\n");
++        while (line_iter.next()) |line| {
++            if (line.len > 0) {
++                if (line[0] == '+') adds += 1;
++                if (line[0] == '-') deletes += 1;
++            }
++        }
++        const stats_line = hunk[std.mem.indexOf(u8, hunk, "+").?..std.mem.indexOf(u8, hunk, "\n").?];
++        const stats = stats_line[0..std.mem.indexOf(u8, stats_line, " ").?];
++        if (std.mem.indexOf(u8, stats, ",")) |comma_idx| {
++            const start_line = try std.fmt.parseInt(usize, stats[1..comma_idx], 10);
++            const len = try std.fmt.parseInt(usize, stats[comma_idx + 1 ..], 10);
++            try hunks.append(.{ .type = .fromCounts(adds, deletes), .line = start_line, .len = len });
++        } else {
++            const start_line = try std.fmt.parseInt(usize, stats[1..], 10);
++            try hunks.append(.{ .type = .fromCounts(adds, deletes), .line = start_line, .len = 0 });
++        }
++    }
++    return hunks.toOwnedSlice();
++}
++
++test "parseDiff" {
++    const allocator = std.testing.allocator;
++    const out =
++        \\diff --git 1/tmp/a 2/tmp/b
++        \\index d121fe0..c308f6e 100644
++        \\--- 1/tmp/a
++        \\+++ 2/tmp/b
++        \\@@ -1 +0,0 @@
++        \\-const cha = @import("change.zig");
++        \\@@ -3,2 +2,2 @@ const clp = @import("clipboard.zig");
++        \\-const core = @import("core.zig");
++        \\-const Span = core.Span;
++        \\+const core = @import("core.ziggg");
++        \\+const Span = core.Spannn;
++        \\@@ -7,0 +7,2 @@ const Dimensions = core.Dimensions;
++        \\+const Dimensions = core.Dimensions;
++        \\+const Dimensions = core.Dimensions;
++    ;
++    const hunks = try parseDiff(allocator, out);
++    defer allocator.free(hunks);
++
++    try std.testing.expectEqual(hunks.len, 3);
++    try std.testing.expectEqualDeep(hunks[0], Hunk{ .type = .delete, .line = 0, .len = 0 });
++    try std.testing.expectEqualDeep(hunks[1], Hunk{ .type = .modify, .line = 2, .len = 2 });
++    try std.testing.expectEqualDeep(hunks[2], Hunk{ .type = .add, .line = 7, .len = 2 });
++}
++
++test "parseDiff blank lines" {
++    const allocator = std.testing.allocator;
++    const out =
++        \\diff --git 1/tmp/a 2/tmp/b
++        \\index 285f63d..96f799d 100644
++        \\--- 1/tmp/hat_staged
++        \\+++ 2/src/main.zig
++        \\@@ -34,0 +35 @@ pub var tty_in: std.fs.File = undefined;
++        \\+
++        \\@@ -37 +37,0 @@ pub var term: ter.Terminal = undefined;
++        \\-
++    ;
++    const hunks = try parseDiff(allocator, out);
++    defer allocator.free(hunks);
++
++    try std.testing.expectEqual(hunks.len, 2);
++    try std.testing.expectEqualDeep(hunks[0], Hunk{ .type = .add, .line = 35, .len = 0 });
++    try std.testing.expectEqualDeep(hunks[1], Hunk{ .type = .delete, .line = 37, .len = 0 });
++}
 diff --git a/src/main.zig b/src/main.zig
-index 96f799d..285f63d 100644
+index 285f63d..96f799d 100644
 --- a/src/main.zig
 +++ b/src/main.zig
 @@ -32,9 +32,9 @@ pub const std_out = std.io.getStdOut();
  pub const std_err = std.io.getStdErr();
  pub var tty_in: std.fs.File = undefined;
  
--
++
  pub var editor: edi.Editor = undefined;
  pub var term: ter.Terminal = undefined;
-+
+-
  pub var args: Args = .{};
  
  pub var main_loop_mutex: std.Thread.Mutex = .{};
 diff --git a/src/terminal.zig b/src/terminal.zig
-index f1df5bb..cfd8b1d 100644
+index cfd8b1d..f1df5bb 100644
 --- a/src/terminal.zig
 +++ b/src/terminal.zig
-@@ -170,38 +170,6 @@ pub const Terminal = struct {
+@@ -170,6 +170,38 @@ pub const Terminal = struct {
                  );
              }
          }
--        if (buffer.git_hunks.items.len > 0) {
--            const hunks = buffer.git_hunks.items;
--            log.info(@This(), "hunks: {any}\n", .{hunks});
--            var hunk_idx: usize = 0;
--            for (@intCast(area.pos.row)..@as(usize, @intCast(area.pos.row)) + area.dims.height) |term_row| {
--                const buffer_row = @as(i32, @intCast(term_row)) + buffer.offset.row;
--                if (buffer_row < 0) continue;
--                if (buffer_row >= buffer.line_positions.items.len) break;
--                if (hunk_idx >= hunks.len) break;
--
--                const hunk = hunks[hunk_idx];
--                const single_line_match = hunk.len == 0 and buffer_row == hunk.line - 1;
--                if (single_line_match or (buffer_row >= hunk.line - 1 and buffer_row < hunk.line - 1 + hunk.len)) {
--                    try self.moveCursor(.{ .row = @intCast(term_row), .col = area.pos.col });
--                    switch (hunk.type) {
--                        .add => {
--                            try co.attributes.write(co.attributes.git_added, self.writer.writer());
--                            _ = try self.write("┃");
--                        },
--                        .delete => {
--                            try co.attributes.write(co.attributes.git_deleted, self.writer.writer());
--                            _ = try self.write("▁");
--                        },
--                        .modify => {
--                            try co.attributes.write(co.attributes.git_modified, self.writer.writer());
--                            _ = try self.write("┃");
--                        },
--                    }
--                }
--                if (buffer_row > hunk.line - 1 + hunk.len) hunk_idx += 1;
--            }
--        }
++        if (buffer.git_hunks.items.len > 0) {
++            const hunks = buffer.git_hunks.items;
++            log.info(@This(), "hunks: {any}\n", .{hunks});
++            var hunk_idx: usize = 0;
++            for (@intCast(area.pos.row)..@as(usize, @intCast(area.pos.row)) + area.dims.height) |term_row| {
++                const buffer_row = @as(i32, @intCast(term_row)) + buffer.offset.row;
++                if (buffer_row < 0) continue;
++                if (buffer_row >= buffer.line_positions.items.len) break;
++                if (hunk_idx >= hunks.len) break;
++
++                const hunk = hunks[hunk_idx];
++                const single_line_match = hunk.len == 0 and buffer_row == hunk.line - 1;
++                if (single_line_match or (buffer_row >= hunk.line - 1 and buffer_row < hunk.line - 1 + hunk.len)) {
++                    try self.moveCursor(.{ .row = @intCast(term_row), .col = area.pos.col });
++                    switch (hunk.type) {
++                        .add => {
++                            try co.attributes.write(co.attributes.git_added, self.writer.writer());
++                            _ = try self.write("┃");
++                        },
++                        .delete => {
++                            try co.attributes.write(co.attributes.git_deleted, self.writer.writer());
++                            _ = try self.write("▁");
++                        },
++                        .modify => {
++                            try co.attributes.write(co.attributes.git_modified, self.writer.writer());
++                            _ = try self.write("┃");
++                        },
++                    }
++                }
++                if (buffer_row > hunk.line - 1 + hunk.len) hunk_idx += 1;
++            }
++        }
      }
  
      fn drawBuffer(self: *Terminal, buffer: *buf.Buffer, area: Area) !void {
-@@ -447,7 +415,7 @@ pub fn terminalSize() !Dimensions {
+@@ -415,7 +447,7 @@ pub fn terminalSize() !Dimensions {
  }
  
  pub fn computeLayout(term_dims: Dimensions) Layout {
--    const number_line_width = 6;
-+    const number_line_width = 5;
+-    const number_line_width = 5;
++    const number_line_width = 6;
  
      return .{
          .number_line = .{

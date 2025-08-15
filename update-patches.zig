@@ -13,7 +13,7 @@ pub fn main() !void {
     const allocator = debug_allocator.allocator();
 
     inline for (patches) |patch| {
-        const out = try runCmd(allocator, &.{ "git", "diff", patch, "master", "--", "src" });
+        const out = try runCmd(allocator, &.{ "git", "diff", "master", patch, "--", "src" });
         defer allocator.free(out);
         const patch_path = std.fmt.comptimePrint("patch/{s}/{s}.diff", .{ patch, patch });
         const f = try std.fs.cwd().createFile(patch_path, .{ .truncate = true });

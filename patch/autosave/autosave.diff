@@ -1,85 +1,85 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index 9557243..f8ac475 100644
+index f8ac475..9557243 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
-@@ -171,6 +171,14 @@ pub const Buffer = struct {
+@@ -171,14 +171,6 @@ pub const Buffer = struct {
          _ = try self.syncFs();
  
          self.file_history_index = self.history_index;
-+
-+        const msg = try std.fmt.allocPrint(
-+            self.allocator,
-+            "{s} {}B written",
-+            .{ self.path, self.content_raw.items.len },
-+        );
-+        defer self.allocator.free(msg);
-+        try main.editor.sendMessage(msg);
+-
+-        const msg = try std.fmt.allocPrint(
+-            self.allocator,
+-            "{s} {}B written",
+-            .{ self.path, self.content_raw.items.len },
+-        );
+-        defer self.allocator.free(msg);
+-        try main.editor.sendMessage(msg);
      }
  
      pub fn moveCursor(self: *Buffer, new_cursor: Cursor) !void {
-@@ -353,11 +361,6 @@ pub const Buffer = struct {
+@@ -361,6 +353,11 @@ pub const Buffer = struct {
          self.history_index = self.history.items.len - 1;
  
          try main.editor.dotRepeatCommitReady();
--
--        if (main.editor.config.autosave) {
--            try self.write();
--            log.debug(@This(), "autosave {s}\n", .{self.path});
--        }
++
++        if (main.editor.config.autosave) {
++            try self.write();
++            log.debug(@This(), "autosave {s}\n", .{self.path});
++        }
      }
  
      pub fn changeInsertText(self: *Buffer, text: []const u21) !void {
-@@ -511,11 +514,6 @@ pub const Buffer = struct {
+@@ -514,6 +511,11 @@ pub const Buffer = struct {
                  try self.moveCursor(inv_change.new_span.?.start);
              }
              self.history_index = if (h_idx > 0) h_idx - 1 else null;
--
--            if (main.editor.config.autosave) {
--                try self.write();
--                log.debug(@This(), "autosave {s}\n", .{self.path});
--            }
++
++            if (main.editor.config.autosave) {
++                try self.write();
++                log.debug(@This(), "autosave {s}\n", .{self.path});
++            }
          }
      }
  
-@@ -531,11 +529,6 @@ pub const Buffer = struct {
+@@ -529,6 +531,11 @@ pub const Buffer = struct {
              try self.moveCursor(change.new_span.?.start);
          }
          self.history_index = redo_idx;
--
--        if (main.editor.config.autosave) {
--            try self.write();
--            log.debug(@This(), "autosave {s}\n", .{self.path});
--        }
++
++        if (main.editor.config.autosave) {
++            try self.write();
++            log.debug(@This(), "autosave {s}\n", .{self.path});
++        }
      }
  
      pub fn textAt(self: *const Buffer, span: Span) []const u21 {
 diff --git a/src/editor.zig b/src/editor.zig
-index 6e697b6..21fc180 100644
+index 21fc180..6e697b6 100644
 --- a/src/editor.zig
 +++ b/src/editor.zig
-@@ -27,7 +27,6 @@ pub const DotRepeat = enum {
+@@ -27,6 +27,7 @@ pub const DotRepeat = enum {
  };
  
  pub const Config = struct {
--    autosave: bool = false,
++    autosave: bool = false,
  };
  
  pub const Editor = struct {
 diff --git a/src/main.zig b/src/main.zig
-index d590f7b..285f63d 100644
+index 285f63d..d590f7b 100644
 --- a/src/main.zig
 +++ b/src/main.zig
-@@ -331,13 +331,6 @@ fn startEditor(allocator: std.mem.Allocator) !void {
+@@ -331,6 +331,13 @@ fn startEditor(allocator: std.mem.Allocator) !void {
  
                      if (editor.mode == .normal and eql(u8, multi_key, " w")) {
                          try buffer.write();
--                        const msg = try std.fmt.allocPrint(
--                            allocator,
--                            "{s} {}B written",
--                            .{ buffer.path, buffer.content_raw.items.len },
--                        );
--                        defer allocator.free(msg);
--                        try editor.sendMessage(msg);
++                        const msg = try std.fmt.allocPrint(
++                            allocator,
++                            "{s} {}B written",
++                            .{ buffer.path, buffer.content_raw.items.len },
++                        );
++                        defer allocator.free(msg);
++                        try editor.sendMessage(msg);
                      } else if (editor.mode == .normal and eql(u8, multi_key, " d")) {
                          try buffer.goToDefinition();
                      } else if (editor.mode == .normal and eql(u8, multi_key, " r")) {

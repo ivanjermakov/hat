@@ -1,217 +1,217 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index 62688cb..f8ac475 100644
+index f8ac475..62688cb 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
-@@ -23,7 +23,6 @@ const main = @import("main.zig");
+@@ -23,6 +23,7 @@ const main = @import("main.zig");
  const ter = @import("terminal.zig");
  const ts = @import("ts.zig");
  const uni = @import("unicode.zig");
--const fzf = @import("ui/fzf.zig");
++const fzf = @import("ui/fzf.zig");
  
  pub const Buffer = struct {
      path: []const u8,
-@@ -600,27 +599,6 @@ pub const Buffer = struct {
+@@ -599,6 +600,27 @@ pub const Buffer = struct {
          }
      }
  
--    pub fn findSymbols(self: *Buffer) !void {
--        if (self.ts_state) |*ts_state| {
--            if (ts_state.symbol) |*parse_result| {
--                try parse_result.makeSpans(ts_state.tree.?);
--                for (parse_result.spans.items) |span| {
--                    const symbol_name = self.content_raw.items[span.start..span.end];
--                    log.debug(@This(), "symbol span: {s}\n", .{symbol_name});
--                }
--                const pick_result = fzf.pickSymbol(self.allocator, self, parse_result.spans.items) catch |e| {
--                    log.err(@This(), "{}\n", .{e});
--                    if (@errorReturnTrace()) |trace| std.debug.dumpStackTrace(trace.*);
--                    return;
--                };
--                defer self.allocator.free(pick_result.path);
--                log.debug(@This(), "picked symbol: {}\n", .{pick_result});
--                try self.moveCursor(pick_result.position);
--                try self.centerCursor();
--            }
--        }
--    }
--
++    pub fn findSymbols(self: *Buffer) !void {
++        if (self.ts_state) |*ts_state| {
++            if (ts_state.symbol) |*parse_result| {
++                try parse_result.makeSpans(ts_state.tree.?);
++                for (parse_result.spans.items) |span| {
++                    const symbol_name = self.content_raw.items[span.start..span.end];
++                    log.debug(@This(), "symbol span: {s}\n", .{symbol_name});
++                }
++                const pick_result = fzf.pickSymbol(self.allocator, self, parse_result.spans.items) catch |e| {
++                    log.err(@This(), "{}\n", .{e});
++                    if (@errorReturnTrace()) |trace| std.debug.dumpStackTrace(trace.*);
++                    return;
++                };
++                defer self.allocator.free(pick_result.path);
++                log.debug(@This(), "picked symbol: {}\n", .{pick_result});
++                try self.moveCursor(pick_result.position);
++                try self.centerCursor();
++            }
++        }
++    }
++
      pub fn showHover(self: *Buffer) !void {
          for (self.lsp_connections.items) |conn| {
              try conn.hover();
 diff --git a/src/core.zig b/src/core.zig
-index 2f40357..17f68e6 100644
+index 17f68e6..2f40357 100644
 --- a/src/core.zig
 +++ b/src/core.zig
-@@ -82,11 +82,6 @@ pub const ByteSpan = struct {
+@@ -82,6 +82,11 @@ pub const ByteSpan = struct {
      start: usize,
      end: usize,
  
--    pub fn init(span: ByteSpan, capture_name: []const u8) ?ByteSpan {
--        if (!std.mem.eql(u8, capture_name, "name")) return null;
--        return span;
--    }
--
++    pub fn init(span: ByteSpan, capture_name: []const u8) ?ByteSpan {
++        if (!std.mem.eql(u8, capture_name, "name")) return null;
++        return span;
++    }
++
      pub fn fromBufSpan(buffer: *const buf.Buffer, span: Span) ByteSpan {
          return .{
              .start = buffer.cursorToBytePos(span.start),
 diff --git a/src/file_type.zig b/src/file_type.zig
-index 14329fd..f166cf9 100644
+index f166cf9..14329fd 100644
 --- a/src/file_type.zig
 +++ b/src/file_type.zig
-@@ -7,9 +7,7 @@ const log = @import("log.zig");
+@@ -7,7 +7,9 @@ const log = @import("log.zig");
  const main = @import("main.zig");
  const ts = @import("ts.zig");
  
--const nvim_runtime_path = "$HOME/.local/share/nvim";
--const nvim_ts_path = nvim_runtime_path ++ "/lazy/nvim-treesitter";
--const nvim_aerial_path = nvim_runtime_path ++ "/lazy/aerial.nvim";
-+const nvim_ts_path = "$HOME/.local/share/nvim/lazy/nvim-treesitter";
+-const nvim_ts_path = "$HOME/.local/share/nvim/lazy/nvim-treesitter";
++const nvim_runtime_path = "$HOME/.local/share/nvim";
++const nvim_ts_path = nvim_runtime_path ++ "/lazy/nvim-treesitter";
++const nvim_aerial_path = nvim_runtime_path ++ "/lazy/aerial.nvim";
  
  pub const FileTypeConfig = struct {
      name: []const u8,
-@@ -22,7 +20,6 @@ pub const TsConfig = struct {
+@@ -20,6 +22,7 @@ pub const TsConfig = struct {
      lib_symbol: []const u8,
      highlight_query: []const u8,
      indent_query: []const u8,
--    symbol_query: ?[]const u8,
++    symbol_query: ?[]const u8,
  
      pub fn from_nvim(comptime name: []const u8) TsConfig {
          return .{
-@@ -30,7 +27,6 @@ pub const TsConfig = struct {
+@@ -27,6 +30,7 @@ pub const TsConfig = struct {
              .lib_symbol = "tree_sitter_" ++ name,
              .highlight_query = highlight_query_from_nvim(name),
              .indent_query = indent_query_from_nvim(name),
--            .symbol_query = symbol_query_from_aerial(name),
++            .symbol_query = symbol_query_from_aerial(name),
          };
      }
  
-@@ -62,10 +58,6 @@ pub const TsConfig = struct {
+@@ -58,6 +62,10 @@ pub const TsConfig = struct {
      pub fn indent_query_from_nvim(comptime name: []const u8) []const u8 {
          return nvim_ts_path ++ "/queries/" ++ name ++ "/indents.scm";
      }
--
--    pub fn symbol_query_from_aerial(comptime name: []const u8) []const u8 {
--        return nvim_aerial_path ++ "/queries/" ++ name ++ "/aerial.scm";
--    }
++
++    pub fn symbol_query_from_aerial(comptime name: []const u8) []const u8 {
++        return nvim_aerial_path ++ "/queries/" ++ name ++ "/aerial.scm";
++    }
  };
  
  pub const plain: FileTypeConfig = .{ .name = "plain", .ts = null };
-@@ -82,7 +74,6 @@ pub const file_type = std.StaticStringMap(FileTypeConfig).initComptime(.{
+@@ -74,6 +82,7 @@ pub const file_type = std.StaticStringMap(FileTypeConfig).initComptime(.{
              .lib_symbol = "tree_sitter_typescript",
              .highlight_query = TsConfig.highlight_query_from_nvim("ecma"),
              .indent_query = TsConfig.highlight_query_from_nvim("ecma"),
--            .symbol_query = TsConfig.symbol_query_from_aerial("typescript"),
++            .symbol_query = TsConfig.symbol_query_from_aerial("typescript"),
          },
      } },
      .{ ".zig", FileTypeConfig{
 diff --git a/src/main.zig b/src/main.zig
-index 1afa26f..285f63d 100644
+index 285f63d..1afa26f 100644
 --- a/src/main.zig
 +++ b/src/main.zig
-@@ -337,8 +337,6 @@ fn startEditor(allocator: std.mem.Allocator) !void {
+@@ -337,6 +337,8 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                          try buffer.findReferences();
                      } else if (editor.mode == .normal and eql(u8, multi_key, " n")) {
                          try buffer.renamePrompt();
--                    } else if (editor.mode == .normal and eql(u8, multi_key, " f")) {
--                        try buffer.findSymbols();
++                    } else if (editor.mode == .normal and eql(u8, multi_key, " f")) {
++                        try buffer.findSymbols();
                      } else if (editor.mode == .normal and eql(u8, key, "r") and editor.key_queue.items[1].printable != null) {
                          const macro_name = key2.printable.?[0];
                          try editor.startMacro(macro_name);
 diff --git a/src/ts.zig b/src/ts.zig
-index 1694e8d..995de5f 100644
+index 995de5f..1694e8d 100644
 --- a/src/ts.zig
 +++ b/src/ts.zig
-@@ -72,7 +72,6 @@ pub const State = struct {
+@@ -72,6 +72,7 @@ pub const State = struct {
      tree: ?*ts.TSTree = null,
      highlight: ParseResult(AttrsSpan),
      indent: ParseResult(IndentSpanTuple),
--    symbol: ?ParseResult(ByteSpan) = null,
++    symbol: ?ParseResult(ByteSpan) = null,
      allocator: Allocator,
  
      pub fn init(allocator: Allocator, ts_conf: ft.TsConfig) !State {
-@@ -81,18 +80,14 @@ pub const State = struct {
+@@ -80,14 +81,18 @@ pub const State = struct {
          defer allocator.free(highlight_query);
          const indent_query = try ft.TsConfig.loadQuery(allocator, ts_conf.indent_query);
          defer allocator.free(indent_query);
--        const symbol_query = if (ts_conf.symbol_query) |sq| try ft.TsConfig.loadQuery(allocator, sq) else null;
--        defer if (symbol_query) |sq| allocator.free(sq);
++        const symbol_query = if (ts_conf.symbol_query) |sq| try ft.TsConfig.loadQuery(allocator, sq) else null;
++        defer if (symbol_query) |sq| allocator.free(sq);
  
--        var self = State{
-+        const self = State{
+-        const self = State{
++        var self = State{
              .parser = ts.ts_parser_new(),
              .allocator = allocator,
              .highlight = try ParseResult(AttrsSpan).init(allocator, language(), highlight_query),
              .indent = try ParseResult(IndentSpanTuple).init(allocator, language(), indent_query),
          };
--        if (symbol_query) |sq| self.symbol = try ParseResult(ByteSpan).init(allocator, language(), sq);
++        if (symbol_query) |sq| self.symbol = try ParseResult(ByteSpan).init(allocator, language(), sq);
          _ = ts.ts_parser_set_language(self.parser, language());
--
++
          return self;
      }
  
-@@ -124,7 +119,6 @@ pub const State = struct {
+@@ -119,6 +124,7 @@ pub const State = struct {
          if (self.tree) |t| ts.ts_tree_delete(t);
          self.highlight.deinit();
          self.indent.deinit();
--        if (self.symbol) |*s| s.deinit();
++        if (self.symbol) |*s| s.deinit();
      }
  };
  
 diff --git a/src/ui/fzf.zig b/src/ui/fzf.zig
-index 88ae4e6..400f720 100644
+index 400f720..88ae4e6 100644
 --- a/src/ui/fzf.zig
 +++ b/src/ui/fzf.zig
-@@ -5,7 +5,6 @@ const buf = @import("../buffer.zig");
+@@ -5,6 +5,7 @@ const buf = @import("../buffer.zig");
  const col = @import("../color.zig");
  const core = @import("../core.zig");
  const Cursor = core.Cursor;
--const ByteSpan = core.ByteSpan;
++const ByteSpan = core.ByteSpan;
  const ext = @import("../external.zig");
  const log = @import("../log.zig");
  const lsp = @import("../lsp.zig");
-@@ -27,7 +26,7 @@ pub const FindResult = struct {
+@@ -26,7 +27,7 @@ pub const FindResult = struct {
      position: Cursor,
  
      pub fn init(allocator: Allocator, fzf_out: []const u8) !FindResult {
--        var iter = std.mem.splitScalar(u8, std.mem.trimEnd(u8, fzf_out, "\n"), ':');
-+        var iter = std.mem.splitScalar(u8, fzf_out, ':');
+-        var iter = std.mem.splitScalar(u8, fzf_out, ':');
++        var iter = std.mem.splitScalar(u8, std.mem.trimEnd(u8, fzf_out, "\n"), ':');
          return .{
              .path = try allocator.dupe(u8, iter.next().?),
              .position = .{
-@@ -96,36 +95,6 @@ pub fn pickLspLocation(allocator: Allocator, locations: []const lsp.types.Locati
+@@ -95,6 +96,36 @@ pub fn pickLspLocation(allocator: Allocator, locations: []const lsp.types.Locati
      return .init(allocator, out);
  }
  
--pub fn pickSymbol(allocator: Allocator, buffer: *const buf.Buffer, symbols: []const ByteSpan) !FindResult {
--    var lines = std.ArrayList(u8).init(allocator);
--    for (symbols) |symbol| {
--        const pos = buffer.posToCursor(symbol.start);
--        const symbol_name = buffer.content_raw.items[symbol.start..symbol.end];
--        const s = try std.fmt.allocPrint(
--            allocator,
--            "{s}:{}:{}\n",
--            .{ symbol_name, pos.row + 1, pos.col + 1 },
--        );
--        defer allocator.free(s);
--        try lines.appendSlice(s);
--    }
--    const bufs_str = try lines.toOwnedSlice();
--    defer allocator.free(bufs_str);
--
--    const preview_cmd = try std.fmt.allocPrint(
--        allocator,
--        "hat --printer --term-height=$FZF_PREVIEW_LINES --highlight-line={{2}} {s}",
--        .{buffer.path},
--    );
--    defer allocator.free(preview_cmd);
--
--    const cmd: []const []const u8 = fzf_command ++ .{ "--preview", preview_cmd, "--delimiter", ":" };
--    const out = try ext.runExternalWait(allocator, cmd, bufs_str, null);
--    defer allocator.free(out);
--    if (out.len == 0) return error.EmptyOut;
--    return .init(allocator, out);
--}
--
++pub fn pickSymbol(allocator: Allocator, buffer: *const buf.Buffer, symbols: []const ByteSpan) !FindResult {
++    var lines = std.ArrayList(u8).init(allocator);
++    for (symbols) |symbol| {
++        const pos = buffer.posToCursor(symbol.start);
++        const symbol_name = buffer.content_raw.items[symbol.start..symbol.end];
++        const s = try std.fmt.allocPrint(
++            allocator,
++            "{s}:{}:{}\n",
++            .{ symbol_name, pos.row + 1, pos.col + 1 },
++        );
++        defer allocator.free(s);
++        try lines.appendSlice(s);
++    }
++    const bufs_str = try lines.toOwnedSlice();
++    defer allocator.free(bufs_str);
++
++    const preview_cmd = try std.fmt.allocPrint(
++        allocator,
++        "hat --printer --term-height=$FZF_PREVIEW_LINES --highlight-line={{2}} {s}",
++        .{buffer.path},
++    );
++    defer allocator.free(preview_cmd);
++
++    const cmd: []const []const u8 = fzf_command ++ .{ "--preview", preview_cmd, "--delimiter", ":" };
++    const out = try ext.runExternalWait(allocator, cmd, bufs_str, null);
++    defer allocator.free(out);
++    if (out.len == 0) return error.EmptyOut;
++    return .init(allocator, out);
++}
++
  const fzf_cmd_with_preview: []const []const u8 = fzf_command ++ .{
      "--preview",
      "hat --printer --term-height=$FZF_PREVIEW_LINES --highlight-line={2} {1}",
