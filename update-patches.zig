@@ -7,6 +7,7 @@ const patches = .{
     "autosave",
     "lsp-formatting",
     "lsp-highlight",
+    "lsp-code-action",
 };
 
 pub fn main() !void {

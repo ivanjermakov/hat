@@ -45,7 +45,7 @@ Hat is a **ha**ckable modal **t**ext editor for modern terminals.
 | 🚧   | Windows support           |                                                       |                                                                   |
 | 🚧   | MacOS support             |                                                       |                                                                   |
 | ✔️   | LSP highlight             | [patch/lsp-highlight](/patch/lsp-highlight)           | [link](https://github.com/ivanjermakov/hat/tree/lsp-highlight)    |
-| 🚧   | LSP code action           |                                                       |                                                                   |
+| ✔️   | LSP code action           | [patch/lsp-code-action](/patch/lsp-code-action)       | [link](https://github.com/ivanjermakov/hat/tree/lsp-code-action)  |
 | ✔️   | LSP formatting            | [patch/lsp-formatting](/patch/lsp-formatting)         | [link](https://github.com/ivanjermakov/hat/tree/lsp-formatting)   |
 | 🚧   | Persistent undo           |                                                       |                                                                   |
 | 🚧   | Persistent macros         |                                                       |                                                                   |
