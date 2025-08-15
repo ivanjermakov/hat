@@ -119,6 +119,7 @@ pub const LspConnection = struct {
                     .rename = .{
                         .prepareSupport = true,
                     },
+                    .formatting = .{},
                 },
                 .workspace = .{
                     .workspaceFolders = true,
