@@ -528,16 +528,13 @@ pub const LspConnection = struct {
     }
 
     fn handleCodeActionResponse(self: *LspConnection, arena: Allocator, resp: ?std.json.Value) !void {
+        _ = self;
         if (resp == null or resp.? == .null) return;
         const result = try std.json.parseFromValue([]const types.CodeAction, arena, resp.?, .{});
         const editor = &main.editor;
 
-        main.editor.resetCodeActions();
-        var code_actions = std.ArrayList(act.CodeAction).init(self.allocator);
-        for (result.value) |lsp_code_action| {
-            try code_actions.append(try .init(editor.allocator, lsp_code_action));
-        }
-        editor.code_actions = try code_actions.toOwnedSlice();
+        editor.resetCodeActions();
+        editor.code_actions = try act.fromLsp(editor.allocator, result.value);
         log.debug(@This(), "got {} code actions\n", .{editor.code_actions.?.len});
         editor.dirty.draw = true;
     }
