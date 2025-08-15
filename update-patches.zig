@@ -5,6 +5,7 @@ const patches = .{
     "ts-symbol-picker",
     "buffer-centering",
     "autosave",
+    "lsp-formatting",
 };
 
 pub fn main() !void {
