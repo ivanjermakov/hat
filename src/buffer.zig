@@ -803,7 +803,10 @@ pub const Buffer = struct {
     }
 
     pub fn applyTextEdits(self: *Buffer, text_edits: []const lsp.types.TextEdit) !void {
-        for (text_edits) |edit| {
+        // should be applied in reverse order to preserve original positions
+        for (0..text_edits.len) |i_| {
+            const i = text_edits.len - i_ - 1;
+            const edit = text_edits[i];
             var change = try cha.Change.fromLsp(self.allocator, self, edit);
             log.debug(@This(), "change: {s}: {}\n", .{ self.path, change });
             try self.appendChange(&change);
@@ -848,8 +851,6 @@ pub const Buffer = struct {
         change.new_byte_span = ByteSpan.fromBufSpan(self, change.new_span.?);
         try self.moveCursor(change.new_span.?.end);
         self.cursor = change.new_span.?.end;
-        std.debug.assert(std.meta.eql(self.cursor, change.new_span.?.end));
-        // log.debug(@This(), "applied change: {}\n", .{change});
 
         if (self.ts_state) |*ts_state| try ts_state.edit(change);
     }

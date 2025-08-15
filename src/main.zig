@@ -389,6 +389,7 @@ fn startEditor(allocator: std.mem.Allocator) !void {
         buffer = editor.active_buffer;
         editor.dirty.draw = editor.dirty.draw or buffer.pending_changes.items.len > 0;
         if (buffer.pending_changes.items.len > 0) {
+            buffer.version += 1;
             buffer.clearDiagnostics();
             try buffer.reparse();
             perf.parse = timer.lap();
@@ -397,7 +398,6 @@ fn startEditor(allocator: std.mem.Allocator) !void {
             }
             for (buffer.pending_changes.items) |*change| change.deinit();
             buffer.pending_changes.clearRetainingCapacity();
-            buffer.version += 1;
             perf.did_change = timer.lap();
         } else {
             perf.parse = 0;
