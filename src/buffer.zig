@@ -65,6 +65,7 @@ pub const Buffer = struct {
     uncommitted_changes: std.ArrayList(cha.Change),
     lsp_connections: std.ArrayList(*lsp.LspConnection),
     scratch: bool = false,
+    highlights: std.ArrayList(Span),
     allocator: Allocator,
 
     pub fn init(allocator: Allocator, path: ?[]const u8, content_raw: []const u8) !Buffer {
@@ -105,6 +106,7 @@ pub const Buffer = struct {
             .uncommitted_changes = std.ArrayList(cha.Change).init(allocator),
             .lsp_connections = std.ArrayList(*lsp.LspConnection).init(allocator),
             .scratch = scratch,
+            .highlights = std.ArrayList(Span).init(allocator),
             .allocator = allocator,
         };
         _ = try self.syncFs();
@@ -150,6 +152,7 @@ pub const Buffer = struct {
         self.line_positions.deinit();
         self.line_byte_positions.deinit();
         self.indents.deinit();
+        self.highlights.deinit();
 
         for (self.history.items) |*i| {
             for (i.items) |*c| c.deinit();
@@ -611,6 +614,12 @@ pub const Buffer = struct {
     pub fn showHover(self: *Buffer) !void {
         for (self.lsp_connections.items) |conn| {
             try conn.hover();
+        }
+    }
+
+    pub fn highlight(self: *Buffer) !void {
+        for (self.lsp_connections.items) |conn| {
+            try conn.highlight();
         }
     }
 

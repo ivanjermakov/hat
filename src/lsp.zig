@@ -9,6 +9,7 @@ const buf = @import("buffer.zig");
 const cha = @import("change.zig");
 const core = @import("core.zig");
 const Cursor = core.Cursor;
+const Span = core.Span;
 const fs = @import("fs.zig");
 const log = @import("log.zig");
 const main = @import("main.zig");
@@ -119,6 +120,7 @@ pub const LspConnection = struct {
                     .rename = .{
                         .prepareSupport = true,
                     },
+                    .documentHighlight = .{},
                 },
                 .workspace = .{
                     .workspaceFolders = true,
@@ -190,6 +192,8 @@ pub const LspConnection = struct {
                         try self.handleHoverResponse(arena.allocator(), response_result);
                     } else if (std.mem.eql(u8, method, "textDocument/rename")) {
                         try self.handleRenameResponse(arena.allocator(), response_result);
+                    } else if (std.mem.eql(u8, method, "textDocument/documentHighlight")) {
+                        try self.handleHighlightResponse(arena.allocator(), response_result);
                     }
                 },
                 .notification => |notif| {
@@ -231,6 +235,14 @@ pub const LspConnection = struct {
     pub fn hover(self: *LspConnection) !void {
         const buffer = main.editor.active_buffer;
         try self.sendRequest("textDocument/hover", .{
+            .textDocument = .{ .uri = buffer.uri },
+            .position = buffer.cursor.toLsp(),
+        });
+    }
+
+    pub fn highlight(self: *LspConnection) !void {
+        const buffer = main.editor.active_buffer;
+        try self.sendRequest("textDocument/documentHighlight", .{
             .textDocument = .{ .uri = buffer.uri },
             .position = buffer.cursor.toLsp(),
         });
@@ -511,6 +523,21 @@ pub const LspConnection = struct {
             }
         }
         try main.editor.applyWorkspaceEdit(result.value);
+    }
+
+    fn handleHighlightResponse(self: *LspConnection, arena: Allocator, resp: ?std.json.Value) !void {
+        _ = self;
+        if (resp == null or resp.? == .null) return;
+        const result = try std.json.parseFromValue([]const types.DocumentHighlight, arena, resp.?, .{});
+        const buffer = main.editor.active_buffer;
+        buffer.highlights.clearRetainingCapacity();
+        for (result.value) |hi| {
+            try buffer.highlights.append(Span.fromLsp(hi.range));
+        }
+        if (buffer.highlights.items.len > 0) {
+            log.debug(@This(), "got {} highlights\n", .{buffer.highlights.items.len});
+            main.editor.dirty.draw = true;
+        }
     }
 
     fn handleNotification(self: *LspConnection, arena: Allocator, notif: lsp.JsonRPCMessage.Notification) !void {
