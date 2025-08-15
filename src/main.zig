@@ -335,6 +335,8 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                         try buffer.goToDefinition();
                     } else if (editor.mode == .normal and eql(u8, multi_key, " r")) {
                         try buffer.findReferences();
+                    } else if (editor.mode == .normal and eql(u8, multi_key, " c")) {
+                        try buffer.codeAction();
                     } else if (editor.mode == .normal and eql(u8, multi_key, " n")) {
                         try buffer.renamePrompt();
                     } else if (editor.mode == .normal and eql(u8, key, "r") and editor.key_queue.items[1].printable != null) {

@@ -259,6 +259,7 @@ pub const Buffer = struct {
 
         main.editor.dirty.cursor = true;
         main.editor.resetHover();
+        main.editor.resetCodeActions();
     }
 
     pub fn centerCursor(self: *Buffer) !void {
@@ -611,6 +612,12 @@ pub const Buffer = struct {
     pub fn showHover(self: *Buffer) !void {
         for (self.lsp_connections.items) |conn| {
             try conn.hover();
+        }
+    }
+
+    pub fn codeAction(self: *Buffer) !void {
+        for (self.lsp_connections.items) |conn| {
+            try conn.codeAction();
         }
     }
 

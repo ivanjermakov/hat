@@ -9,11 +9,13 @@ const buf = @import("buffer.zig");
 const cha = @import("change.zig");
 const core = @import("core.zig");
 const Cursor = core.Cursor;
+const Span = core.Span;
 const fs = @import("fs.zig");
 const log = @import("log.zig");
 const main = @import("main.zig");
 const fzf = @import("ui/fzf.zig");
 const dia = @import("ui/diagnostic.zig");
+const act = @import("ui/code_action.zig");
 const uri = @import("uri.zig");
 
 const default_stringify_opts = std.json.StringifyOptions{ .emit_null_optional_fields = false };
@@ -119,6 +121,7 @@ pub const LspConnection = struct {
                     .rename = .{
                         .prepareSupport = true,
                     },
+                    .codeAction = .{},
                 },
                 .workspace = .{
                     .workspaceFolders = true,
@@ -190,6 +193,8 @@ pub const LspConnection = struct {
                         try self.handleHoverResponse(arena.allocator(), response_result);
                     } else if (std.mem.eql(u8, method, "textDocument/rename")) {
                         try self.handleRenameResponse(arena.allocator(), response_result);
+                    } else if (std.mem.eql(u8, method, "textDocument/codeAction")) {
+                        try self.handleCodeActionResponse(arena.allocator(), response_result);
                     }
                 },
                 .notification => |notif| {
@@ -233,6 +238,15 @@ pub const LspConnection = struct {
         try self.sendRequest("textDocument/hover", .{
             .textDocument = .{ .uri = buffer.uri },
             .position = buffer.cursor.toLsp(),
+        });
+    }
+
+    pub fn codeAction(self: *LspConnection) !void {
+        const buffer = main.editor.active_buffer;
+        try self.sendRequest("textDocument/codeAction", .{
+            .textDocument = .{ .uri = buffer.uri },
+            .range = (Span{ .start = buffer.cursor, .end = buffer.cursor }).toLsp(),
+            .context = .{ .diagnostics = &.{} },
         });
     }
 
@@ -511,6 +525,21 @@ pub const LspConnection = struct {
             }
         }
         try main.editor.applyWorkspaceEdit(result.value);
+    }
+
+    fn handleCodeActionResponse(self: *LspConnection, arena: Allocator, resp: ?std.json.Value) !void {
+        if (resp == null or resp.? == .null) return;
+        const result = try std.json.parseFromValue([]const types.CodeAction, arena, resp.?, .{});
+        const editor = &main.editor;
+
+        main.editor.resetCodeActions();
+        var code_actions = std.ArrayList(act.CodeAction).init(self.allocator);
+        for (result.value) |lsp_code_action| {
+            try code_actions.append(try .init(editor.allocator, lsp_code_action));
+        }
+        editor.code_actions = try code_actions.toOwnedSlice();
+        log.debug(@This(), "got {} code actions\n", .{editor.code_actions.?.len});
+        editor.dirty.draw = true;
     }
 
     fn handleNotification(self: *LspConnection, arena: Allocator, notif: lsp.JsonRPCMessage.Notification) !void {
