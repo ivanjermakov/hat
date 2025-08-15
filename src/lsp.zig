@@ -529,6 +529,7 @@ pub const LspConnection = struct {
     }
 
     fn handleFormattingResponse(self: *LspConnection, arena: Allocator, resp: ?std.json.Value) !void {
+        _ = self;
         if (resp == null or resp.? == .null) return;
         const result = try std.json.parseFromValue([]const types.TextEdit, arena, resp.?, .{});
         log.debug(@This(), "got {} formatting edits\n", .{result.value.len});
@@ -536,7 +537,7 @@ pub const LspConnection = struct {
             main.main_loop_mutex.lock();
             defer main.main_loop_mutex.unlock();
             const buffer = main.editor.active_buffer;
-            try self.applyTextEdits(buffer, result.value);
+            try buffer.applyTextEdits(result.value);
             try buffer.commitChanges();
         }
     }
