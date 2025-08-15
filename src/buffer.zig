@@ -520,6 +520,11 @@ pub const Buffer = struct {
                 try self.moveCursor(inv_change.new_span.?.start);
             }
             self.history_index = if (h_idx > 0) h_idx - 1 else null;
+
+            if (main.editor.config.autosave) {
+                try self.write();
+                log.debug(@This(), "autosave {s}\n", .{self.path});
+            }
         }
     }
 
@@ -535,6 +540,11 @@ pub const Buffer = struct {
             try self.moveCursor(change.new_span.?.start);
         }
         self.history_index = redo_idx;
+
+        if (main.editor.config.autosave) {
+            try self.write();
+            log.debug(@This(), "autosave {s}\n", .{self.path});
+        }
     }
 
     pub fn textAt(self: *const Buffer, span: Span) []const u21 {
