@@ -6,6 +6,7 @@ const patches = .{
     "buffer-centering",
     "autosave",
     "lsp-formatting",
+    "lsp-highlight",
 };
 
 pub fn main() !void {
