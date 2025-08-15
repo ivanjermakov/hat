@@ -455,11 +455,7 @@ pub const Editor = struct {
             defer self.allocator.free(path);
             try self.openBuffer(path);
             const buffer = self.active_buffer;
-            for (text_edits) |edit| {
-                var change = try cha.Change.fromLsp(buffer.allocator, buffer, edit);
-                log.debug(@This(), "change: {s}: {}\n", .{ change_uri, change });
-                try buffer.appendChange(&change);
-            }
+            try buffer.applyTextEdits(text_edits);
             // TODO: apply another dummy edit that resets cursor position back to `old_cursor`
             // because now redoing rename jumps the cursor
             try buffer.commitChanges();

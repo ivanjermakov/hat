@@ -794,6 +794,14 @@ pub const Buffer = struct {
         main.editor.dirty.draw = true;
     }
 
+    pub fn applyTextEdits(self: *Buffer, text_edits: []const lsp.types.TextEdit) !void {
+        for (text_edits) |edit| {
+            var change = try cha.Change.fromLsp(self.allocator, self, edit);
+            log.debug(@This(), "change: {s}: {}\n", .{ self.path, change });
+            try self.appendChange(&change);
+        }
+    }
+
     fn find(self: *Buffer, query: []const u8) ![]const ByteSpan {
         var spans = std.ArrayList(ByteSpan).init(self.allocator);
         var re = try reg.Regex.from(query, false, self.allocator);
