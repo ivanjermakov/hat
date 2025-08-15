@@ -155,6 +155,15 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                 const cmd_active = editor.command_line.command != null;
                 var repeat_or_1: i32 = 1;
                 if (repeat_count) |rc| repeat_or_1 = @intCast(rc);
+                const code_action = if (editor.code_actions) |code_actions| b: {
+                    if (raw_key.printable) |printable| {
+                        for (code_actions) |action| {
+                            if (action.hint == printable[0])
+                                break :b action;
+                        }
+                    }
+                    break :b null;
+                } else null;
 
                 // command line menu
                 if (cmd_active) {
@@ -175,6 +184,10 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                         defer allocator.free(key_uni);
                         try editor.command_line.insert(key_uni);
                     }
+
+                // code action menu
+                } else if (code_action) |action| {
+                    try buffer.codeActionExecute(action);
 
                     // text insertion
                 } else if (editor.mode == .insert and editor.key_queue.items[0].printable != null) {
