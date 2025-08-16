@@ -344,6 +344,13 @@ fn startEditor(allocator: std.mem.Allocator) !void {
 
                     if (editor.mode == .normal and eql(u8, multi_key, " w")) {
                         try buffer.write();
+                        const msg = try std.fmt.allocPrint(
+                            allocator,
+                            "{s} {}B written",
+                            .{ buffer.path, buffer.content_raw.items.len },
+                        );
+                        defer allocator.free(msg);
+                        try editor.sendMessage(msg);
                     } else if (editor.mode == .normal and eql(u8, multi_key, " d")) {
                         try buffer.goToDefinition();
                     } else if (editor.mode == .normal and eql(u8, multi_key, " r")) {

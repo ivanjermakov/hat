@@ -190,14 +190,6 @@ pub const Buffer = struct {
         _ = try self.syncFs();
 
         self.file_history_index = self.history_index;
-
-        const msg = try std.fmt.allocPrint(
-            self.allocator,
-            "{s} {}B written",
-            .{ self.path, self.content_raw.items.len },
-        );
-        defer self.allocator.free(msg);
-        try main.editor.sendMessage(msg);
     }
 
     pub fn moveCursor(self: *Buffer, new_cursor: Cursor) !void {
@@ -383,6 +375,11 @@ pub const Buffer = struct {
         self.history_index = self.history.items.len - 1;
 
         try main.editor.dotRepeatCommitReady();
+
+        if (main.editor.config.autosave) {
+            try self.write();
+            log.debug(@This(), "autosave {s}\n", .{self.path});
+        }
     }
 
     pub fn changeInsertText(self: *Buffer, text: []const u21) !void {
@@ -566,6 +563,11 @@ pub const Buffer = struct {
                 try self.moveCursor(inv_change.new_span.?.start);
             }
             self.history_index = if (h_idx > 0) h_idx - 1 else null;
+
+            if (main.editor.config.autosave) {
+                try self.write();
+                log.debug(@This(), "autosave {s}\n", .{self.path});
+            }
         }
     }
 
@@ -581,6 +583,11 @@ pub const Buffer = struct {
             try self.moveCursor(change.new_span.?.start);
         }
         self.history_index = redo_idx;
+
+        if (main.editor.config.autosave) {
+            try self.write();
+            log.debug(@This(), "autosave {s}\n", .{self.path});
+        }
     }
 
     pub fn textAt(self: *const Buffer, span: Span) []const u21 {
