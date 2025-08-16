@@ -354,6 +354,8 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                         try buffer.renamePrompt();
                     } else if (editor.mode == .normal and eql(u8, multi_key, " l")) {
                         try buffer.format();
+                    } else if (editor.mode == .normal and eql(u8, multi_key, " f")) {
+                        try buffer.findSymbols();
                     } else if (editor.mode == .normal and eql(u8, key, "r") and editor.key_queue.items[1].printable != null) {
                         const macro_name = key2.printable.?[0];
                         try editor.startMacro(macro_name);
