@@ -125,10 +125,9 @@ pub const Buffer = struct {
 
     pub fn updateContent(self: *Buffer) !void {
         self.content.clearRetainingCapacity();
-        const content_uni = try uni.utf8FromBytes(self.allocator, self.content_raw.items);
-        // TODO: less allocations
-        defer self.allocator.free(content_uni);
-        try self.content.appendSlice(content_uni);
+        const view = try std.unicode.Utf8View.init(self.content_raw.items);
+        var iter = view.iterator();
+        while (iter.nextCodepoint()) |ch| try self.content.append(ch);
     }
 
     pub fn deinit(self: *Buffer) void {
