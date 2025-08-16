@@ -24,6 +24,7 @@ const ter = @import("terminal.zig");
 const ts = @import("ts.zig");
 const uni = @import("unicode.zig");
 const dia = @import("ui/diagnostic.zig");
+const act = @import("ui/code_action.zig");
 
 pub const Buffer = struct {
     path: []const u8,
@@ -259,6 +260,7 @@ pub const Buffer = struct {
 
         main.editor.dirty.cursor = true;
         main.editor.resetHover();
+        main.editor.resetCodeActions();
     }
 
     pub fn centerCursor(self: *Buffer) !void {
@@ -612,6 +614,18 @@ pub const Buffer = struct {
         for (self.lsp_connections.items) |conn| {
             try conn.hover();
         }
+    }
+
+    pub fn codeAction(self: *Buffer) !void {
+        for (self.lsp_connections.items) |conn| {
+            try conn.codeAction();
+        }
+    }
+
+    pub fn codeActionExecute(self: *Buffer, code_action: act.CodeAction) !void {
+        const parse_result = try std.json.parseFromSlice(lsp.types.WorkspaceEdit, self.allocator, code_action.edit_json, .{});
+        defer parse_result.deinit();
+        try main.editor.applyWorkspaceEdit(parse_result.value);
     }
 
     pub fn renamePrompt(self: *Buffer) !void {
