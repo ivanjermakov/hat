@@ -10,15 +10,19 @@ pub fn utf8FromBytes(allocator: Allocator, bytes: []const u8) ![]const u21 {
 }
 
 pub fn utf8ToBytes(allocator: Allocator, utf: []const u21) ![]const u8 {
-    var total_size: usize = 0;
-    for (utf) |ch| total_size += try std.unicode.utf8CodepointSequenceLength(ch);
-    var b = try allocator.alloc(u8, total_size);
+    var b = try std.ArrayList(u8).initCapacity(allocator, utf.len);
+    try utf8ToBytesWrite(b.writer(), utf);
+    return b.toOwnedSlice();
+}
+
+pub fn utf8ToBytesWrite(writer: anytype, utf: []const u21) !void {
     var pos: usize = 0;
+    var buf: [1024]u8 = undefined;
     for (utf) |ch| {
-        const len = try std.unicode.utf8Encode(ch, b[pos..]);
+        const len = try std.unicode.utf8Encode(ch, &buf);
+        try writer.writeAll(buf[0..len]);
         pos += len;
     }
-    return b;
 }
 
 pub fn utf8ByteLen(utf: []const u21) !usize {

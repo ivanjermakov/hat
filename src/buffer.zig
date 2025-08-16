@@ -885,10 +885,7 @@ pub const Buffer = struct {
 
     fn updateRaw(self: *Buffer) !void {
         self.content_raw.clearRetainingCapacity();
-        const raw = try uni.utf8ToBytes(self.allocator, self.content.items);
-        // TODO: less allocations
-        defer self.allocator.free(raw);
-        try self.content_raw.appendSlice(raw);
+        try uni.utf8ToBytesWrite(self.content_raw.writer(), self.content.items);
     }
 
     fn scrollForCursor(self: *Buffer, new_buf_cursor: Cursor) void {
