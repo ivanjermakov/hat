@@ -150,7 +150,6 @@ pub const Terminal = struct {
             if (buffer_row < 0 or buffer_row >= buffer.line_positions.items.len) {
                 if (main.editor.config.end_of_buffer_char) |ch| _ = try self.write(&.{ch});
             } else {
-                // TODO: option to use non-relative line numbers
                 try std.fmt.formatInt(
                     @as(usize, @intCast(buffer_row + 1)),
                     10,
