@@ -14,53 +14,6 @@ const Order = std.math.Order;
 const testing = std.testing;
 const assert = std.debug.assert;
 
-// Number of days in each month not accounting for leap year
-pub const Weekday = enum(u3) {
-    Monday = 1,
-    Tuesday,
-    Wednesday,
-    Thursday,
-    Friday,
-    Saturday,
-    Sunday,
-};
-
-pub const Month = enum(u4) {
-    January = 1,
-    February,
-    March,
-    April,
-    May,
-    June,
-    July,
-    August,
-    September,
-    October,
-    November,
-    December,
-
-    // Convert an abbreviation, eg Jan to the enum value
-    pub fn parseAbbr(month: []const u8) !Month {
-        if (month.len == 3) {
-            inline for (std.meta.fields(Month)) |f| {
-                if (ascii.eqlIgnoreCase(f.name[0..3], month)) {
-                    return @enumFromInt(f.value);
-                }
-            }
-        }
-        return error.InvalidFormat;
-    }
-
-    pub fn parseName(month: []const u8) !Month {
-        inline for (std.meta.fields(Month)) |f| {
-            if (ascii.eqlIgnoreCase(f.name, month)) {
-                return @enumFromInt(f.value);
-            }
-        }
-        return error.InvalidFormat;
-    }
-};
-
 pub const MIN_YEAR: u16 = 1;
 pub const MAX_YEAR: u16 = 9999;
 pub const MAX_ORDINAL: u32 = 3652059;
@@ -107,26 +60,6 @@ fn ymd2ord(year: u16, month: u8, day: u8) u32 {
     return daysBeforeYear(year) + daysBeforeMonth(year, month) + day;
 }
 
-// Calculate the number of days of the first monday for week 1 iso calendar
-// for the given year since 01-Jan-0001
-pub fn daysBeforeFirstMonday(year: u16) u32 {
-    // From cpython/datetime.py _isoweek1monday
-    const THURSDAY = 3;
-    const first_day = ymd2ord(year, 1, 1);
-    const first_weekday = (first_day + 6) % 7;
-    var week1_monday = first_day - first_weekday;
-    if (first_weekday > THURSDAY) {
-        week1_monday += 7;
-    }
-    return week1_monday;
-}
-
-pub const ISOCalendar = struct {
-    year: u16,
-    week: u6, // Week of year 1-53
-    weekday: u3, // Day of week 1-7
-};
-
 pub const Date = struct {
     year: u16,
     month: u4 = 1, // Month of year
@@ -143,11 +76,6 @@ pub const Date = struct {
             .month = @intCast(month),
             .day = @intCast(day),
         };
-    }
-
-    // Return a copy of the date
-    pub fn copy(self: Date) !Date {
-        return Date.create(self.year, self.month, self.day);
     }
 
     // Create a Date from the number of days since 01-Jan-0001
@@ -227,13 +155,6 @@ pub const Date = struct {
         return Date.create(year, month, n + 1) catch unreachable;
     }
 
-    // Return proleptic Gregorian ordinal for the year, month and day.
-    // January 1 of year 1 is day 1.  Only the year, month and day values
-    // contribute to the result.
-    pub fn toOrdinal(self: Date) u32 {
-        return ymd2ord(self.year, self.month, self.day);
-    }
-
     // Returns todays date
     pub fn now() Date {
         return Date.fromTimestamp(time.milliTimestamp());
@@ -248,12 +169,6 @@ pub const Date = struct {
         return Date.fromOrdinal(@intCast(days));
     }
 
-    // Return the number of seconds since 1 Jan 1970
-    pub fn toSeconds(self: Date) f64 {
-        const days = @as(i64, @intCast(self.toOrdinal())) - @as(i64, EPOCH);
-        return @floatFromInt(days * time.s_per_day);
-    }
-
     // Create a date from a UTC timestamp in milliseconds relative to Jan 1st 1970
     pub fn fromTimestamp(timestamp: i64) Date {
         const days = @divFloor(timestamp, time.ms_per_day) + @as(i64, EPOCH);
@@ -261,39 +176,6 @@ pub const Date = struct {
         return Date.fromOrdinal(@intCast(days));
     }
 
-    // Create a UTC timestamp in milliseconds relative to Jan 1st 1970
-    pub fn toTimestamp(self: Date) i64 {
-        const d: i64 = @intCast(daysBeforeYear(self.year));
-        const days = d - @as(i64, EPOCH) + @as(i64, @intCast(self.dayOfYear()));
-        return days * time.ms_per_day;
-    }
-
-    // Convert to an ISOCalendar date containing the year, week number, and
-    // weekday. First week is 1. Monday is 1, Sunday is 7.
-    pub fn isoCalendar(self: Date) ISOCalendar {
-        // Ported from python's isocalendar.
-        var y = self.year;
-        var first_monday = daysBeforeFirstMonday(y);
-        const today = ymd2ord(self.year, self.month, self.day);
-        if (today < first_monday) {
-            y -= 1;
-            first_monday = daysBeforeFirstMonday(y);
-        }
-        const days_between = today - first_monday;
-        var week = @divFloor(days_between, 7);
-        const day = @mod(days_between, 7);
-        if (week >= 52 and today >= daysBeforeFirstMonday(y + 1)) {
-            y += 1;
-            week = 0;
-        }
-        assert(week >= 0 and week < 53);
-        assert(day >= 0 and day < 8);
-        return ISOCalendar{ .year = y, .week = @intCast(week + 1), .weekday = @intCast(day + 1) };
-    }
-
-    // ------------------------------------------------------------------------
-    // Comparisons
-    // ------------------------------------------------------------------------
     pub fn eql(self: Date, other: Date) bool {
         return self.cmp(other) == .eq;
     }
@@ -306,24 +188,6 @@ pub const Date = struct {
         if (self.day > other.day) return .gt;
         if (self.day < other.day) return .lt;
         return .eq;
-    }
-
-    pub fn gt(self: Date, other: Date) bool {
-        return self.cmp(other) == .gt;
-    }
-
-    pub fn gte(self: Date, other: Date) bool {
-        const r = self.cmp(other);
-        return r == .eq or r == .gt;
-    }
-
-    pub fn lt(self: Date, other: Date) bool {
-        return self.cmp(other) == .lt;
-    }
-
-    pub fn lte(self: Date, other: Date) bool {
-        const r = self.cmp(other);
-        return r == .eq or r == .lt;
     }
 
     // Parse date in format YYYY-MM-DD. Numbers must be zero padded.
@@ -350,108 +214,13 @@ pub const Date = struct {
     pub fn writeIso(self: Date, writer: anytype) !void {
         try std.fmt.format(writer, ISO_DATE_FMT, .{ self.year, self.month, self.day });
     }
-
-    // Return day of year starting with 1
-    pub fn dayOfYear(self: Date) u16 {
-        const d = self.toOrdinal() - daysBeforeYear(self.year);
-        assert(d >= 1 and d <= 366);
-        return @intCast(d);
-    }
-
-    // Return day of week starting with Monday = 1 and Sunday = 7
-    pub fn dayOfWeek(self: Date) Weekday {
-        const dow: u3 = @intCast(self.toOrdinal() % 7);
-        return @enumFromInt(if (dow == 0) 7 else dow);
-    }
-
-    // Return the ISO calendar based week of year. With 1 being the first week.
-    pub fn weekOfYear(self: Date) u8 {
-        return self.isoCalendar().week;
-    }
-
-    // Return day of week starting with Monday = 0 and Sunday = 6
-    pub fn weekday(self: Date) u4 {
-        return @intFromEnum(self.dayOfWeek()) - 1;
-    }
-
-    // Return whether the date is a weekend (Saturday or Sunday)
-    pub fn isWeekend(self: Date) bool {
-        return self.weekday() >= 5;
-    }
-
-    // Return the name of the day of the week, eg "Sunday"
-    pub fn weekdayName(self: Date) []const u8 {
-        return @tagName(self.dayOfWeek());
-    }
-
-    // Return the name of the day of the month, eg "January"
-    pub fn monthName(self: Date) []const u8 {
-        assert(self.month >= 1 and self.month <= 12);
-        return @tagName(@as(Month, @enumFromInt(self.month)));
-    }
-
-    // Return a copy of the date shifted by the given number of days
-    pub fn shiftDays(self: Date, days: i32) Date {
-        return self.shift(Delta{ .days = days });
-    }
-
-    // Return a copy of the date shifted by the given number of years
-    pub fn shiftYears(self: Date, years: i16) Date {
-        return self.shift(Delta{ .years = years });
-    }
-
-    pub const Delta = struct {
-        years: i16 = 0,
-        days: i32 = 0,
-    };
-
-    // Return a copy of the date shifted in time by the delta
-    pub fn shift(self: Date, delta: Delta) Date {
-        if (delta.years == 0 and delta.days == 0) {
-            return self.copy() catch unreachable;
-        }
-
-        // Shift year
-        var year = self.year;
-        if (delta.years < 0) {
-            year -= @intCast(-delta.years);
-        } else {
-            year += @intCast(delta.years);
-        }
-        var ord = daysBeforeYear(year);
-        var days = self.dayOfYear();
-        const from_leap = isLeapYear(self.year);
-        const to_leap = isLeapYear(year);
-        if (days == 59 and from_leap and to_leap) {
-            // No change before leap day
-        } else if (days < 59) {
-            // No change when jumping from leap day to leap day
-        } else if (to_leap and !from_leap) {
-            // When jumping to a leap year to non-leap year
-            // we have to add a leap day to the day of year
-            days += 1;
-        } else if (from_leap and !to_leap) {
-            // When jumping from leap year to non-leap year we have to undo
-            // the leap day added to the day of yearear
-            days -= 1;
-        }
-        ord += days;
-
-        // Shift days
-        if (delta.days < 0) {
-            ord -= @intCast(-delta.days);
-        } else {
-            ord += @intCast(delta.days);
-        }
-        return Date.fromOrdinal(ord);
-    }
 };
 
 pub const Time = struct {
-    hour: u8 = 0, // 0 to 23
-    minute: u8 = 0, // 0 to 59
-    second: u8 = 0, // 0 to 59
-    nanosecond: u32 = 0, // 0 to 999999999
+    hour: u8 = 0,
+    minute: u8 = 0,
+    second: u8 = 0,
+    nanosecond: u32 = 0,
 
     pub fn now() Time {
         return Time.fromTimestamp(time.milliTimestamp());
@@ -468,11 +237,6 @@ pub const Time = struct {
             .second = @intCast(second),
             .nanosecond = nanosecond,
         };
-    }
-
-    // Create a copy of the Time
-    pub fn copy(self: Time) !Time {
-        return Time.create(self.hour, self.minute, self.second, self.nanosecond);
     }
 
     // Create Time from a UTC Timestamp in milliseconds
@@ -670,14 +434,6 @@ pub const Datetime = struct {
         };
     }
 
-    // Return a copy
-    pub fn copy(self: Datetime) !Datetime {
-        return Datetime{
-            .date = try self.date.copy(),
-            .time = try self.time.copy(),
-        };
-    }
-
     pub fn fromDate(year: u16, month: u8, day: u8) !Datetime {
         return Datetime{
             .date = try Date.create(year, month, day),
@@ -691,11 +447,6 @@ pub const Datetime = struct {
             .date = Date.fromSeconds(seconds),
             .time = Time.fromSeconds(seconds),
         };
-    }
-
-    // Seconds since 1 Jan 0001 including nanoseconds
-    pub fn toSeconds(self: Datetime) f64 {
-        return self.date.toSeconds() + self.time.toSeconds();
     }
 
     // From POSIX timestamp in milliseconds relative to 1 Jan 1970
@@ -716,162 +467,12 @@ pub const Datetime = struct {
         return Datetime.fromTimestamp(ts);
     }
 
-    // To a UTC POSIX timestamp in milliseconds relative to 1 Jan 1970
-    pub fn toTimestamp(self: Datetime) i128 {
-        const ds = self.date.toTimestamp();
-        const ts = self.time.toTimestamp();
-        return ds + ts;
-    }
-
     pub fn eql(self: Datetime, other: Datetime) bool {
         return self.cmp(other) == .eq;
     }
 
     pub fn cmp(self: Datetime, other: Datetime) Order {
         return self.time.cmp(other.time);
-    }
-
-    pub fn gt(self: Datetime, other: Datetime) bool {
-        return self.cmp(other) == .gt;
-    }
-
-    pub fn gte(self: Datetime, other: Datetime) bool {
-        const r = self.cmp(other);
-        return r == .eq or r == .gt;
-    }
-
-    pub fn lt(self: Datetime, other: Datetime) bool {
-        return self.cmp(other) == .lt;
-    }
-
-    pub fn lte(self: Datetime, other: Datetime) bool {
-        const r = self.cmp(other);
-        return r == .eq or r == .lt;
-    }
-
-    // Return a Datetime.Delta relative to this date
-    pub fn sub(self: Datetime, other: Datetime) Delta {
-        var days = @as(i32, @intCast(self.date.toOrdinal())) - @as(i32, @intCast(other.date.toOrdinal()));
-        const offset = 0;
-        var seconds = (self.time.totalSeconds() - other.time.totalSeconds()) - offset;
-        var ns = @as(i32, @intCast(self.time.nanosecond)) - @as(i32, @intCast(other.time.nanosecond));
-        while (seconds > 0 and ns < 0) {
-            seconds -= 1;
-            ns += time.ns_per_s;
-        }
-        while (days > 0 and seconds < 0) {
-            days -= 1;
-            seconds += time.s_per_day;
-        }
-        return Delta{ .days = days, .seconds = seconds, .nanoseconds = ns };
-    }
-
-    // Create a Datetime shifted by the given number of years
-    pub fn shiftYears(self: Datetime, years: i16) Datetime {
-        return self.shift(Delta{ .years = years });
-    }
-
-    // Create a Datetime shifted by the given number of days
-    pub fn shiftDays(self: Datetime, days: i32) Datetime {
-        return self.shift(Delta{ .days = days });
-    }
-
-    // Create a Datetime shifted by the given number of hours
-    pub fn shiftHours(self: Datetime, hours: i32) Datetime {
-        return self.shift(Delta{ .seconds = hours * time.s_per_hour });
-    }
-
-    // Create a Datetime shifted by the given number of minutes
-    pub fn shiftMinutes(self: Datetime, minutes: i32) Datetime {
-        return self.shift(Delta{ .seconds = minutes * time.s_per_min });
-    }
-
-    // Create a Datetime shifted by the given number of seconds
-    pub fn shiftSeconds(self: Datetime, seconds: i64) Datetime {
-        return self.shift(Delta{ .seconds = seconds });
-    }
-
-    // Create a Datetime shifted by the given Delta
-    pub fn shift(self: Datetime, delta: Delta) Datetime {
-        var days = delta.days;
-        var s = delta.seconds + self.time.totalSeconds();
-
-        // Rollover ns to s
-        var ns = delta.nanoseconds + @as(i32, @intCast(self.time.nanosecond));
-        if (ns >= time.ns_per_s) {
-            s += 1;
-            ns -= time.ns_per_s;
-        } else if (ns < -time.ns_per_s) {
-            s -= 1;
-            ns += time.ns_per_s;
-        }
-        assert(ns >= 0 and ns < time.ns_per_s);
-        const nanosecond: u32 = @intCast(ns);
-
-        // Rollover s to days
-        if (s >= time.s_per_day) {
-            const d = @divFloor(s, time.s_per_day);
-            days += @intCast(d);
-            s -= d * time.s_per_day;
-        } else if (s < 0) {
-            if (s < -time.s_per_day) { // Wrap multiple
-                const d = @divFloor(s, -time.s_per_day);
-                days -= @intCast(d);
-                s += d * time.s_per_day;
-            }
-            days -= 1;
-            s = time.s_per_day + s;
-        }
-        assert(s >= 0 and s < time.s_per_day);
-
-        var second: u32 = @intCast(s);
-        const hour = @divFloor(second, time.s_per_hour);
-        second -= hour * time.s_per_hour;
-        const minute = @divFloor(second, time.s_per_min);
-        second -= minute * time.s_per_min;
-
-        return Datetime{
-            .date = self.date.shift(Date.Delta{ .years = delta.years, .days = days }),
-            .time = Time.create(hour, minute, second, nanosecond) catch unreachable, // Error here would mean a bug
-        };
-    }
-
-    // Formats a timestamp in the format used by HTTP.
-    // eg "Tue, 15 Nov 1994 08:12:31 GMT"
-    pub fn formatHttp(self: Datetime, allocator: Allocator) ![]const u8 {
-        return try std.fmt.allocPrint(allocator, "{s}, {d} {s} {d} {d:0>2}:{d:0>2}:{d:0>2}", .{
-            self.date.weekdayName()[0..3],
-            self.date.day,
-            self.date.monthName()[0..3],
-            self.date.year,
-            self.time.hour,
-            self.time.minute,
-            self.time.second,
-        });
-    }
-
-    pub fn formatHttpBuf(self: Datetime, buf: []u8) ![]const u8 {
-        return try std.fmt.bufPrint(buf, "{s}, {d} {s} {d} {d:0>2}:{d:0>2}:{d:0>2}", .{
-            self.date.weekdayName()[0..3],
-            self.date.day,
-            self.date.monthName()[0..3],
-            self.date.year,
-            self.time.hour,
-            self.time.minute,
-            self.time.second,
-        });
-    }
-
-    // Formats a timestamp in the format used by HTTP.
-    // eg "Tue, 15 Nov 1994 08:12:31 GMT"
-    pub fn formatHttpFromTimestamp(buf: []u8, timestamp: i64) ![]const u8 {
-        return Datetime.fromTimestamp(timestamp).formatHttpBuf(buf);
-    }
-
-    // From time in nanoseconds
-    pub fn formatHttpFromModifiedDate(buf: []u8, mtime: i128) ![]const u8 {
-        const ts: i64 = @intCast(@divFloor(mtime, time.ns_per_ms));
-        return Datetime.formatHttpFromTimestamp(buf, ts);
     }
 
     /// Format datetime to ISO8601 format
@@ -921,140 +522,10 @@ pub const Datetime = struct {
             },
         );
     }
-
-    pub fn formatISO8601(self: Datetime, writer: anytype, with_micro: bool) !void {
-        var micro_part_len: usize = 0;
-        var micro_part: [7]u8 = undefined;
-        if (with_micro) {
-            _ = try std.fmt.bufPrint(&micro_part, ".{:0>6}", .{self.time.nanosecond / 1000});
-            micro_part_len = 7;
-        }
-
-        try std.fmt.format(
-            writer,
-            "{d:0>4}-{d:0>2}-{d:0>2}T{d:0>2}:{d:0>2}:{d:0>2}{s}",
-            .{
-                self.date.year,
-                self.date.month,
-                self.date.day,
-                self.time.hour,
-                self.time.minute,
-                self.time.second,
-                micro_part[0..micro_part_len],
-            },
-        );
-    }
-
-    // Parse a HTTP If-Modified-Since header
-    // in the format "<day-name>, <day> <month> <year> <hour>:<minute>:<second> GMT"
-    // eg, "Wed, 21 Oct 2015 07:28:00 GMT"
-    pub fn parseModifiedSince(ims: []const u8) !Datetime {
-        const value = std.mem.trim(u8, ims, " ");
-        if (value.len < 29) return error.InvalidFormat;
-        const day = std.fmt.parseInt(u8, value[5..7], 10) catch return error.InvalidFormat;
-        const month = @intFromEnum(try Month.parseAbbr(value[8..11]));
-        const year = std.fmt.parseInt(u16, value[12..16], 10) catch return error.InvalidFormat;
-        const hour = std.fmt.parseInt(u8, value[17..19], 10) catch return error.InvalidFormat;
-        const minute = std.fmt.parseInt(u8, value[20..22], 10) catch return error.InvalidFormat;
-        const second = std.fmt.parseInt(u8, value[23..25], 10) catch return error.InvalidFormat;
-        return Datetime.create(year, month, day, hour, minute, second, 0);
-    }
 };
 
 test "datetime-now" {
     _ = Datetime.now();
-}
-
-test "datetime-create-timestamp" {
-    //var t = Datetime.now();
-    const ts = 1574908586928;
-    const t = Datetime.fromTimestamp(ts);
-    try testing.expect(t.date.eql(try Date.create(2019, 11, 28)));
-    try testing.expect(t.time.eql(try Time.create(2, 36, 26, 928000000)));
-    try testing.expectEqual(ts, t.toTimestamp());
-}
-
-test "datetime-from-seconds" {
-    // datetime.utcfromtimestamp(1592417521.9326444)
-    // datetime.datetime(2020, 6, 17, 18, 12, 1, 932644)
-    const ts: f64 = 1592417521.9326444;
-    const t = Datetime.fromSeconds(ts);
-    try testing.expect(t.date.year == 2020);
-    try testing.expectEqual(try Date.create(2020, 6, 17), t.date);
-    try testing.expectEqual(try Time.create(18, 12, 1, 932644400), t.time);
-    try testing.expectEqual(ts, t.toSeconds());
-}
-
-test "datetime-shift" {
-    var dt = try Datetime.create(2019, 12, 2, 11, 51, 13, 466545);
-
-    try testing.expect(dt.shiftYears(0).eql(dt));
-    try testing.expect(dt.shiftDays(0).eql(dt));
-    try testing.expect(dt.shiftHours(0).eql(dt));
-
-    var t = dt.shiftDays(7);
-    try testing.expect(t.date.eql(try Date.create(2019, 12, 9)));
-    try testing.expect(t.time.eql(dt.time));
-
-    t = dt.shiftDays(-3);
-    try testing.expect(t.date.eql(try Date.create(2019, 11, 29)));
-    try testing.expect(t.time.eql(dt.time));
-
-    t = dt.shiftHours(18);
-    try testing.expect(t.date.eql(try Date.create(2019, 12, 3)));
-    try testing.expect(t.time.eql(try Time.create(5, 51, 13, 466545)));
-
-    t = dt.shiftHours(-36);
-    try testing.expect(t.date.eql(try Date.create(2019, 11, 30)));
-    try testing.expect(t.time.eql(try Time.create(23, 51, 13, 466545)));
-
-    t = dt.shiftYears(1);
-    try testing.expect(t.date.eql(try Date.create(2020, 12, 2)));
-    try testing.expect(t.time.eql(dt.time));
-
-    t = dt.shiftYears(-3);
-    try testing.expect(t.date.eql(try Date.create(2016, 12, 2)));
-    try testing.expect(t.time.eql(dt.time));
-}
-
-test "datetime-subtract" {
-    var a = try Datetime.create(2019, 12, 2, 11, 51, 13, 466545);
-    var b = try Datetime.create(2019, 12, 5, 11, 51, 13, 466545);
-    var delta = a.sub(b);
-    try testing.expectEqual(-3, delta.days);
-    try testing.expectEqual(-3 * time.s_per_day, delta.totalSeconds());
-    delta = b.sub(a);
-    try testing.expectEqual(3, delta.days);
-    try testing.expectEqual(3 * time.s_per_day, delta.totalSeconds());
-
-    b = try Datetime.create(2019, 12, 2, 11, 0, 0, 466545);
-    delta = a.sub(b);
-    try testing.expectEqual(13 + 51 * time.s_per_min, delta.totalSeconds());
-}
-
-test "datetime-subtract-delta" {
-    var now = Datetime.fromSeconds(1686183930);
-    var future = Datetime.fromSeconds(1686268800);
-    var delta = future.sub(now);
-    try testing.expect(delta.days == 0);
-    try testing.expect(delta.seconds == 84870);
-
-    delta = now.sub(future);
-    try testing.expect(delta.days == -1);
-    try testing.expect(delta.seconds == 1530);
-
-    now = Datetime.fromSeconds(1686183930);
-    future = Datetime.fromSeconds(1686270330);
-    delta = future.sub(now);
-    try testing.expect(delta.days == 1);
-    try testing.expect(delta.seconds == 0);
-}
-
-test "datetime-parse-modified-since" {
-    const str = " Wed, 21 Oct 2015 07:28:00 GMT ";
-    try testing.expectEqual(try Datetime.create(2015, 10, 21, 7, 28, 0, 0), try Datetime.parseModifiedSince(str));
-
-    try testing.expectError(error.InvalidFormat, Datetime.parseModifiedSince("21/10/2015"));
 }
 
 test "datetime-format-ISO8601" {
@@ -1094,20 +565,6 @@ test "datetime-format-ISO8601" {
     dt = try Datetime.create(2023, 6, 10, 14, 6, 40, 15006000);
     dt_str = try dt.formatISO8601Buf(&buf, true);
     try testing.expectEqualStrings("2023-06-10T14:06:40.015006", dt_str);
-}
-
-test "month-parse-abbr" {
-    try testing.expectEqual(.January, try Month.parseAbbr("Jan"));
-    try testing.expectEqual(.October, try Month.parseAbbr("Oct"));
-    try testing.expectEqual(.September, try Month.parseAbbr("sep"));
-    try testing.expectError(error.InvalidFormat, Month.parseAbbr("cra"));
-}
-
-test "month-parse" {
-    try testing.expectEqual(.January, try Month.parseName("January"));
-    try testing.expectEqual(.October, try Month.parseName("OCTOBER"));
-    try testing.expectEqual(.July, try Month.parseName("july"));
-    try testing.expectError(error.InvalidFormat, Month.parseName("NoShaveNov"));
 }
 
 test "leapyear" {
@@ -1155,137 +612,8 @@ test "days-before-year" {
     try testing.expect(DI100Y == 25 * DI4Y - 1);
 }
 
-test "iso-first-monday" {
-    // Created using python
-    const years = [20]u16{ 1816, 1823, 1839, 1849, 1849, 1870, 1879, 1882, 1909, 1910, 1917, 1934, 1948, 1965, 1989, 2008, 2064, 2072, 2091, 2096 };
-    const output = [20]u32{ 662915, 665470, 671315, 674969, 674969, 682641, 685924, 687023, 696886, 697250, 699805, 706014, 711124, 717340, 726104, 733041, 753495, 756421, 763358, 765185 };
-    for (years, 0..) |year, i| {
-        try testing.expectEqual(output[i], daysBeforeFirstMonday(year));
-    }
-}
-
 test "date-now" {
     _ = Date.now();
-}
-
-test "date-compare" {
-    const d1 = try Date.create(2019, 7, 3);
-    const d2 = try Date.create(2019, 7, 3);
-    const d3 = try Date.create(2019, 6, 3);
-    const d4 = try Date.create(2020, 7, 3);
-    try testing.expect(d1.eql(d2));
-    try testing.expect(d1.gt(d3));
-    try testing.expect(d3.lt(d2));
-    try testing.expect(d4.gt(d2));
-}
-
-test "date-from-ordinal" {
-    var date = Date.fromOrdinal(9921);
-    try testing.expectEqual(28, date.year);
-    try testing.expectEqual(2, date.month);
-    try testing.expectEqual(29, date.day);
-    try testing.expectEqual(9921, date.toOrdinal());
-
-    date = Date.fromOrdinal(737390);
-    try testing.expectEqual(2019, date.year);
-    try testing.expectEqual(11, date.month);
-    try testing.expectEqual(27, date.day);
-    try testing.expectEqual(737390, date.toOrdinal());
-
-    date = Date.fromOrdinal(719163);
-    try testing.expectEqual(1970, date.year);
-    try testing.expectEqual(1, date.month);
-    try testing.expectEqual(1, date.day);
-    try testing.expectEqual(719163, date.toOrdinal());
-}
-
-test "date-from-seconds" {
-    var seconds: f64 = 0;
-    var date = Date.fromSeconds(seconds);
-    try testing.expectEqual(try Date.create(1970, 1, 1), date);
-    try testing.expectEqual(seconds, date.toSeconds());
-
-    seconds = -@as(f64, EPOCH - 1) * time.s_per_day;
-    date = Date.fromSeconds(seconds);
-    try testing.expectEqual(try Date.create(1, 1, 1), date);
-    try testing.expectEqual(seconds, date.toSeconds());
-
-    seconds = @as(f64, MAX_ORDINAL - EPOCH) * time.s_per_day;
-    date = Date.fromSeconds(seconds);
-    try testing.expectEqual(try Date.create(9999, 12, 31), date);
-    try testing.expectEqual(seconds, date.toSeconds());
-}
-
-test "date-day-of-year" {
-    var date = try Date.create(1970, 1, 1);
-    try testing.expect(date.dayOfYear() == 1);
-}
-
-test "date-day-of-week" {
-    var date = try Date.create(2019, 11, 27);
-    try testing.expectEqual(2, date.weekday());
-    try testing.expectEqual(.Wednesday, date.dayOfWeek());
-    try testing.expectEqualSlices(u8, "November", date.monthName());
-    try testing.expectEqualSlices(u8, "Wednesday", date.weekdayName());
-    try testing.expect(!date.isWeekend());
-
-    date = try Date.create(1776, 6, 4);
-    try testing.expectEqual(1, date.weekday());
-    try testing.expectEqual(.Tuesday, date.dayOfWeek());
-    try testing.expectEqualSlices(u8, "June", date.monthName());
-    try testing.expectEqualSlices(u8, "Tuesday", date.weekdayName());
-    try testing.expect(!date.isWeekend());
-
-    date = try Date.create(2019, 12, 1);
-    try testing.expectEqualSlices(u8, date.monthName(), "December");
-    try testing.expectEqualSlices(u8, date.weekdayName(), "Sunday");
-    try testing.expect(date.isWeekend());
-}
-
-test "date-shift-days" {
-    var date = try Date.create(2019, 11, 27);
-    var d = date.shiftDays(-2);
-    try testing.expectEqual(25, d.day);
-    try testing.expectEqualSlices(u8, d.weekdayName(), "Monday");
-
-    // Ahead one week
-    d = date.shiftDays(7);
-    try testing.expectEqualSlices(u8, d.weekdayName(), date.weekdayName());
-    try testing.expectEqual(12, d.month);
-    try testing.expectEqualSlices(u8, "December", d.monthName());
-    try testing.expectEqual(4, d.day);
-
-    d = date.shiftDays(0);
-    try testing.expect(date.eql(d));
-}
-
-test "date-shift-years" {
-    // Shift including a leap year
-    var date = try Date.create(2019, 11, 27);
-    var d = date.shiftYears(-4);
-    try testing.expect(d.eql(try Date.create(2015, 11, 27)));
-
-    d = date.shiftYears(15);
-    try testing.expect(d.eql(try Date.create(2034, 11, 27)));
-
-    // Shifting from leap day
-    var leap_day = try Date.create(2020, 2, 29);
-    d = leap_day.shiftYears(1);
-    try testing.expect(d.eql(try Date.create(2021, 2, 28)));
-
-    // Before leap day
-    date = try Date.create(2020, 2, 2);
-    d = date.shiftYears(1);
-    try testing.expect(d.eql(try Date.create(2021, 2, 2)));
-
-    // After leap day
-    date = try Date.create(2020, 3, 1);
-    d = date.shiftYears(1);
-    try testing.expect(d.eql(try Date.create(2021, 3, 1)));
-
-    // From leap day to leap day
-    d = leap_day.shiftYears(4);
-    try testing.expect(d.eql(try Date.create(2024, 2, 29)));
 }
 
 test "date-create" {
@@ -1293,12 +621,6 @@ test "date-create" {
 
     var date = Date.fromTimestamp(1574908586928);
     try testing.expect(date.eql(try Date.create(2019, 11, 28)));
-}
-
-test "date-copy" {
-    const d1 = try Date.create(2020, 1, 1);
-    const d2 = try d1.copy();
-    try testing.expect(d1.eql(d2));
 }
 
 test "date-parse-iso" {
@@ -1348,62 +670,6 @@ test "date-write-iso" {
         var d = try Date.parseIso(date_str);
         try d.writeIso(stream.writer());
         try testing.expectEqualStrings(date_str, stream.getWritten());
-    }
-}
-
-test "date-isocalendar" {
-    const today = try Date.create(2021, 8, 12);
-    try testing.expectEqual(ISOCalendar{ .year = 2021, .week = 32, .weekday = 4 }, today.isoCalendar());
-
-    // Some random dates and outputs generated with python
-    const dates = [15][]const u8{
-        "2018-12-15",
-        "2019-01-19",
-        "2019-10-14",
-        "2020-09-26",
-
-        // Border cases
-        "2020-12-27",
-        "2020-12-30",
-        "2020-12-31",
-
-        "2021-01-01",
-        "2021-01-03",
-        "2021-01-04",
-        "2021-01-10",
-
-        "2021-09-14",
-        "2022-09-12",
-        "2023-04-10",
-        "2024-01-16",
-    };
-
-    const expect = [15]ISOCalendar{
-        ISOCalendar{ .year = 2018, .week = 50, .weekday = 6 },
-        ISOCalendar{ .year = 2019, .week = 3, .weekday = 6 },
-        ISOCalendar{ .year = 2019, .week = 42, .weekday = 1 },
-        ISOCalendar{ .year = 2020, .week = 39, .weekday = 6 },
-
-        ISOCalendar{ .year = 2020, .week = 52, .weekday = 7 },
-        ISOCalendar{ .year = 2020, .week = 53, .weekday = 3 },
-        ISOCalendar{ .year = 2020, .week = 53, .weekday = 4 },
-
-        ISOCalendar{ .year = 2020, .week = 53, .weekday = 5 },
-        ISOCalendar{ .year = 2020, .week = 53, .weekday = 7 },
-        ISOCalendar{ .year = 2021, .week = 1, .weekday = 1 },
-        ISOCalendar{ .year = 2021, .week = 1, .weekday = 7 },
-
-        ISOCalendar{ .year = 2021, .week = 37, .weekday = 2 },
-        ISOCalendar{ .year = 2022, .week = 37, .weekday = 1 },
-        ISOCalendar{ .year = 2023, .week = 15, .weekday = 1 },
-        ISOCalendar{ .year = 2024, .week = 3, .weekday = 2 },
-    };
-
-    for (dates, 0..) |d, i| {
-        const date = try Date.parseIso(d);
-        const cal = date.isoCalendar();
-        try testing.expectEqual(expect[i], cal);
-        try testing.expectEqual(expect[i].week, date.weekOfYear());
     }
 }
 
@@ -1457,12 +723,6 @@ test "time-from-seconds" {
     try testing.expect(t.nanosecond == 120000000);
     try testing.expectEqual(t.totalSeconds(), 6 * 3600 + 315);
     //testing.expectAlmostEqual(t.toSeconds(), seconds-time.s_per_day);
-}
-
-test "time-copy" {
-    const t1 = try Time.create(8, 30, 0, 0);
-    const t2 = try t1.copy();
-    try testing.expect(t1.eql(t2));
 }
 
 test "time-compare" {
