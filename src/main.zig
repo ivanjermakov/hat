@@ -427,6 +427,13 @@ fn startEditor(allocator: std.mem.Allocator) !void {
         } else if (editor.dirty.cursor) {
             editor.dirty.cursor = false;
             try term.updateCursor();
+
+            if (buffer.highlights.items.len > 0) {
+                buffer.highlights.clearRetainingCapacity();
+                // redraw next frame to clear invalid highlights
+                editor.dirty.draw = true;
+            }
+            try buffer.highlight();
         }
         perf.draw = timer.lap();
 

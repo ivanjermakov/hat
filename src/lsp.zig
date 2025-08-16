@@ -123,6 +123,7 @@ pub const LspConnection = struct {
                     },
                     .codeAction = .{},
                     .formatting = .{},
+                    .documentHighlight = .{},
                 },
                 .workspace = .{
                     .workspaceFolders = true,
@@ -198,6 +199,8 @@ pub const LspConnection = struct {
                         try self.handleCodeActionResponse(arena.allocator(), response_result);
                     } else if (std.mem.eql(u8, method, "textDocument/formatting")) {
                         try self.handleFormattingResponse(arena.allocator(), response_result);
+                    } else if (std.mem.eql(u8, method, "textDocument/documentHighlight")) {
+                        try self.handleHighlightResponse(arena.allocator(), response_result);
                     }
                 },
                 .notification => |notif| {
@@ -264,6 +267,14 @@ pub const LspConnection = struct {
             },
         });
     }
+
+    pub fn highlight(self: *LspConnection) !void {
+        const buffer = main.editor.active_buffer;
+        try self.sendRequest("textDocument/documentHighlight", .{
+            .textDocument = .{ .uri = buffer.uri },
+            .position = buffer.cursor.toLsp(),
+        });
+        }
 
     pub fn rename(self: *LspConnection, new_name: []const u8) !void {
         const buffer = main.editor.active_buffer;
@@ -565,6 +576,21 @@ pub const LspConnection = struct {
             const buffer = main.editor.active_buffer;
             try buffer.applyTextEdits(result.value);
             try buffer.commitChanges();
+        }
+    }
+
+    fn handleHighlightResponse(self: *LspConnection, arena: Allocator, resp: ?std.json.Value) !void {
+        _ = self;
+        if (resp == null or resp.? == .null) return;
+        const result = try std.json.parseFromValue([]const types.DocumentHighlight, arena, resp.?, .{});
+        const buffer = main.editor.active_buffer;
+        buffer.highlights.clearRetainingCapacity();
+        for (result.value) |hi| {
+            try buffer.highlights.append(Span.fromLsp(hi.range));
+        }
+        if (buffer.highlights.items.len > 0) {
+            log.debug(@This(), "got {} highlights\n", .{buffer.highlights.items.len});
+            main.editor.dirty.draw = true;
         }
     }
 
