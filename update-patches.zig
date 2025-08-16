@@ -8,6 +8,7 @@ const patches = .{
     "lsp-formatting",
     "lsp-highlight",
     "lsp-code-action",
+    "relative-number",
 };
 
 pub fn main() !void {

@@ -55,6 +55,7 @@ Hat is a **ha**ckable modal **t**ext editor for modern terminals.
 | 🚧   | Tree-sitter tree actions  |                                                       |                                                                   |
 | ✔️   | Buffer centering          | [patch/buffer-centering](/patch/buffer-centering)     | [link](https://github.com/ivanjermakov/hat/tree/buffer-centering) |
 | ✔️   | Autosave                  | [patch/autosave](/patch/autosave)                     | [link](https://github.com/ivanjermakov/hat/tree/autosave)         |
+| ✔️   | Relative line numbers     | [patch/relative-number](/patch/relative-number)       | [link](https://github.com/ivanjermakov/hat/tree/relative-number)  |
 
 ## Philosophy
 
