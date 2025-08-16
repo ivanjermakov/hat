@@ -1,8 +1,8 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index f8ac475..9557243 100644
+index 52e56a0..732e384 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
-@@ -171,14 +171,6 @@ pub const Buffer = struct {
+@@ -173,14 +173,6 @@ pub const Buffer = struct {
          _ = try self.syncFs();
  
          self.file_history_index = self.history_index;
@@ -17,7 +17,7 @@ index f8ac475..9557243 100644
      }
  
      pub fn moveCursor(self: *Buffer, new_cursor: Cursor) !void {
-@@ -361,6 +353,11 @@ pub const Buffer = struct {
+@@ -363,6 +355,11 @@ pub const Buffer = struct {
          self.history_index = self.history.items.len - 1;
  
          try main.editor.dotRepeatCommitReady();
@@ -29,7 +29,7 @@ index f8ac475..9557243 100644
      }
  
      pub fn changeInsertText(self: *Buffer, text: []const u21) !void {
-@@ -514,6 +511,11 @@ pub const Buffer = struct {
+@@ -521,6 +518,11 @@ pub const Buffer = struct {
                  try self.moveCursor(inv_change.new_span.?.start);
              }
              self.history_index = if (h_idx > 0) h_idx - 1 else null;
@@ -41,7 +41,7 @@ index f8ac475..9557243 100644
          }
      }
  
-@@ -529,6 +531,11 @@ pub const Buffer = struct {
+@@ -536,6 +538,11 @@ pub const Buffer = struct {
              try self.moveCursor(change.new_span.?.start);
          }
          self.history_index = redo_idx;
@@ -54,19 +54,22 @@ index f8ac475..9557243 100644
  
      pub fn textAt(self: *const Buffer, span: Span) []const u21 {
 diff --git a/src/editor.zig b/src/editor.zig
-index 21fc180..6e697b6 100644
+index 2ceb867..bcf1773 100644
 --- a/src/editor.zig
 +++ b/src/editor.zig
-@@ -27,6 +27,7 @@ pub const DotRepeat = enum {
+@@ -28,7 +28,9 @@ pub const DotRepeat = enum {
+     executing,
  };
  
- pub const Config = struct {
+-pub const Config = struct {};
++pub const Config = struct {
 +    autosave: bool = false,
- };
++};
  
  pub const Editor = struct {
+     config: Config = .{},
 diff --git a/src/main.zig b/src/main.zig
-index 285f63d..d590f7b 100644
+index 2270272..1b32b27 100644
 --- a/src/main.zig
 +++ b/src/main.zig
 @@ -331,6 +331,13 @@ fn startEditor(allocator: std.mem.Allocator) !void {

@@ -1,5 +1,5 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index c2de239..0f3d57a 100644
+index 52e56a0..4384dad 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
 @@ -24,6 +24,7 @@ const ter = @import("terminal.zig");
@@ -10,7 +10,7 @@ index c2de239..0f3d57a 100644
  
  pub const Buffer = struct {
      path: []const u8,
-@@ -258,6 +259,7 @@ pub const Buffer = struct {
+@@ -257,6 +258,7 @@ pub const Buffer = struct {
  
          main.editor.dirty.cursor = true;
          main.editor.resetHover();
@@ -18,7 +18,7 @@ index c2de239..0f3d57a 100644
      }
  
      pub fn centerCursor(self: *Buffer) !void {
-@@ -613,6 +615,18 @@ pub const Buffer = struct {
+@@ -612,6 +614,18 @@ pub const Buffer = struct {
          }
      }
  

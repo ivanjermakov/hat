@@ -1,8 +1,8 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index f8ac475..1f136b1 100644
+index 52e56a0..b1ba9b5 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
-@@ -670,6 +670,12 @@ pub const Buffer = struct {
+@@ -677,6 +677,12 @@ pub const Buffer = struct {
          try self.commitChanges();
      }
  
@@ -14,12 +14,20 @@ index f8ac475..1f136b1 100644
 +
      pub fn copySelectionToClipboard(self: *Buffer) !void {
          if (self.selection) |selection| {
-             const text = try self.rawTextAt(self.allocator, selection);
+             try clp.write(self.allocator, self.rawTextAt(selection));
 diff --git a/src/lsp.zig b/src/lsp.zig
-index 3781d75..97e7df9 100644
+index 07fa78a..49e765a 100644
 --- a/src/lsp.zig
 +++ b/src/lsp.zig
-@@ -189,6 +189,8 @@ pub const LspConnection = struct {
+@@ -119,6 +119,7 @@ pub const LspConnection = struct {
+                     .rename = .{
+                         .prepareSupport = true,
+                     },
++                    .formatting = .{},
+                 },
+                 .workspace = .{
+                     .workspaceFolders = true,
+@@ -190,6 +191,8 @@ pub const LspConnection = struct {
                          try self.handleHoverResponse(arena.allocator(), response_result);
                      } else if (std.mem.eql(u8, method, "textDocument/rename")) {
                          try self.handleRenameResponse(arena.allocator(), response_result);
@@ -28,7 +36,7 @@ index 3781d75..97e7df9 100644
                      }
                  },
                  .notification => |notif| {
-@@ -235,6 +237,18 @@ pub const LspConnection = struct {
+@@ -236,6 +239,18 @@ pub const LspConnection = struct {
          });
      }
  
@@ -47,11 +55,12 @@ index 3781d75..97e7df9 100644
      pub fn rename(self: *LspConnection, new_name: []const u8) !void {
          const buffer = main.editor.active_buffer;
          try self.sendRequest("textDocument/rename", .{
-@@ -511,6 +525,19 @@ pub const LspConnection = struct {
-         try self.applyWorkspaceEdit(result.value);
+@@ -513,6 +528,20 @@ pub const LspConnection = struct {
+         try main.editor.applyWorkspaceEdit(result.value);
      }
  
 +    fn handleFormattingResponse(self: *LspConnection, arena: Allocator, resp: ?std.json.Value) !void {
++        _ = self;
 +        if (resp == null or resp.? == .null) return;
 +        const result = try std.json.parseFromValue([]const types.TextEdit, arena, resp.?, .{});
 +        log.debug(@This(), "got {} formatting edits\n", .{result.value.len});
@@ -59,7 +68,7 @@ index 3781d75..97e7df9 100644
 +            main.main_loop_mutex.lock();
 +            defer main.main_loop_mutex.unlock();
 +            const buffer = main.editor.active_buffer;
-+            try self.applyTextEdits(buffer, result.value);
++            try buffer.applyTextEdits(result.value);
 +            try buffer.commitChanges();
 +        }
 +    }
@@ -67,37 +76,8 @@ index 3781d75..97e7df9 100644
      fn handleNotification(self: *LspConnection, arena: Allocator, notif: lsp.JsonRPCMessage.Notification) !void {
          _ = self;
          // log.debug(@This(), "notification: {s}\n", .{notif.method});
-@@ -543,11 +570,7 @@ pub const LspConnection = struct {
-             defer self.allocator.free(path);
-             try main.editor.openBuffer(path);
-             const buffer = main.editor.active_buffer;
--            for (text_edits) |edit| {
--                var change = try cha.Change.fromLsp(buffer.allocator, buffer, edit);
--                log.debug(@This(), "change: {s}: {}\n", .{ change_uri, change });
--                try buffer.appendChange(&change);
--            }
-+            try self.applyTextEdits(buffer, text_edits);
-             // TODO: apply another dummy edit that resets cursor position back to `old_cursor`
-             // because now redoing rename jumps the cursor
-             try buffer.commitChanges();
-@@ -557,6 +580,15 @@ pub const LspConnection = struct {
-         main.editor.active_buffer.offset = old_offset;
-         main.editor.dirty.draw = true;
-     }
-+
-+    fn applyTextEdits(self: *LspConnection, buffer: *buf.Buffer, text_edits: []const types.TextEdit) !void {
-+        _ = self;
-+        for (text_edits) |edit| {
-+            var change = try cha.Change.fromLsp(buffer.allocator, buffer, edit);
-+            log.debug(@This(), "change: {s}: {}\n", .{ buffer.path, change });
-+            try buffer.appendChange(&change);
-+        }
-+    }
- };
- 
- var request_id: i64 = 0;
 diff --git a/src/main.zig b/src/main.zig
-index 285f63d..bcb4e9e 100644
+index 2270272..b45a5c3 100644
 --- a/src/main.zig
 +++ b/src/main.zig
 @@ -337,6 +337,8 @@ fn startEditor(allocator: std.mem.Allocator) !void {

@@ -1,8 +1,8 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index f8ac475..f2a50e5 100644
+index 52e56a0..a6362e0 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
-@@ -64,6 +64,7 @@ pub const Buffer = struct {
+@@ -65,6 +65,7 @@ pub const Buffer = struct {
      uncommitted_changes: std.ArrayList(cha.Change),
      lsp_connections: std.ArrayList(*lsp.LspConnection),
      scratch: bool = false,
@@ -10,7 +10,7 @@ index f8ac475..f2a50e5 100644
      allocator: Allocator,
  
      pub fn init(allocator: Allocator, path: ?[]const u8, content_raw: []const u8) !Buffer {
-@@ -104,6 +105,7 @@ pub const Buffer = struct {
+@@ -105,6 +106,7 @@ pub const Buffer = struct {
              .uncommitted_changes = std.ArrayList(cha.Change).init(allocator),
              .lsp_connections = std.ArrayList(*lsp.LspConnection).init(allocator),
              .scratch = scratch,
@@ -18,7 +18,7 @@ index f8ac475..f2a50e5 100644
              .allocator = allocator,
          };
          _ = try self.syncFs();
-@@ -148,6 +150,7 @@ pub const Buffer = struct {
+@@ -150,6 +152,7 @@ pub const Buffer = struct {
          self.line_positions.deinit();
          self.line_byte_positions.deinit();
          self.indents.deinit();
@@ -26,7 +26,7 @@ index f8ac475..f2a50e5 100644
  
          for (self.history.items) |*i| {
              for (i.items) |*c| c.deinit();
-@@ -605,6 +608,12 @@ pub const Buffer = struct {
+@@ -612,6 +615,12 @@ pub const Buffer = struct {
          }
      }
  
@@ -52,7 +52,7 @@ index 1335218..20721b7 100644
      pub const string = &[_]Attr{.{ .fg = color.green }};
      pub const literal = &[_]Attr{.{ .fg = color.yellow }};
 diff --git a/src/lsp.zig b/src/lsp.zig
-index 3781d75..bb56913 100644
+index 07fa78a..27a082a 100644
 --- a/src/lsp.zig
 +++ b/src/lsp.zig
 @@ -9,6 +9,7 @@ const buf = @import("buffer.zig");
@@ -63,7 +63,7 @@ index 3781d75..bb56913 100644
  const fs = @import("fs.zig");
  const log = @import("log.zig");
  const main = @import("main.zig");
-@@ -118,6 +119,7 @@ pub const LspConnection = struct {
+@@ -119,6 +120,7 @@ pub const LspConnection = struct {
                      .rename = .{
                          .prepareSupport = true,
                      },
@@ -71,7 +71,7 @@ index 3781d75..bb56913 100644
                  },
                  .workspace = .{
                      .workspaceFolders = true,
-@@ -189,6 +191,8 @@ pub const LspConnection = struct {
+@@ -190,6 +192,8 @@ pub const LspConnection = struct {
                          try self.handleHoverResponse(arena.allocator(), response_result);
                      } else if (std.mem.eql(u8, method, "textDocument/rename")) {
                          try self.handleRenameResponse(arena.allocator(), response_result);
@@ -80,7 +80,7 @@ index 3781d75..bb56913 100644
                      }
                  },
                  .notification => |notif| {
-@@ -235,6 +239,14 @@ pub const LspConnection = struct {
+@@ -236,6 +240,14 @@ pub const LspConnection = struct {
          });
      }
  
@@ -95,8 +95,8 @@ index 3781d75..bb56913 100644
      pub fn rename(self: *LspConnection, new_name: []const u8) !void {
          const buffer = main.editor.active_buffer;
          try self.sendRequest("textDocument/rename", .{
-@@ -511,6 +523,21 @@ pub const LspConnection = struct {
-         try self.applyWorkspaceEdit(result.value);
+@@ -513,6 +525,21 @@ pub const LspConnection = struct {
+         try main.editor.applyWorkspaceEdit(result.value);
      }
  
 +    fn handleHighlightResponse(self: *LspConnection, arena: Allocator, resp: ?std.json.Value) !void {
@@ -118,7 +118,7 @@ index 3781d75..bb56913 100644
          _ = self;
          // log.debug(@This(), "notification: {s}\n", .{notif.method});
 diff --git a/src/main.zig b/src/main.zig
-index 285f63d..69bd182 100644
+index 2270272..efc6990 100644
 --- a/src/main.zig
 +++ b/src/main.zig
 @@ -410,6 +410,13 @@ fn startEditor(allocator: std.mem.Allocator) !void {
@@ -136,7 +136,7 @@ index 285f63d..69bd182 100644
          perf.draw = timer.lap();
  
 diff --git a/src/terminal.zig b/src/terminal.zig
-index cfd8b1d..c0986af 100644
+index b5557e8..55a2690 100644
 --- a/src/terminal.zig
 +++ b/src/terminal.zig
 @@ -229,6 +229,14 @@ pub const Terminal = struct {
@@ -153,4 +153,4 @@ index cfd8b1d..c0986af 100644
 +
                  if (buffer.diagnostics.items.len > 0) {
                      for (buffer.diagnostics.items) |diagnostic| {
-                         const range = diagnostic.range;
+                         const span = diagnostic.span;

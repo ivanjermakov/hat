@@ -1,11 +1,11 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index f8ac475..8eb5457 100644
+index 52e56a0..a63b42f 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
-@@ -23,10 +23,13 @@ const main = @import("main.zig");
- const ter = @import("terminal.zig");
+@@ -24,10 +24,13 @@ const ter = @import("terminal.zig");
  const ts = @import("ts.zig");
  const uni = @import("unicode.zig");
+ const dia = @import("ui/diagnostic.zig");
 +const git = @import("git.zig");
  
  pub const Buffer = struct {
@@ -16,7 +16,7 @@ index f8ac475..8eb5457 100644
      file: ?std.fs.File,
      stat: ?std.fs.File.Stat = null,
      /// Incremented on every content change
-@@ -88,11 +91,17 @@ pub const Buffer = struct {
+@@ -89,11 +92,17 @@ pub const Buffer = struct {
          const abs_path = std.fs.realpathAlloc(allocator, buf_path) catch null;
          defer if (abs_path) |a| allocator.free(a);
          const uri = try std.fmt.allocPrint(allocator, "file://{s}", .{abs_path orelse buf_path});
@@ -33,8 +33,8 @@ index f8ac475..8eb5457 100644
 +            .git_hunks = std.ArrayList(git.Hunk).init(allocator),
              .content = std.ArrayList(u21).init(allocator),
              .content_raw = raw,
-             .diagnostics = std.ArrayList(lsp.types.Diagnostic).init(allocator),
-@@ -120,6 +129,7 @@ pub const Buffer = struct {
+             .diagnostics = std.ArrayList(dia.Diagnostic).init(allocator),
+@@ -121,6 +130,7 @@ pub const Buffer = struct {
          try self.updateRaw();
          if (self.ts_state) |*ts_state| try ts_state.reparse(self.content_raw.items);
          try self.updateLinePositions();
@@ -51,7 +51,7 @@ index f8ac475..8eb5457 100644
          self.allocator.free(self.path);
  
          if (self.ts_state) |*ts_state| ts_state.deinit();
-@@ -501,6 +513,31 @@ pub const Buffer = struct {
+@@ -508,6 +520,31 @@ pub const Buffer = struct {
          }
      }
  
@@ -262,7 +262,7 @@ index 0000000..47cc91c
 +    try std.testing.expectEqualDeep(hunks[1], Hunk{ .type = .delete, .line = 37, .len = 0 });
 +}
 diff --git a/src/main.zig b/src/main.zig
-index 285f63d..96f799d 100644
+index 2270272..f238e4d 100644
 --- a/src/main.zig
 +++ b/src/main.zig
 @@ -32,9 +32,9 @@ pub const std_out = std.io.getStdOut();
@@ -277,7 +277,7 @@ index 285f63d..96f799d 100644
  
  pub var main_loop_mutex: std.Thread.Mutex = .{};
 diff --git a/src/terminal.zig b/src/terminal.zig
-index cfd8b1d..f1df5bb 100644
+index b5557e8..c67951f 100644
 --- a/src/terminal.zig
 +++ b/src/terminal.zig
 @@ -170,6 +170,38 @@ pub const Terminal = struct {

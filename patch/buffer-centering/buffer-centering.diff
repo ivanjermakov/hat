@@ -11,23 +11,26 @@ index 17f68e6..955a94c 100644
      buffer: Area,
  };
 diff --git a/src/editor.zig b/src/editor.zig
-index 21fc180..866bca6 100644
+index 2ceb867..cfb32b5 100644
 --- a/src/editor.zig
 +++ b/src/editor.zig
-@@ -27,6 +27,11 @@ pub const DotRepeat = enum {
+@@ -28,7 +28,13 @@ pub const DotRepeat = enum {
+     executing,
  };
  
- pub const Config = struct {
+-pub const Config = struct {};
++pub const Config = struct {
 +    /// Imaginary width of a buffer that should be aligned (padded on the left).
 +    /// `null` means "no centering".
 +    /// If >`term_width`, padding is 0,
 +    /// If <`term_width`, left padding is `(term_width-centering_width)/2`
 +    centering_width: ?usize = null,
- };
++};
  
  pub const Editor = struct {
+     config: Config = .{},
 diff --git a/src/main.zig b/src/main.zig
-index 285f63d..d868f77 100644
+index 2270272..51c092f 100644
 --- a/src/main.zig
 +++ b/src/main.zig
 @@ -91,7 +91,7 @@ pub fn main() !void {
@@ -40,7 +43,7 @@ index 285f63d..d868f77 100644
  
      const path = if (args.path) |path| try allocator.dupe(u8, path) else fzf.pickFile(allocator) catch return;
 diff --git a/src/terminal.zig b/src/terminal.zig
-index cfd8b1d..4e0d5cb 100644
+index b5557e8..e8528c5 100644
 --- a/src/terminal.zig
 +++ b/src/terminal.zig
 @@ -416,20 +416,32 @@ pub fn terminalSize() !Dimensions {

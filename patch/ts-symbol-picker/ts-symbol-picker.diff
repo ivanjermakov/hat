@@ -1,16 +1,16 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index f8ac475..62688cb 100644
+index 52e56a0..1464cd2 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
-@@ -23,6 +23,7 @@ const main = @import("main.zig");
- const ter = @import("terminal.zig");
+@@ -24,6 +24,7 @@ const ter = @import("terminal.zig");
  const ts = @import("ts.zig");
  const uni = @import("unicode.zig");
+ const dia = @import("ui/diagnostic.zig");
 +const fzf = @import("ui/fzf.zig");
  
  pub const Buffer = struct {
      path: []const u8,
-@@ -599,6 +600,27 @@ pub const Buffer = struct {
+@@ -606,6 +607,27 @@ pub const Buffer = struct {
          }
      }
  
@@ -105,7 +105,7 @@ index f166cf9..14329fd 100644
      } },
      .{ ".zig", FileTypeConfig{
 diff --git a/src/main.zig b/src/main.zig
-index 285f63d..1afa26f 100644
+index 2270272..657c2ba 100644
 --- a/src/main.zig
 +++ b/src/main.zig
 @@ -337,6 +337,8 @@ fn startEditor(allocator: std.mem.Allocator) !void {
