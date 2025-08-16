@@ -187,18 +187,20 @@ pub const Buffer = struct {
         const old_cursor = self.cursor;
         const vertical_only = old_cursor.col == new_cursor.col and old_cursor.row != new_cursor.row;
 
-        // TODO: move to first line in file instead of early return
-        if (new_cursor.row < 0) return;
+        if (new_cursor.row < 0) {
+            try self.moveCursor(.{ .row = 0, .col = new_cursor.col });
+            return;
+        }
         self.scrollForCursor(new_cursor);
 
         const term_cursor = new_cursor.applyOffset(self.offset.negate());
-        const dims = main.term.dimensions;
-        const in_term = term_cursor.row >= 0 and term_cursor.row < dims.height and
-            term_cursor.col >= 0 and term_cursor.col < dims.width;
-        if (!in_term) return;
+        if (term_cursor.row < 0 or term_cursor.col < 0) return;
 
-        // TODO: move to last line in file instead of early return
-        if (new_cursor.row >= self.line_positions.items.len) return;
+        if (new_cursor.row >= self.line_positions.items.len) {
+            log.debug(@This(), "nooo!\n", .{});
+            try self.moveCursor(.{ .row = @intCast(self.line_positions.items.len - 1), .col = new_cursor.col });
+            return;
+        }
         const max_col = self.lineLength(@intCast(new_cursor.row));
         var col: i32 = @intCast(@min(new_cursor.col, max_col));
         if (vertical_only) {
