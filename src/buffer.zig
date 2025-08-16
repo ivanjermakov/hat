@@ -742,8 +742,10 @@ pub const Buffer = struct {
     pub fn findNext(self: *Buffer, query: []const u21, forward: bool) !void {
         const query_b = try uni.utf8ToBytes(self.allocator, query);
         defer self.allocator.free(query_b);
-        // TODO: catch invalid regex
-        const spans = try self.find(query_b);
+        const spans = self.find(query_b) catch {
+            try main.editor.sendMessageFmt("invalid search: {s}", .{query_b});
+            return;
+        };
         defer self.allocator.free(spans);
         const cursor_pos = self.cursorToPos(self.cursor);
         var match: ?usize = null;
