@@ -589,9 +589,9 @@ pub const Buffer = struct {
         return self.content.items[start .. start + self.lineLength(row)];
     }
 
-    pub fn rawTextAt(self: *const Buffer, allocator: Allocator, span: Span) ![]const u8 {
-        // TODO: slice from self.content_raw
-        return try uni.utf8ToBytes(allocator, self.textAt(span));
+    pub fn rawTextAt(self: *const Buffer, span: Span) []const u8 {
+        const bs = ByteSpan.fromBufSpan(self, span);
+        return self.content_raw.items[bs.start..bs.end];
     }
 
     pub fn goToDefinition(self: *Buffer) !void {
@@ -679,9 +679,7 @@ pub const Buffer = struct {
 
     pub fn copySelectionToClipboard(self: *Buffer) !void {
         if (self.selection) |selection| {
-            const text = try self.rawTextAt(self.allocator, selection);
-            defer self.allocator.free(text);
-            try clp.write(self.allocator, text);
+            try clp.write(self.allocator, self.rawTextAt(selection));
             try main.editor.enterMode(.normal);
         }
     }
