@@ -28,7 +28,11 @@ pub const DotRepeat = enum {
     executing,
 };
 
-pub const Config = struct {};
+pub const Config = struct {
+    /// Char to denote terminal lines after end of buffer
+    /// See vim's :h fillchars -> eob
+    end_of_buffer_char: ?u8 = null,
+};
 
 pub const Editor = struct {
     config: Config = .{},

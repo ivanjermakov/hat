@@ -149,7 +149,7 @@ pub const Terminal = struct {
             const buffer_row = @as(i32, @intCast(term_row)) + buffer.offset.row;
             try self.moveCursor(.{ .row = @intCast(term_row), .col = area.pos.col });
             if (buffer_row < 0 or buffer_row >= buffer.line_positions.items.len) {
-                // TODO: option to show "~"
+                if (main.editor.config.end_of_buffer_char) |ch| _ = try self.write(&.{ch});
             } else {
                 // TODO: option to use non-relative line numbers
                 var display_num: usize = 0;
