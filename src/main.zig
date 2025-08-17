@@ -137,7 +137,7 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                 const normal_or_select = editor.mode.normalOrSelect();
 
                 if (normal_or_select and key.len == 1 and std.ascii.isDigit(key[0])) {
-                    const d = try std.fmt.parseInt(usize, key, 10);
+                    const d = std.fmt.parseInt(usize, key, 10) catch unreachable;
                     repeat_count = (if (repeat_count) |rc| rc * 10 else 0) + d;
                     const removed = editor.key_queue.orderedRemove(0);
                     try editor.recordMacroKey(removed);
@@ -200,24 +200,24 @@ fn startEditor(allocator: std.mem.Allocator) !void {
 
                     // cmp_menu
                 } else if (cmp_menu_active and eql(u8, key, "<up>")) {
-                    try editor.completion_menu.prevItem();
+                    editor.completion_menu.prevItem();
                 } else if (cmp_menu_active and eql(u8, key, "<down>")) {
-                    try editor.completion_menu.nextItem();
+                    editor.completion_menu.nextItem();
                 } else if (cmp_menu_active and eql(u8, key, "\n")) {
                     try editor.completion_menu.accept();
 
                     // global
                 } else if (eql(u8, key, "<up>")) {
-                    try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = -1 }));
+                    buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = -1 }));
                 } else if (eql(u8, key, "<down>")) {
-                    try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = 1 }));
+                    buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = 1 }));
                 } else if (eql(u8, key, "<left>")) {
-                    try buffer.moveCursor(buffer.cursor.applyOffset(.{ .col = -1 }));
+                    buffer.moveCursor(buffer.cursor.applyOffset(.{ .col = -1 }));
                 } else if (eql(u8, key, "<right>")) {
-                    try buffer.moveCursor(buffer.cursor.applyOffset(.{ .col = 1 }));
+                    buffer.moveCursor(buffer.cursor.applyOffset(.{ .col = 1 }));
                 } else if (eql(u8, key, "<escape>")) {
                     try editor.enterMode(.normal);
-                    try editor.dismissMessage();
+                    editor.dismissMessage();
                     repeat_count = null;
 
                     // normal mode with modifiers
@@ -236,29 +236,29 @@ fn startEditor(allocator: std.mem.Allocator) !void {
 
                     // normal or select mode
                 } else if (normal_or_select and eql(u8, key, "i")) {
-                    try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = -1 * repeat_or_1 }));
+                    buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = -1 * repeat_or_1 }));
                 } else if (normal_or_select and eql(u8, key, "k")) {
-                    try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = 1 * repeat_or_1 }));
+                    buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = 1 * repeat_or_1 }));
                 } else if (normal_or_select and eql(u8, key, "j")) {
-                    try buffer.moveCursor(buffer.cursor.applyOffset(.{ .col = -1 * repeat_or_1 }));
+                    buffer.moveCursor(buffer.cursor.applyOffset(.{ .col = -1 * repeat_or_1 }));
                 } else if (normal_or_select and eql(u8, key, "l")) {
-                    try buffer.moveCursor(buffer.cursor.applyOffset(.{ .col = 1 * repeat_or_1 }));
+                    buffer.moveCursor(buffer.cursor.applyOffset(.{ .col = 1 * repeat_or_1 }));
                 } else if (normal_or_select and eql(u8, key, "I")) {
                     const half_screen = @divFloor(@as(i32, @intCast(term.dimensions.height)), 2);
-                    try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = -1 * repeat_or_1 * half_screen }));
-                    try buffer.centerCursor();
+                    buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = -1 * repeat_or_1 * half_screen }));
+                    buffer.centerCursor();
                 } else if (normal_or_select and eql(u8, key, "K")) {
                     const half_screen = @divFloor(@as(i32, @intCast(term.dimensions.height)), 2);
-                    try buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = repeat_or_1 * half_screen }));
-                    try buffer.centerCursor();
+                    buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = repeat_or_1 * half_screen }));
+                    buffer.centerCursor();
                 } else if (normal_or_select and eql(u8, key, "w")) {
-                    try buffer.moveToNextWord();
+                    buffer.moveToNextWord();
                 } else if (normal_or_select and eql(u8, key, "W")) {
-                    try buffer.moveToPrevWord();
+                    buffer.moveToPrevWord();
                 } else if (normal_or_select and eql(u8, key, "e")) {
-                    try buffer.moveToWordEnd();
+                    buffer.moveToWordEnd();
                 } else if (normal_or_select and eql(u8, key, "E")) {
-                    try buffer.moveToTokenEnd();
+                    buffer.moveToTokenEnd();
                 } else if (normal_or_select and eql(u8, key, "h")) {
                     try editor.enterMode(.insert);
                 } else if (normal_or_select and eql(u8, key, "c")) {
@@ -275,9 +275,9 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                 } else if (normal_or_select and eql(u8, key, "p")) {
                     try buffer.changeInsertFromClipboard();
                 } else if (normal_or_select and eql(u8, key, "z")) {
-                    try buffer.centerCursor();
+                    buffer.centerCursor();
                 } else if (normal_or_select and eql(u8, key, ":")) {
-                    try buffer.pipePrompt();
+                    buffer.pipePrompt();
 
                     // normal mode
                 } else if (normal_or_select and (eql(u8, key, "q") or eql(u8, key, "Q"))) {
@@ -305,7 +305,7 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                 } else if (editor.mode == .normal and eql(u8, key, ".")) {
                     try editor.dotRepeat();
                 } else if (editor.mode == .normal and eql(u8, key, "/")) {
-                    try editor.command_line.activate(.find);
+                    editor.command_line.activate(.find);
                 } else if (editor.mode == .normal and eql(u8, key, "n")) {
                     if (editor.find_query) |q| try buffer.findNext(q, true);
                 } else if (editor.mode == .normal and eql(u8, key, "N")) {
@@ -344,21 +344,21 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                         const macro_name = key2.printable.?[0];
                         try editor.replayMacro(macro_name);
                     } else if (normal_or_select and eql(u8, multi_key, "gi")) {
-                        try buffer.moveCursor(.{ .col = buffer.cursor.col });
-                        try buffer.centerCursor();
+                        buffer.moveCursor(.{ .col = buffer.cursor.col });
+                        buffer.centerCursor();
                     } else if (normal_or_select and eql(u8, multi_key, "gk")) {
-                        try buffer.moveCursor(.{
+                        buffer.moveCursor(.{
                             .row = @as(i32, @intCast(buffer.line_positions.items.len)) - 1,
                             .col = buffer.cursor.col,
                         });
-                        try buffer.centerCursor();
+                        buffer.centerCursor();
                     } else if (normal_or_select and eql(u8, multi_key, "gl")) {
-                        try buffer.moveCursor(.{
+                        buffer.moveCursor(.{
                             .row = buffer.cursor.row,
                             .col = @intCast(buffer.lineLength(@intCast(buffer.cursor.row))),
                         });
                     } else if (normal_or_select and eql(u8, multi_key, "gj")) {
-                        try buffer.moveCursor(.{ .row = buffer.cursor.row, .col = 0 });
+                        buffer.moveCursor(.{ .row = buffer.cursor.row, .col = 0 });
                     } else {
                         // no multi-key matches, drop first key as it will never match
                         keys_consumed = 1;
