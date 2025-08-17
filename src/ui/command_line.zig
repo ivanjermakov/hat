@@ -39,7 +39,7 @@ pub const CommandLine = struct {
         self.content.deinit();
     }
 
-    pub fn activate(self: *CommandLine, command: Command) !void {
+    pub fn activate(self: *CommandLine, command: Command) void {
         self.command = command;
         log.debug(@This(), "active cmd: {}\n", .{command});
         main.editor.dirty.draw = true;
