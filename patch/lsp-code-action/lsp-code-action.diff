@@ -1,5 +1,5 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index 2f7c4b9..2b97a2b 100644
+index 8955c3c..6bf2dbd 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
 @@ -24,6 +24,7 @@ const ter = @import("terminal.zig");
@@ -17,8 +17,8 @@ index 2f7c4b9..2b97a2b 100644
 +        main.editor.resetCodeActions();
      }
  
-     pub fn centerCursor(self: *Buffer) !void {
-@@ -614,6 +616,18 @@ pub const Buffer = struct {
+     pub fn centerCursor(self: *Buffer) void {
+@@ -604,6 +606,18 @@ pub const Buffer = struct {
          }
      }
  
@@ -38,10 +38,10 @@ index 2f7c4b9..2b97a2b 100644
          const cmd = &main.editor.command_line;
          const line = self.lineContent(@intCast(self.cursor.row));
 diff --git a/src/editor.zig b/src/editor.zig
-index d84af08..e5cde44 100644
+index 9767970..1bace0d 100644
 --- a/src/editor.zig
 +++ b/src/editor.zig
-@@ -9,6 +9,7 @@ const main = @import("main.zig");
+@@ -11,6 +11,7 @@ const main = @import("main.zig");
  const ter = @import("terminal.zig");
  const cmd = @import("ui/command_line.zig");
  const cmp = @import("ui/completion_menu.zig");
@@ -49,7 +49,7 @@ index d84af08..e5cde44 100644
  const fzf = @import("ui/fzf.zig");
  const uni = @import("unicode.zig");
  const ur = @import("uri.zig");
-@@ -48,6 +49,7 @@ pub const Editor = struct {
+@@ -49,6 +50,7 @@ pub const Editor = struct {
      messages: std.ArrayList([]const u8),
      message_read_idx: usize = 0,
      hover_contents: ?[]const u8 = null,
@@ -57,7 +57,7 @@ index d84af08..e5cde44 100644
      key_queue: std.ArrayList(inp.Key),
      dot_repeat_input: std.ArrayList(inp.Key),
      dot_repeat_input_uncommitted: std.ArrayList(inp.Key),
-@@ -150,6 +152,7 @@ pub const Editor = struct {
+@@ -151,6 +153,7 @@ pub const Editor = struct {
  
      pub fn enterMode(self: *Editor, mode: Mode) !void {
          self.resetHover();
@@ -65,7 +65,7 @@ index d84af08..e5cde44 100644
  
          if (self.mode == mode) return;
          if (self.mode == .insert) try self.active_buffer.commitChanges();
-@@ -191,6 +194,7 @@ pub const Editor = struct {
+@@ -192,6 +195,7 @@ pub const Editor = struct {
          self.messages.deinit();
  
          self.resetHover();
@@ -73,7 +73,7 @@ index d84af08..e5cde44 100644
  
          for (self.key_queue.items) |key| key.deinit();
          self.key_queue.deinit();
-@@ -369,6 +373,15 @@ pub const Editor = struct {
+@@ -370,6 +374,15 @@ pub const Editor = struct {
          }
      }
  
@@ -90,7 +90,7 @@ index d84af08..e5cde44 100644
          const keys = try ter.getKeys(self.allocator, str);
          defer self.allocator.free(keys);
 diff --git a/src/lsp.zig b/src/lsp.zig
-index 07fa78a..70c6640 100644
+index 8ed46b8..26ace95 100644
 --- a/src/lsp.zig
 +++ b/src/lsp.zig
 @@ -9,11 +9,13 @@ const buf = @import("buffer.zig");
@@ -160,7 +160,7 @@ index 07fa78a..70c6640 100644
          _ = self;
          // log.debug(@This(), "notification: {s}\n", .{notif.method});
 diff --git a/src/main.zig b/src/main.zig
-index 2270272..019337e 100644
+index d6b06e8..0fb08eb 100644
 --- a/src/main.zig
 +++ b/src/main.zig
 @@ -155,6 +155,15 @@ fn startEditor(allocator: std.mem.Allocator) !void {
