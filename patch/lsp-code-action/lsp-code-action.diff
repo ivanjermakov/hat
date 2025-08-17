@@ -1,5 +1,5 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index 52e56a0..4384dad 100644
+index 2f7c4b9..2b97a2b 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
 @@ -24,6 +24,7 @@ const ter = @import("terminal.zig");
@@ -10,7 +10,7 @@ index 52e56a0..4384dad 100644
  
  pub const Buffer = struct {
      path: []const u8,
-@@ -257,6 +258,7 @@ pub const Buffer = struct {
+@@ -259,6 +260,7 @@ pub const Buffer = struct {
  
          main.editor.dirty.cursor = true;
          main.editor.resetHover();
@@ -18,7 +18,7 @@ index 52e56a0..4384dad 100644
      }
  
      pub fn centerCursor(self: *Buffer) !void {
-@@ -612,6 +614,18 @@ pub const Buffer = struct {
+@@ -614,6 +616,18 @@ pub const Buffer = struct {
          }
      }
  
@@ -38,7 +38,7 @@ index 52e56a0..4384dad 100644
          const cmd = &main.editor.command_line;
          const line = self.lineContent(@intCast(self.cursor.row));
 diff --git a/src/editor.zig b/src/editor.zig
-index 2ceb867..8781ae0 100644
+index d84af08..e5cde44 100644
 --- a/src/editor.zig
 +++ b/src/editor.zig
 @@ -9,6 +9,7 @@ const main = @import("main.zig");
@@ -49,7 +49,7 @@ index 2ceb867..8781ae0 100644
  const fzf = @import("ui/fzf.zig");
  const uni = @import("unicode.zig");
  const ur = @import("uri.zig");
-@@ -44,6 +45,7 @@ pub const Editor = struct {
+@@ -48,6 +49,7 @@ pub const Editor = struct {
      messages: std.ArrayList([]const u8),
      message_read_idx: usize = 0,
      hover_contents: ?[]const u8 = null,
@@ -57,7 +57,7 @@ index 2ceb867..8781ae0 100644
      key_queue: std.ArrayList(inp.Key),
      dot_repeat_input: std.ArrayList(inp.Key),
      dot_repeat_input_uncommitted: std.ArrayList(inp.Key),
-@@ -146,6 +148,7 @@ pub const Editor = struct {
+@@ -150,6 +152,7 @@ pub const Editor = struct {
  
      pub fn enterMode(self: *Editor, mode: Mode) !void {
          self.resetHover();
@@ -65,7 +65,7 @@ index 2ceb867..8781ae0 100644
  
          if (self.mode == mode) return;
          if (self.mode == .insert) try self.active_buffer.commitChanges();
-@@ -187,6 +190,7 @@ pub const Editor = struct {
+@@ -191,6 +194,7 @@ pub const Editor = struct {
          self.messages.deinit();
  
          self.resetHover();
@@ -73,7 +73,7 @@ index 2ceb867..8781ae0 100644
  
          for (self.key_queue.items) |key| key.deinit();
          self.key_queue.deinit();
-@@ -365,6 +369,15 @@ pub const Editor = struct {
+@@ -369,6 +373,15 @@ pub const Editor = struct {
          }
      }
  
@@ -200,7 +200,7 @@ index 2270272..019337e 100644
                          try buffer.renamePrompt();
                      } else if (editor.mode == .normal and eql(u8, key, "r") and editor.key_queue.items[1].printable != null) {
 diff --git a/src/terminal.zig b/src/terminal.zig
-index b5557e8..358cf0a 100644
+index 566bb71..e9bac90 100644
 --- a/src/terminal.zig
 +++ b/src/terminal.zig
 @@ -15,6 +15,7 @@ const log = @import("log.zig");
@@ -219,7 +219,7 @@ index b5557e8..358cf0a 100644
          if (main.editor.command_line.command == null) try self.drawMessage();
          try self.updateCursor();
          if (main.editor.command_line.command != null) try self.drawCmd(&main.editor.command_line);
-@@ -351,6 +353,34 @@ pub const Terminal = struct {
+@@ -340,6 +342,34 @@ pub const Terminal = struct {
          try self.drawOverlay(doc_lines.items, doc_pos);
      }
  
