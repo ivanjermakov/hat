@@ -1,7 +1,9 @@
 const std = @import("std");
+const Allocator = std.mem.Allocator;
 const builtin = @import("builtin");
 
 const buf = @import("buffer.zig");
+const cha = @import("change.zig");
 const inp = @import("input.zig");
 const log = @import("log.zig");
 const lsp = @import("lsp.zig");
@@ -12,7 +14,6 @@ const cmp = @import("ui/completion_menu.zig");
 const fzf = @import("ui/fzf.zig");
 const uni = @import("unicode.zig");
 const ur = @import("uri.zig");
-const cha = @import("change.zig");
 
 pub const Dirty = struct {
     input: bool = false,
@@ -55,9 +56,9 @@ pub const Editor = struct {
     find_query: ?[]const u21 = null,
     recording_macro: ?u8 = null,
     macros: std.AutoHashMap(u8, std.ArrayList(inp.Key)),
-    allocator: std.mem.Allocator,
+    allocator: Allocator,
 
-    pub fn init(allocator: std.mem.Allocator, config: Config) !Editor {
+    pub fn init(allocator: Allocator, config: Config) !Editor {
         const editor = Editor{
             .config = config,
             .buffers = std.ArrayList(*buf.Buffer).init(allocator),
@@ -156,12 +157,12 @@ pub const Editor = struct {
 
         switch (mode) {
             .normal => {
-                try self.active_buffer.clearSelection();
+                self.active_buffer.clearSelection();
                 self.completion_menu.reset();
             },
-            .select => try self.active_buffer.selectChar(),
-            .select_line => try self.active_buffer.selectLine(),
-            .insert => try self.active_buffer.clearSelection(),
+            .select => self.active_buffer.selectChar(),
+            .select_line => self.active_buffer.selectLine(),
+            .insert => self.active_buffer.clearSelection(),
         }
         if (mode != .normal) self.dotRepeatInside();
         log.debug(@This(), "mode: {}->{}\n", .{ self.mode, mode });
@@ -225,7 +226,7 @@ pub const Editor = struct {
         defer self.allocator.free(find_result.path);
         log.debug(@This(), "find result: {}\n", .{find_result});
         try self.openBuffer(find_result.path);
-        try self.active_buffer.moveCursor(find_result.position);
+        self.active_buffer.moveCursor(find_result.position);
     }
 
     pub fn pickBuffer(self: *Editor) !void {
@@ -334,12 +335,12 @@ pub const Editor = struct {
 
     pub fn sendMessage(self: *Editor, msg: []const u8) !void {
         log.debug(@This(), "message: {s}\n", .{msg});
-        try main.editor.dismissMessage();
+        main.editor.dismissMessage();
         try self.messages.append(try self.allocator.dupe(u8, msg));
         self.dirty.draw = true;
     }
 
-    pub fn dismissMessage(self: *Editor) !void {
+    pub fn dismissMessage(self: *Editor) void {
         if (self.message_read_idx == self.messages.items.len) return;
         self.message_read_idx = self.messages.items.len;
         self.dirty.draw = true;

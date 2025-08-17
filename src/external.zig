@@ -6,7 +6,7 @@ const log = @import("log.zig");
 const main = @import("main.zig");
 
 pub fn runExternalWait(
-    allocator: std.mem.Allocator,
+    allocator: Allocator,
     cmd: []const []const u8,
     input: ?[]const u8,
     exit_code: ?*u8,

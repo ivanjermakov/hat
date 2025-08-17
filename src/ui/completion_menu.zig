@@ -131,7 +131,7 @@ pub const CompletionMenu = struct {
         self.display_items.deinit();
     }
 
-    pub fn nextItem(self: *CompletionMenu) !void {
+    pub fn nextItem(self: *CompletionMenu) void {
         if (self.active_item == self.display_items.items.len - 1) {
             self.active_item = 0;
         } else {
@@ -140,7 +140,7 @@ pub const CompletionMenu = struct {
         main.editor.dirty.draw = true;
     }
 
-    pub fn prevItem(self: *CompletionMenu) !void {
+    pub fn prevItem(self: *CompletionMenu) void {
         if (self.active_item == 0) {
             self.active_item = self.display_items.items.len - 1;
         } else {

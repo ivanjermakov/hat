@@ -439,7 +439,7 @@ pub const LspConnection = struct {
             }
             log.debug(@This(), "jump to {}\n", .{loc.range.start});
             const new_cursor = Cursor.fromLsp(loc.range.start);
-            try main.editor.active_buffer.moveCursor(new_cursor);
+            main.editor.active_buffer.moveCursor(new_cursor);
         }
     }
 
@@ -456,7 +456,7 @@ pub const LspConnection = struct {
         defer self.allocator.free(pick_result.path);
         log.debug(@This(), "picked reference: {}\n", .{pick_result});
         try main.editor.openBuffer(pick_result.path);
-        try main.editor.active_buffer.moveCursor(pick_result.position);
+        main.editor.active_buffer.moveCursor(pick_result.position);
     }
 
     fn handleCompletionResponse(self: *LspConnection, arena: Allocator, resp: ?std.json.Value) !void {
