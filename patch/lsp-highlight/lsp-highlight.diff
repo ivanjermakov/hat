@@ -1,5 +1,5 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index 52e56a0..a6362e0 100644
+index 2f7c4b9..3be4b5a 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
 @@ -65,6 +65,7 @@ pub const Buffer = struct {
@@ -26,7 +26,7 @@ index 52e56a0..a6362e0 100644
  
          for (self.history.items) |*i| {
              for (i.items) |*c| c.deinit();
-@@ -612,6 +615,12 @@ pub const Buffer = struct {
+@@ -614,6 +617,12 @@ pub const Buffer = struct {
          }
      }
  
@@ -136,10 +136,10 @@ index 2270272..efc6990 100644
          perf.draw = timer.lap();
  
 diff --git a/src/terminal.zig b/src/terminal.zig
-index b5557e8..55a2690 100644
+index 566bb71..ca504a7 100644
 --- a/src/terminal.zig
 +++ b/src/terminal.zig
-@@ -229,6 +229,14 @@ pub const Terminal = struct {
+@@ -218,6 +218,14 @@ pub const Terminal = struct {
                      }
                  }
  
