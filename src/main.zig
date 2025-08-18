@@ -235,19 +235,19 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     }
 
                     // normal or select mode
-                } else if (normal_or_select and eql(u8, key, "i")) {
-                    buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = -1 * repeat_or_1 }));
                 } else if (normal_or_select and eql(u8, key, "k")) {
-                    buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = 1 * repeat_or_1 }));
+                    buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = -1 * repeat_or_1 }));
                 } else if (normal_or_select and eql(u8, key, "j")) {
+                    buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = 1 * repeat_or_1 }));
+                } else if (normal_or_select and eql(u8, key, "h")) {
                     buffer.moveCursor(buffer.cursor.applyOffset(.{ .col = -1 * repeat_or_1 }));
                 } else if (normal_or_select and eql(u8, key, "l")) {
                     buffer.moveCursor(buffer.cursor.applyOffset(.{ .col = 1 * repeat_or_1 }));
-                } else if (normal_or_select and eql(u8, key, "I")) {
+                } else if (normal_or_select and eql(u8, key, "<c-u>")) {
                     const half_screen = @divFloor(@as(i32, @intCast(term.dimensions.height)), 2);
                     buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = -1 * repeat_or_1 * half_screen }));
                     buffer.centerCursor();
-                } else if (normal_or_select and eql(u8, key, "K")) {
+                } else if (normal_or_select and eql(u8, key, "<c-d>")) {
                     const half_screen = @divFloor(@as(i32, @intCast(term.dimensions.height)), 2);
                     buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = repeat_or_1 * half_screen }));
                     buffer.centerCursor();
@@ -259,7 +259,7 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     buffer.moveToWordEnd();
                 } else if (normal_or_select and eql(u8, key, "E")) {
                     buffer.moveToTokenEnd();
-                } else if (normal_or_select and eql(u8, key, "h")) {
+                } else if (normal_or_select and eql(u8, key, "i")) {
                     try editor.enterMode(.insert);
                 } else if (normal_or_select and eql(u8, key, "c")) {
                     try buffer.changeSelectionDelete();
@@ -343,10 +343,10 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                     } else if (editor.mode == .normal and eql(u8, key, "@") and editor.key_queue.items[1].printable != null) {
                         const macro_name = key2.printable.?[0];
                         try editor.replayMacro(macro_name);
-                    } else if (normal_or_select and eql(u8, multi_key, "gi")) {
+                    } else if (normal_or_select and eql(u8, multi_key, "gk")) {
                         buffer.moveCursor(.{ .col = buffer.cursor.col });
                         buffer.centerCursor();
-                    } else if (normal_or_select and eql(u8, multi_key, "gk")) {
+                    } else if (normal_or_select and eql(u8, multi_key, "gj")) {
                         buffer.moveCursor(.{
                             .row = @as(i32, @intCast(buffer.line_positions.items.len)) - 1,
                             .col = buffer.cursor.col,
@@ -357,7 +357,7 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                             .row = buffer.cursor.row,
                             .col = @intCast(buffer.lineLength(@intCast(buffer.cursor.row))),
                         });
-                    } else if (normal_or_select and eql(u8, multi_key, "gj")) {
+                    } else if (normal_or_select and eql(u8, multi_key, "gh")) {
                         buffer.moveCursor(.{ .row = buffer.cursor.row, .col = 0 });
                     } else {
                         // no multi-key matches, drop first key as it will never match
