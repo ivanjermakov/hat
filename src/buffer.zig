@@ -663,8 +663,8 @@ pub const Buffer = struct {
                 };
                 defer self.allocator.free(pick_result.path);
                 log.debug(@This(), "picked symbol: {}\n", .{pick_result});
-                try self.moveCursor(pick_result.position);
-                try self.centerCursor();
+                self.moveCursor(pick_result.position);
+                self.centerCursor();
             }
         }
     }
