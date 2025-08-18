@@ -18,6 +18,10 @@ pub const KeyCode = enum {
     f2,
     f3,
     f4,
+    end,
+    home,
+    pgup,
+    pgdown,
 };
 
 pub const Modifier = enum(u8) {
