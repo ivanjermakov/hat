@@ -18,6 +18,10 @@ pub const KeyCode = enum {
     f2,
     f3,
     f4,
+    end,
+    home,
+    pgup,
+    pgdown,
 };
 
 pub const Modifier = enum(u8) {
@@ -52,7 +56,7 @@ pub const Key = struct {
     modifiers: u4 = 0,
     allocator: Allocator,
 
-    pub fn clone(self: *const Key, allocator: std.mem.Allocator) !Key {
+    pub fn clone(self: *const Key, allocator: Allocator) !Key {
         var k = self.*;
         if (self.printable) |p| k.printable = try allocator.dupe(u8, p);
         return k;
