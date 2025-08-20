@@ -23,11 +23,11 @@ const lsp = @import("lsp.zig");
 const main = @import("main.zig");
 const ter = @import("terminal.zig");
 const ts = @import("ts.zig");
-const act = @import("ui/code_action.zig");
 const git = @import("git.zig");
 const uni = @import("unicode.zig");
 const dia = @import("ui/diagnostic.zig");
 const fzf = @import("ui/fzf.zig");
+const act = @import("ui/code_action.zig");
 
 pub const Buffer = struct {
     path: []const u8,

@@ -185,9 +185,9 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                         try editor.command_line.insert(raw_key.printable.?);
                     }
 
-                    // code action menu
+                // code action menu
                 } else if (code_action) |action| {
-                    try buffer.codeActionExecute(action);
+                    buffer.codeActionExecute(action) catch |e| log.err(@This(), "code action exec error: {}\n", .{e});
 
                     // text insertion
                 } else if (editor.mode == .insert and editor.key_queue.items[0].printable != null) {
@@ -353,7 +353,7 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     } else if (editor.mode == .normal and eql(u8, multi_key, " r")) {
                         buffer.findReferences() catch |e| log.err(@This(), "find references LSP error: {}", .{e});
                     } else if (editor.mode == .normal and eql(u8, multi_key, " c")) {
-                        try buffer.codeAction();
+                        buffer.codeAction() catch |e| log.err(@This(), "code action LSP error: {}\n", .{e});
                     } else if (editor.mode == .normal and eql(u8, multi_key, " n")) {
                         try buffer.renamePrompt();
                     } else if (editor.mode == .normal and eql(u8, multi_key, " l")) {
