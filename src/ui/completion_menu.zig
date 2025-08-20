@@ -156,7 +156,7 @@ pub const CompletionMenu = struct {
         const buffer = main.editor.active_buffer;
 
         const span = Span.fromLsp(self.replace_range.?);
-        const new_text = try uni.utf8FromBytes(buffer.allocator, item.replace_text);
+        const new_text = try uni.unicodeFromBytes(buffer.allocator, item.replace_text);
         defer self.allocator.free(new_text);
         var change = try cha.Change.initReplace(self.allocator, buffer, span, new_text);
         try buffer.appendChange(&change);
