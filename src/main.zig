@@ -172,9 +172,7 @@ fn startEditor(allocator: Allocator) !void {
                     } else if (cmd_active and eql(u8, key, "<delete>")) {
                         editor.command_line.delete();
                     } else if (cmd_active and raw_key.printable != null) {
-                        const key_uni = uni.unicodeFromBytes(allocator, raw_key.printable.?) catch unreachable;
-                        defer allocator.free(key_uni);
-                        try editor.command_line.insert(key_uni);
+                        try editor.command_line.insert(raw_key.printable.?);
                     }
 
                     // text insertion
@@ -185,10 +183,7 @@ fn startEditor(allocator: Allocator) !void {
                     while (true) {
                         const next_key = if (keys_consumed < editor.key_queue.items.len) editor.key_queue.items[keys_consumed] else null;
                         if (next_key != null and next_key.?.printable != null) {
-                            const p = next_key.?.printable.?;
-                            const utf = try uni.unicodeFromBytes(allocator, p);
-                            defer allocator.free(utf);
-                            try printable.appendSlice(utf);
+                            try printable.appendSlice(next_key.?.printable.?);
                             keys_consumed += 1;
                         } else {
                             break;
@@ -339,10 +334,10 @@ fn startEditor(allocator: Allocator) !void {
                     } else if (editor.mode == .normal and eql(u8, multi_key, " n")) {
                         try buffer.renamePrompt();
                     } else if (editor.mode == .normal and eql(u8, key, "r") and editor.key_queue.items[1].printable != null) {
-                        const macro_name = key2.printable.?[0];
+                        const macro_name: u8 = @intCast(key2.printable.?[0]);
                         try editor.startMacro(macro_name);
                     } else if (editor.mode == .normal and eql(u8, key, "@") and editor.key_queue.items[1].printable != null) {
-                        const macro_name = key2.printable.?[0];
+                        const macro_name: u8 = @intCast(key2.printable.?[0]);
                         try editor.replayMacro(macro_name);
                     } else if (normal_or_select and eql(u8, multi_key, "gk")) {
                         buffer.moveCursor(.{ .col = buffer.cursor.col });
