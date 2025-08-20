@@ -245,30 +245,10 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     }
 
                     // normal or select mode
-                } else if (normal_or_select and eql(u8, key, "i")) {
-                    buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = -1 * repeat_or_1 }));
                 } else if (normal_or_select and eql(u8, key, "k")) {
-                    buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = 1 * repeat_or_1 }));
+                    buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = -1 * repeat_or_1 }));
                 } else if (normal_or_select and eql(u8, key, "j")) {
-                    buffer.moveCursor(buffer.cursor.applyOffset(.{ .col = -1 * repeat_or_1 }));
-                } else if (normal_or_select and eql(u8, key, "l")) {
-                    buffer.moveCursor(buffer.cursor.applyOffset(.{ .col = 1 * repeat_or_1 }));
-                } else if (normal_or_select and eql(u8, key, "I")) {
-                    const half_screen = @divFloor(@as(i32, @intCast(term.dimensions.height)), 2);
-                    buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = -1 * repeat_or_1 * half_screen }));
-                    buffer.centerCursor();
-                } else if (normal_or_select and eql(u8, key, "K")) {
-                    const half_screen = @divFloor(@as(i32, @intCast(term.dimensions.height)), 2);
-                    buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = repeat_or_1 * half_screen }));
-                    buffer.centerCursor();
-                } else if (normal_or_select and eql(u8, key, "w")) {
-                    buffer.moveToNextWord();
-                } else if (normal_or_select and eql(u8, key, "W")) {
-                    buffer.moveToPrevWord();
-                } else if (normal_or_select and eql(u8, key, "e")) {
-                    buffer.moveToWordEnd();
-                } else if (normal_or_select and eql(u8, key, "E")) {
-                    buffer.moveToTokenEnd();
+                    buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = 1 * repeat_or_1 }));
                 } else if (normal_or_select and eql(u8, key, "h")) {
                     buffer.moveCursor(buffer.cursor.applyOffset(.{ .col = -1 * repeat_or_1 }));
                 } else if (normal_or_select and eql(u8, key, "l")) {
