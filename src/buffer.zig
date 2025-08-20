@@ -381,8 +381,8 @@ pub const Buffer = struct {
         main.editor.dotRepeatCommitReady();
 
         if (main.editor.config.autosave) {
-            try self.write();
             log.debug(@This(), "autosave {s}\n", .{self.path});
+            self.write() catch |e| log.err(@This(), "write buffer error: {}", .{e});
         }
     }
 
@@ -544,7 +544,7 @@ pub const Buffer = struct {
         }
     }
 
-    pub fn undo(self: *Buffer) !void {
+    pub fn undo(self: *Buffer) FatalError!void {
         log.debug(@This(), "undo: {?}/{}\n", .{ self.history_index, self.history.items.len });
         if (self.history_index) |h_idx| {
             const hist_to_undo = self.history.items[h_idx].items;
@@ -559,7 +559,7 @@ pub const Buffer = struct {
             self.history_index = if (h_idx > 0) h_idx - 1 else null;
 
             if (main.editor.config.autosave) {
-                try self.write();
+                self.write() catch |e| log.err(@This(), "write buffer error: {}", .{e});
                 log.debug(@This(), "autosave {s}\n", .{self.path});
             }
         }
@@ -579,7 +579,7 @@ pub const Buffer = struct {
         self.history_index = redo_idx;
 
         if (main.editor.config.autosave) {
-            try self.write();
+            self.write() catch |e| log.err(@This(), "write buffer error: {}", .{e});
             log.debug(@This(), "autosave {s}\n", .{self.path});
         }
     }
