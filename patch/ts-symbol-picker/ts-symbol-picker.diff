@@ -1,5 +1,5 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index 2f7c4b9..69c8627 100644
+index 8955c3c..8feb58b 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
 @@ -24,6 +24,7 @@ const ter = @import("terminal.zig");
@@ -10,7 +10,7 @@ index 2f7c4b9..69c8627 100644
  
  pub const Buffer = struct {
      path: []const u8,
-@@ -608,6 +609,27 @@ pub const Buffer = struct {
+@@ -598,6 +599,27 @@ pub const Buffer = struct {
          }
      }
  
@@ -29,8 +29,8 @@ index 2f7c4b9..69c8627 100644
 +                };
 +                defer self.allocator.free(pick_result.path);
 +                log.debug(@This(), "picked symbol: {}\n", .{pick_result});
-+                try self.moveCursor(pick_result.position);
-+                try self.centerCursor();
++                self.moveCursor(pick_result.position);
++                self.centerCursor();
 +            }
 +        }
 +    }
@@ -105,7 +105,7 @@ index f166cf9..14329fd 100644
      } },
      .{ ".zig", FileTypeConfig{
 diff --git a/src/main.zig b/src/main.zig
-index 2270272..657c2ba 100644
+index d6b06e8..c767a4c 100644
 --- a/src/main.zig
 +++ b/src/main.zig
 @@ -337,6 +337,8 @@ fn startEditor(allocator: std.mem.Allocator) !void {
