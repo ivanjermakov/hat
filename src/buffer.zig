@@ -347,7 +347,7 @@ pub const Buffer = struct {
         try self.pending_changes.append(try change.clone(self.allocator));
     }
 
-    pub fn commitChanges(self: *Buffer) !void {
+    pub fn commitChanges(self: *Buffer) FatalError!void {
         if (self.uncommitted_changes.items.len == 0) {
             log.debug(@This(), "no changes to commit\n", .{});
             return;
