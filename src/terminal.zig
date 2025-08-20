@@ -183,7 +183,7 @@ pub const Terminal = struct {
             if (buffer.offset.col > 0) {
                 if (buffer.offset.col >= line.len) continue;
                 const offscreen_line = line[0..@intCast(buffer.offset.col)];
-                byte += try uni.utf8ByteLen(offscreen_line);
+                byte += try uni.unicodeByteLen(offscreen_line);
                 line = line[@intCast(buffer.offset.col)..];
             } else {
                 for (0..@intCast(-buffer.offset.col)) |_| {

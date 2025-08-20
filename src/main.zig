@@ -1,10 +1,11 @@
 const std = @import("std");
 const dl = std.DynLib;
+const Allocator = std.mem.Allocator;
 const builtin = @import("builtin");
 
-const core = @import("core.zig");
 const buf = @import("buffer.zig");
 const co = @import("color.zig");
+const core = @import("core.zig");
 const edi = @import("editor.zig");
 const env = @import("env.zig");
 const ft = @import("file_type.zig");
@@ -102,7 +103,7 @@ pub fn main() !void {
     defer editor.disconnect() catch {};
 }
 
-fn startEditor(allocator: std.mem.Allocator) !void {
+fn startEditor(allocator: Allocator) !void {
     var timer = try std.time.Timer.start();
     var timer_total = try std.time.Timer.start();
     var perf = std.mem.zeroes(PerfInfo);
@@ -170,8 +171,8 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                         editor.command_line.backspace();
                     } else if (cmd_active and eql(u8, key, "<delete>")) {
                         editor.command_line.delete();
-                    } else if (cmd_active and editor.key_queue.items[0].printable != null) {
-                        const key_uni = try uni.utf8FromBytes(allocator, key);
+                    } else if (cmd_active and raw_key.printable != null) {
+                        const key_uni = uni.unicodeFromBytes(allocator, raw_key.printable.?) catch unreachable;
                         defer allocator.free(key_uni);
                         try editor.command_line.insert(key_uni);
                     }
@@ -185,7 +186,7 @@ fn startEditor(allocator: std.mem.Allocator) !void {
                         const next_key = if (keys_consumed < editor.key_queue.items.len) editor.key_queue.items[keys_consumed] else null;
                         if (next_key != null and next_key.?.printable != null) {
                             const p = next_key.?.printable.?;
-                            const utf = try uni.utf8FromBytes(allocator, p);
+                            const utf = try uni.unicodeFromBytes(allocator, p);
                             defer allocator.free(utf);
                             try printable.appendSlice(utf);
                             keys_consumed += 1;

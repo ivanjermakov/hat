@@ -51,7 +51,7 @@ pub const Change = struct {
 
     pub fn fromLsp(allocator: Allocator, buffer: *const buf.Buffer, edit: lsp.types.TextEdit) !Change {
         const span = Span.fromLsp(edit.range);
-        const new_text = try uni.utf8FromBytes(allocator, edit.newText);
+        const new_text = try uni.unicodeFromBytes(allocator, edit.newText);
         defer allocator.free(new_text);
         return initReplace(allocator, buffer, span, new_text);
     }
@@ -114,7 +114,7 @@ pub const Change = struct {
     }
 
     pub fn toLsp(self: *const Change, allocator: Allocator) !lsp.types.TextDocumentContentChangeEvent {
-        const text = try uni.utf8ToBytes(allocator, self.new_text orelse &.{});
+        const text = try uni.unicodeToBytes(allocator, self.new_text orelse &.{});
         return .{
             .literal_0 = .{
                 .range = self.old_span.toLsp(),

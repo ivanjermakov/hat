@@ -542,7 +542,7 @@ pub const Buffer = struct {
     pub fn cursorToBytePos(self: *const Buffer, cursor: Cursor) usize {
         const line_start = self.lineStart(@intCast(cursor.row));
         const part_end = line_start + @as(usize, @intCast(cursor.col));
-        const part_byte_len = uni.utf8ByteLen(self.content.items[line_start..part_end]) catch unreachable;
+        const part_byte_len = uni.unicodeByteLen(self.content.items[line_start..part_end]) catch unreachable;
         return line_start + part_byte_len;
     }
 
@@ -615,7 +615,7 @@ pub const Buffer = struct {
 
     pub fn rename(self: *Buffer, new_text: []const u21) !void {
         for (self.lsp_connections.items) |conn| {
-            const new_text_b = try uni.utf8ToBytes(self.allocator, new_text);
+            const new_text_b = try uni.unicodeToBytes(self.allocator, new_text);
             defer self.allocator.free(new_text_b);
             try conn.rename(new_text_b);
         }
@@ -629,7 +629,7 @@ pub const Buffer = struct {
     }
 
     pub fn pipe(self: *Buffer, command: []const u21) !void {
-        const command_b = try uni.utf8ToBytes(self.allocator, command);
+        const command_b = try uni.unicodeToBytes(self.allocator, command);
         defer self.allocator.free(command_b);
         log.debug(@This(), "pipe command: {s}\n", .{command_b});
 
@@ -641,7 +641,7 @@ pub const Buffer = struct {
         else
             self.lineSpan(@intCast(self.cursor.row));
 
-        const in_b = try uni.utf8ToBytes(self.allocator, self.textAt(span));
+        const in_b = try uni.unicodeToBytes(self.allocator, self.textAt(span));
         defer self.allocator.free(in_b);
 
         var exit_code: u8 = undefined;
@@ -662,7 +662,7 @@ pub const Buffer = struct {
             return;
         }
 
-        const out = try uni.utf8FromBytes(self.allocator, out_b);
+        const out = try uni.unicodeFromBytes(self.allocator, out_b);
         defer self.allocator.free(out);
         var change = try cha.Change.initReplace(self.allocator, self, span, out);
         try self.appendChange(&change);
@@ -682,7 +682,7 @@ pub const Buffer = struct {
         }
         const text = try clp.read(self.allocator);
         defer self.allocator.free(text);
-        const text_uni = try uni.utf8FromBytes(self.allocator, text);
+        const text_uni = try uni.unicodeFromBytes(self.allocator, text);
         defer self.allocator.free(text_uni);
         try self.changeInsertText(text_uni);
         try self.commitChanges();
@@ -719,7 +719,7 @@ pub const Buffer = struct {
         const file = try std.fs.cwd().openFile(self.path, .{ .mode = .read_write });
         const file_content = try file.readToEndAlloc(self.allocator, std.math.maxInt(usize));
         defer self.allocator.free(file_content);
-        const file_content_uni = try uni.utf8FromBytes(self.allocator, file_content);
+        const file_content_uni = try uni.unicodeFromBytes(self.allocator, file_content);
         defer self.allocator.free(file_content_uni);
 
         var change = try cha.Change.initReplace(self.allocator, self, self.fullSpan(), file_content_uni);
@@ -732,7 +732,7 @@ pub const Buffer = struct {
     }
 
     pub fn findNext(self: *Buffer, query: []const u21, forward: bool) !void {
-        const query_b = try uni.utf8ToBytes(self.allocator, query);
+        const query_b = try uni.unicodeToBytes(self.allocator, query);
         defer self.allocator.free(query_b);
         const spans = self.find(query_b) catch {
             try main.editor.sendMessageFmt("invalid search: {s}", .{query_b});
@@ -877,7 +877,7 @@ pub const Buffer = struct {
 
     fn updateRaw(self: *Buffer) !void {
         self.content_raw.clearRetainingCapacity();
-        try uni.utf8ToBytesWrite(self.content_raw.writer(), self.content.items);
+        try uni.unicodeToBytesWrite(self.content_raw.writer(), self.content.items);
     }
 
     fn scrollForCursor(self: *Buffer, new_buf_cursor: Cursor) void {
