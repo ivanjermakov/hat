@@ -108,3 +108,5 @@ pub const Dimensions = struct {
     width: usize,
     height: usize,
 };
+
+pub const FatalError = error{OutOfMemory};
