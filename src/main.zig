@@ -340,7 +340,6 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
 
                     if (editor.mode == .normal and eql(u8, multi_key, " w")) {
                         buffer.write() catch |e| log.err(@This(), "write buffer error: {}", .{e});
-                        try buffer.write();
                         const msg = try std.fmt.allocPrint(
                             allocator,
                             "{s} {}B written",
@@ -358,7 +357,6 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                         try buffer.renamePrompt();
                     } else if (editor.mode == .normal and eql(u8, multi_key, " l")) {
                         buffer.format() catch |e| log.err(@This(), "format LSP error: {}", .{e});
-                        try buffer.format();
                     } else if (editor.mode == .normal and eql(u8, multi_key, " f")) {
                         try buffer.findSymbols();
                     } else if (editor.mode == .normal and eql(u8, key, "r") and editor.key_queue.items[1].printable != null) {
