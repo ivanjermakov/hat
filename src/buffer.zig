@@ -13,6 +13,7 @@ const Span = core.Span;
 const Cursor = core.Cursor;
 const ByteSpan = core.ByteSpan;
 const Dimensions = core.Dimensions;
+const FatalError = core.FatalError;
 const dt = @import("datetime.zig");
 const edi = @import("editor.zig");
 const ext = @import("external.zig");
@@ -22,8 +23,8 @@ const lsp = @import("lsp.zig");
 const main = @import("main.zig");
 const ter = @import("terminal.zig");
 const ts = @import("ts.zig");
-const uni = @import("unicode.zig");
 const dia = @import("ui/diagnostic.zig");
+const uni = @import("unicode.zig");
 
 pub const Buffer = struct {
     path: []const u8,
@@ -117,8 +118,11 @@ pub const Buffer = struct {
         return self;
     }
 
-    pub fn reparse(self: *Buffer) !void {
-        try self.updateRaw();
+    pub fn reparse(self: *Buffer) FatalError!void {
+        self.updateRaw() catch |e| {
+            log.err(@This(), "{}\n", .{e});
+            if (@errorReturnTrace()) |trace| std.debug.dumpStackTrace(trace.*);
+        };
         if (self.ts_state) |*ts_state| try ts_state.reparse(self.content_raw.items);
         try self.updateLinePositions();
     }
@@ -337,7 +341,7 @@ pub const Buffer = struct {
         }
     }
 
-    pub fn appendChange(self: *Buffer, change: *cha.Change) !void {
+    pub fn appendChange(self: *Buffer, change: *cha.Change) FatalError!void {
         try self.applyChange(change);
         try self.uncommitted_changes.append(change.*);
         try self.pending_changes.append(try change.clone(self.allocator));
@@ -364,10 +368,10 @@ pub const Buffer = struct {
         try self.history.append(new_hist);
         self.history_index = self.history.items.len - 1;
 
-        try main.editor.dotRepeatCommitReady();
+        main.editor.dotRepeatCommitReady();
     }
 
-    pub fn changeInsertText(self: *Buffer, text: []const u21) !void {
+    pub fn changeInsertText(self: *Buffer, text: []const u21) FatalError!void {
         var change = try cha.Change.initInsert(self.allocator, self, self.cursor, text);
         try self.appendChange(&change);
     }
@@ -446,7 +450,7 @@ pub const Buffer = struct {
         var char: usize = 0;
         while (line_iter.next()) |line| {
             for (line) |ch| {
-                byte += try std.unicode.utf8CodepointSequenceLength(ch);
+                byte += std.unicode.utf8CodepointSequenceLength(ch) catch unreachable;
             }
             // new line
             byte += 1;
@@ -731,8 +735,8 @@ pub const Buffer = struct {
         self.moveCursor(old_cursor);
     }
 
-    pub fn findNext(self: *Buffer, query: []const u21, forward: bool) !void {
-        const query_b = try uni.unicodeToBytes(self.allocator, query);
+    pub fn findNext(self: *Buffer, query: []const u21, forward: bool) FatalError!void {
+        const query_b = uni.unicodeToBytes(self.allocator, query) catch unreachable;
         defer self.allocator.free(query_b);
         const spans = self.find(query_b) catch {
             try main.editor.sendMessageFmt("invalid search: {s}", .{query_b});
@@ -823,7 +827,7 @@ pub const Buffer = struct {
         return Span{ .start = .{}, .end = .{ .row = @intCast(self.line_positions.items.len) } };
     }
 
-    fn applyChange(self: *Buffer, change: *cha.Change) !void {
+    fn applyChange(self: *Buffer, change: *cha.Change) FatalError!void {
         const span = change.old_span;
 
         if (builtin.mode == .Debug) {
