@@ -1,5 +1,18 @@
+diff --git a/src/buffer.zig b/src/buffer.zig
+index 70ee73d..4902cec 100644
+--- a/src/buffer.zig
++++ b/src/buffer.zig
+@@ -347,7 +347,7 @@ pub const Buffer = struct {
+         try self.pending_changes.append(try change.clone(self.allocator));
+     }
+ 
+-    pub fn commitChanges(self: *Buffer) FatalError!void {
++    pub fn commitChanges(self: *Buffer) !void {
+         if (self.uncommitted_changes.items.len == 0) {
+             log.debug(@This(), "no changes to commit\n", .{});
+             return;
 diff --git a/src/core.zig b/src/core.zig
-index 17f68e6..955a94c 100644
+index 880684d..aa148d2 100644
 --- a/src/core.zig
 +++ b/src/core.zig
 @@ -95,6 +95,7 @@ pub const ByteSpan = struct {
@@ -11,10 +24,10 @@ index 17f68e6..955a94c 100644
      buffer: Area,
  };
 diff --git a/src/editor.zig b/src/editor.zig
-index 9767970..15d1b4a 100644
+index fd3655c..1dc8870 100644
 --- a/src/editor.zig
 +++ b/src/editor.zig
-@@ -33,6 +33,11 @@ pub const Config = struct {
+@@ -35,6 +35,11 @@ pub const Config = struct {
      /// Char to denote terminal lines after end of buffer
      /// See vim's :h fillchars -> eob
      end_of_buffer_char: ?u8 = null,
@@ -26,11 +39,20 @@ index 9767970..15d1b4a 100644
  };
  
  pub const Editor = struct {
+@@ -151,7 +156,7 @@ pub const Editor = struct {
+         main.editor.dirty.draw = true;
+     }
+ 
+-    pub fn enterMode(self: *Editor, mode: Mode) FatalError!void {
++    pub fn enterMode(self: *Editor, mode: Mode) !void {
+         self.resetHover();
+ 
+         if (self.mode == mode) return;
 diff --git a/src/main.zig b/src/main.zig
-index d6b06e8..790667b 100644
+index 0093d54..cc07248 100644
 --- a/src/main.zig
 +++ b/src/main.zig
-@@ -91,7 +91,7 @@ pub fn main() !void {
+@@ -93,7 +93,7 @@ pub fn main() !void {
      term = try ter.Terminal.init(allocator, std_out.writer().any(), try ter.terminalSize());
      defer term.deinit();
  
@@ -40,7 +62,7 @@ index d6b06e8..790667b 100644
  
      const path = if (args.path) |path| try allocator.dupe(u8, path) else fzf.pickFile(allocator) catch return;
 diff --git a/src/terminal.zig b/src/terminal.zig
-index 566bb71..d7b34be 100644
+index f7efb9f..928c23d 100644
 --- a/src/terminal.zig
 +++ b/src/terminal.zig
 @@ -405,20 +405,32 @@ pub fn terminalSize() !Dimensions {

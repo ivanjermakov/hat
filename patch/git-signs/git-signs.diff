@@ -1,12 +1,13 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index 8955c3c..5bab686 100644
+index 70ee73d..859fc62 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
-@@ -24,10 +24,13 @@ const ter = @import("terminal.zig");
+@@ -24,11 +24,14 @@ const main = @import("main.zig");
+ const ter = @import("terminal.zig");
  const ts = @import("ts.zig");
- const uni = @import("unicode.zig");
  const dia = @import("ui/diagnostic.zig");
 +const git = @import("git.zig");
+ const uni = @import("unicode.zig");
  
  pub const Buffer = struct {
      path: []const u8,
@@ -16,7 +17,7 @@ index 8955c3c..5bab686 100644
      file: ?std.fs.File,
      stat: ?std.fs.File.Stat = null,
      /// Incremented on every content change
-@@ -89,11 +92,17 @@ pub const Buffer = struct {
+@@ -90,11 +93,17 @@ pub const Buffer = struct {
          const abs_path = std.fs.realpathAlloc(allocator, buf_path) catch null;
          defer if (abs_path) |a| allocator.free(a);
          const uri = try std.fmt.allocPrint(allocator, "file://{s}", .{abs_path orelse buf_path});
@@ -34,15 +35,15 @@ index 8955c3c..5bab686 100644
              .content = std.ArrayList(u21).init(allocator),
              .content_raw = raw,
              .diagnostics = std.ArrayList(dia.Diagnostic).init(allocator),
-@@ -121,6 +130,7 @@ pub const Buffer = struct {
-         try self.updateRaw();
+@@ -125,6 +134,7 @@ pub const Buffer = struct {
+         };
          if (self.ts_state) |*ts_state| try ts_state.reparse(self.content_raw.items);
          try self.updateLinePositions();
 +        try self.updateGitHunks();
      }
  
      pub fn updateContent(self: *Buffer) !void {
-@@ -137,6 +147,8 @@ pub const Buffer = struct {
+@@ -141,6 +151,8 @@ pub const Buffer = struct {
          self.lsp_connections.deinit();
  
          self.allocator.free(self.uri);
@@ -51,7 +52,16 @@ index 8955c3c..5bab686 100644
          self.allocator.free(self.path);
  
          if (self.ts_state) |*ts_state| ts_state.deinit();
-@@ -500,6 +512,31 @@ pub const Buffer = struct {
+@@ -347,7 +359,7 @@ pub const Buffer = struct {
+         try self.pending_changes.append(try change.clone(self.allocator));
+     }
+ 
+-    pub fn commitChanges(self: *Buffer) FatalError!void {
++    pub fn commitChanges(self: *Buffer) !void {
+         if (self.uncommitted_changes.items.len == 0) {
+             log.debug(@This(), "no changes to commit\n", .{});
+             return;
+@@ -504,6 +516,31 @@ pub const Buffer = struct {
          }
      }
  
@@ -113,6 +123,19 @@ index 1335218..5a225ea 100644
  
      pub fn write(attrs: []const Attr, writer: anytype) !void {
          for (attrs) |attr| {
+diff --git a/src/editor.zig b/src/editor.zig
+index fd3655c..0bdd9c0 100644
+--- a/src/editor.zig
++++ b/src/editor.zig
+@@ -151,7 +151,7 @@ pub const Editor = struct {
+         main.editor.dirty.draw = true;
+     }
+ 
+-    pub fn enterMode(self: *Editor, mode: Mode) FatalError!void {
++    pub fn enterMode(self: *Editor, mode: Mode) !void {
+         self.resetHover();
+ 
+         if (self.mode == mode) return;
 diff --git a/src/git.zig b/src/git.zig
 new file mode 100644
 index 0000000..47cc91c
@@ -262,10 +285,10 @@ index 0000000..47cc91c
 +    try std.testing.expectEqualDeep(hunks[1], Hunk{ .type = .delete, .line = 37, .len = 0 });
 +}
 diff --git a/src/main.zig b/src/main.zig
-index d6b06e8..20917ef 100644
+index 0093d54..00b6fb3 100644
 --- a/src/main.zig
 +++ b/src/main.zig
-@@ -32,9 +32,9 @@ pub const std_out = std.io.getStdOut();
+@@ -34,9 +34,9 @@ pub const std_out = std.io.getStdOut();
  pub const std_err = std.io.getStdErr();
  pub var tty_in: std.fs.File = undefined;
  
@@ -277,7 +300,7 @@ index d6b06e8..20917ef 100644
  
  pub var main_loop_mutex: std.Thread.Mutex = .{};
 diff --git a/src/terminal.zig b/src/terminal.zig
-index 566bb71..0bf93b7 100644
+index f7efb9f..3e385e9 100644
 --- a/src/terminal.zig
 +++ b/src/terminal.zig
 @@ -159,6 +159,38 @@ pub const Terminal = struct {

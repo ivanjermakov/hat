@@ -1,8 +1,17 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index 8955c3c..3a788d5 100644
+index 70ee73d..de06627 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
-@@ -669,6 +669,12 @@ pub const Buffer = struct {
+@@ -347,7 +347,7 @@ pub const Buffer = struct {
+         try self.pending_changes.append(try change.clone(self.allocator));
+     }
+ 
+-    pub fn commitChanges(self: *Buffer) FatalError!void {
++    pub fn commitChanges(self: *Buffer) !void {
+         if (self.uncommitted_changes.items.len == 0) {
+             log.debug(@This(), "no changes to commit\n", .{});
+             return;
+@@ -673,6 +673,12 @@ pub const Buffer = struct {
          try self.commitChanges();
      }
  
@@ -15,6 +24,19 @@ index 8955c3c..3a788d5 100644
      pub fn copySelectionToClipboard(self: *Buffer) !void {
          if (self.selection) |selection| {
              try clp.write(self.allocator, self.rawTextAt(selection));
+diff --git a/src/editor.zig b/src/editor.zig
+index fd3655c..0bdd9c0 100644
+--- a/src/editor.zig
++++ b/src/editor.zig
+@@ -151,7 +151,7 @@ pub const Editor = struct {
+         main.editor.dirty.draw = true;
+     }
+ 
+-    pub fn enterMode(self: *Editor, mode: Mode) FatalError!void {
++    pub fn enterMode(self: *Editor, mode: Mode) !void {
+         self.resetHover();
+ 
+         if (self.mode == mode) return;
 diff --git a/src/lsp.zig b/src/lsp.zig
 index 8ed46b8..d58cdbe 100644
 --- a/src/lsp.zig
@@ -77,15 +99,15 @@ index 8ed46b8..d58cdbe 100644
          _ = self;
          // log.debug(@This(), "notification: {s}\n", .{notif.method});
 diff --git a/src/main.zig b/src/main.zig
-index d6b06e8..91a6d67 100644
+index 0093d54..1ac8b57 100644
 --- a/src/main.zig
 +++ b/src/main.zig
-@@ -337,6 +337,8 @@ fn startEditor(allocator: std.mem.Allocator) !void {
-                         try buffer.findReferences();
+@@ -333,6 +333,8 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+                         buffer.findReferences() catch |e| log.err(@This(), "find references LSP error: {}", .{e});
                      } else if (editor.mode == .normal and eql(u8, multi_key, " n")) {
                          try buffer.renamePrompt();
 +                    } else if (editor.mode == .normal and eql(u8, multi_key, " l")) {
-+                        try buffer.format();
++                        buffer.format() catch |e| log.err(@This(), "format LSP error: {}", .{e});
                      } else if (editor.mode == .normal and eql(u8, key, "r") and editor.key_queue.items[1].printable != null) {
-                         const macro_name = key2.printable.?[0];
+                         const macro_name: u8 = @intCast(key2.printable.?[0]);
                          try editor.startMacro(macro_name);
