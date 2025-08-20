@@ -4,6 +4,8 @@ const builtin = @import("builtin");
 
 const buf = @import("buffer.zig");
 const cha = @import("change.zig");
+const core = @import("core.zig");
+const FatalError = core.FatalError;
 const inp = @import("input.zig");
 const log = @import("log.zig");
 const lsp = @import("lsp.zig");
@@ -337,7 +339,7 @@ pub const Editor = struct {
         try main.editor.sendMessage(msg);
     }
 
-    pub fn sendMessage(self: *Editor, msg: []const u8) !void {
+    pub fn sendMessage(self: *Editor, msg: []const u8) FatalError!void {
         log.debug(@This(), "message: {s}\n", .{msg});
         main.editor.dismissMessage();
         try self.messages.append(try self.allocator.dupe(u8, msg));
@@ -383,7 +385,7 @@ pub const Editor = struct {
         }
     }
 
-    pub fn writeInputString(self: *Editor, str: []const u8) !void {
+    pub fn writeInputString(self: *Editor, str: []const u8) FatalError!void {
         const keys = try ter.getKeys(self.allocator, str);
         defer self.allocator.free(keys);
         try self.key_queue.appendSlice(keys);
@@ -416,12 +418,12 @@ pub const Editor = struct {
         if (self.dot_repeat_state == .executing) self.dot_repeat_state = .outside;
     }
 
-    pub fn dotRepeatCommitReady(self: *Editor) !void {
+    pub fn dotRepeatCommitReady(self: *Editor) void {
         if (self.dot_repeat_state == .executing) return;
         self.dot_repeat_state = .commit_ready;
     }
 
-    pub fn dotRepeatCommit(self: *Editor) !void {
+    pub fn dotRepeatCommit(self: *Editor) FatalError!void {
         std.debug.assert(self.dot_repeat_state == .commit_ready);
 
         for (self.dot_repeat_input.items) |key| key.deinit();
@@ -432,7 +434,7 @@ pub const Editor = struct {
         self.dot_repeat_state = .outside;
     }
 
-    pub fn dotRepeat(self: *Editor) !void {
+    pub fn dotRepeat(self: *Editor) FatalError!void {
         if (self.dot_repeat_input.items.len > 0) {
             log.debug(@This(), "dot repeat of {any}\n", .{self.dot_repeat_input.items});
             for (self.dot_repeat_input.items) |key| {
