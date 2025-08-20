@@ -217,20 +217,6 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     editor.dismissMessage();
                     repeat_count = null;
 
-                    // normal mode with modifiers
-                } else if (editor.mode == .normal and eql(u8, key, "<c-n>")) {
-                    editor.pickFile() catch |e| log.err(@This(), "pick file error: {}", .{e});
-                } else if (editor.mode == .normal and eql(u8, key, "<c-f>")) {
-                    editor.findInFiles() catch |e| log.err(@This(), "find in files error: {}", .{e});
-                } else if (editor.mode == .normal and eql(u8, key, "<c-e>")) {
-                    editor.pickBuffer() catch |e| log.err(@This(), "pick buffer error: {}", .{e});
-                } else if (editor.mode == .normal and eql(u8, key, "<c-d>")) {
-                    if (editor.hover_contents) |hover| {
-                        editor.openScratch(hover) catch |e| log.err(@This(), "open scratch error: {}", .{e});
-                    } else {
-                        buffer.showHover() catch |e| log.err(@This(), "show hover LSP error: {}", .{e});
-                    }
-
                     // normal or select mode
                 } else if (normal_or_select and eql(u8, key, "k")) {
                     buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = -1 * repeat_or_1 }));
@@ -314,6 +300,18 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     try buffer.findNextDiagnostic(false);
                 } else if (editor.mode == .normal and eql(u8, key, "r") and editor.recording_macro != null) {
                     try editor.recordMacro();
+                } else if (editor.mode == .normal and eql(u8, key, "<c-n>")) {
+                    editor.pickFile() catch |e| log.err(@This(), "pick file error: {}", .{e});
+                } else if (editor.mode == .normal and eql(u8, key, "<c-f>")) {
+                    editor.findInFiles() catch |e| log.err(@This(), "find in files error: {}", .{e});
+                } else if (editor.mode == .normal and eql(u8, key, "<c-e>")) {
+                    editor.pickBuffer() catch |e| log.err(@This(), "pick buffer error: {}", .{e});
+                } else if (editor.mode == .normal and eql(u8, key, "<K>")) {
+                    if (editor.hover_contents) |hover| {
+                        editor.openScratch(hover) catch |e| log.err(@This(), "open scratch error: {}", .{e});
+                    } else {
+                        buffer.showHover() catch |e| log.err(@This(), "show hover LSP error: {}", .{e});
+                    }
 
                     // insert mode
                 } else if (editor.mode == .insert and eql(u8, key, "<delete>")) {
