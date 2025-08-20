@@ -122,8 +122,8 @@ pub const LspConnection = struct {
                         .prepareSupport = true,
                     },
                     .codeAction = .{},
-                    .formatting = .{},
                     .documentHighlight = .{},
+                    .formatting = .{},
                 },
                 .workspace = .{
                     .workspaceFolders = true,
@@ -256,6 +256,14 @@ pub const LspConnection = struct {
         });
     }
 
+    pub fn highlight(self: *LspConnection) !void {
+        const buffer = main.editor.active_buffer;
+        try self.sendRequest("textDocument/documentHighlight", .{
+            .textDocument = .{ .uri = buffer.uri },
+            .position = buffer.cursor.toLsp(),
+        });
+    }
+
     pub fn format(self: *LspConnection) !void {
         const buffer = main.editor.active_buffer;
         try self.sendRequest("textDocument/formatting", .{
@@ -265,14 +273,6 @@ pub const LspConnection = struct {
                 .insertSpaces = true,
                 .trimTrailingWhitespace = true,
             },
-        });
-    }
-
-    pub fn highlight(self: *LspConnection) !void {
-        const buffer = main.editor.active_buffer;
-        try self.sendRequest("textDocument/documentHighlight", .{
-            .textDocument = .{ .uri = buffer.uri },
-            .position = buffer.cursor.toLsp(),
         });
     }
 
@@ -565,20 +565,6 @@ pub const LspConnection = struct {
         editor.dirty.draw = true;
     }
 
-    fn handleFormattingResponse(self: *LspConnection, arena: Allocator, resp: ?std.json.Value) !void {
-        _ = self;
-        if (resp == null or resp.? == .null) return;
-        const result = try std.json.parseFromValue([]const types.TextEdit, arena, resp.?, .{});
-        log.debug(@This(), "got {} formatting edits\n", .{result.value.len});
-        {
-            main.main_loop_mutex.lock();
-            defer main.main_loop_mutex.unlock();
-            const buffer = main.editor.active_buffer;
-            try buffer.applyTextEdits(result.value);
-            try buffer.commitChanges();
-        }
-    }
-
     fn handleHighlightResponse(self: *LspConnection, arena: Allocator, resp: ?std.json.Value) !void {
         _ = self;
         if (resp == null or resp.? == .null) return;
@@ -591,6 +577,20 @@ pub const LspConnection = struct {
         if (buffer.highlights.items.len > 0) {
             log.debug(@This(), "got {} highlights\n", .{buffer.highlights.items.len});
             main.editor.dirty.draw = true;
+        }
+    }
+
+    fn handleFormattingResponse(self: *LspConnection, arena: Allocator, resp: ?std.json.Value) !void {
+        _ = self;
+        if (resp == null or resp.? == .null) return;
+        const result = try std.json.parseFromValue([]const types.TextEdit, arena, resp.?, .{});
+        log.debug(@This(), "got {} formatting edits\n", .{result.value.len});
+        {
+            main.main_loop_mutex.lock();
+            defer main.main_loop_mutex.unlock();
+            const buffer = main.editor.active_buffer;
+            try buffer.applyTextEdits(result.value);
+            try buffer.commitChanges();
         }
     }
 

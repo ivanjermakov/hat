@@ -357,6 +357,7 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     } else if (editor.mode == .normal and eql(u8, multi_key, " n")) {
                         try buffer.renamePrompt();
                     } else if (editor.mode == .normal and eql(u8, multi_key, " l")) {
+                        buffer.format() catch |e| log.err(@This(), "format LSP error: {}", .{e});
                         try buffer.format();
                     } else if (editor.mode == .normal and eql(u8, multi_key, " f")) {
                         try buffer.findSymbols();
