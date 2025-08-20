@@ -227,7 +227,7 @@ pub const Terminal = struct {
             if (buffer.offset.col > 0) {
                 if (buffer.offset.col >= line.len) continue;
                 const offscreen_line = line[0..@intCast(buffer.offset.col)];
-                byte += try uni.utf8ByteLen(offscreen_line);
+                byte += try uni.unicodeByteLen(offscreen_line);
                 line = line[@intCast(buffer.offset.col)..];
             } else {
                 for (0..@intCast(-buffer.offset.col)) |_| {
@@ -523,16 +523,16 @@ pub fn parseAnsi(allocator: Allocator, input: *std.ArrayList(u8)) !inp.Key {
     switch (code) {
         0x00...0x03, 0x05...0x08, 0x0e, 0x10...0x19 => {
             // offset 96 converts \x1 to 'a', \x2 to 'b', and so on
-            key.printable = try allocator.dupe(u8, &.{code + 96});
+            key.printable = try uni.unicodeFromBytes(allocator, &.{code + 96});
             key.modifiers = @intFromEnum(inp.Modifier.control);
         },
         0x04 => {
-            key.printable = try allocator.dupe(u8, "d");
+            key.printable = try uni.unicodeFromBytes(allocator, "d");
             key.modifiers = @intFromEnum(inp.Modifier.control);
         },
         0x09 => key.code = .tab,
         0x7f => key.code = .backspace,
-        0x0d => key.printable = try allocator.dupe(u8, &.{'\n'}),
+        0x0d => key.printable = try uni.unicodeFromBytes(allocator, "\n"),
         0x1b => {
             // CSI ANSI escape sequences (prefix ^[ or 0x1b)
             if (input.items.len > 0 and input.items[0] == '[') {
@@ -582,7 +582,7 @@ pub fn parseAnsi(allocator: Allocator, input: *std.ArrayList(u8)) !inp.Key {
                     }
                 }
             } else if (input.items.len > 0 and isPrintableAscii(input.items[0])) {
-                key.printable = try allocator.dupe(u8, &.{input.items[0]});
+                key.printable = try uni.unicodeFromBytes(allocator, &.{input.items[0]});
                 key.modifiers |= @intFromEnum(inp.Modifier.alt);
                 _ = input.orderedRemove(0);
             } else if (input.items.len > 0 and input.items[0] == 'O') {
@@ -611,7 +611,7 @@ pub fn parseAnsi(allocator: Allocator, input: *std.ArrayList(u8)) !inp.Key {
                 const code2 = input.orderedRemove(0);
                 try printable.append(code2);
             }
-            key.printable = try printable.toOwnedSlice();
+            key.printable = try uni.unicodeFromBytes(allocator, printable.items);
         },
     }
     return key;

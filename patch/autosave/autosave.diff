@@ -1,8 +1,8 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index 8955c3c..8e75c62 100644
+index 70ee73d..0330989 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
-@@ -173,14 +173,6 @@ pub const Buffer = struct {
+@@ -177,14 +177,6 @@ pub const Buffer = struct {
          _ = try self.syncFs();
  
          self.file_history_index = self.history_index;
@@ -17,47 +17,56 @@ index 8955c3c..8e75c62 100644
      }
  
      pub fn moveCursor(self: *Buffer, new_cursor: Cursor) void {
-@@ -365,6 +357,11 @@ pub const Buffer = struct {
+@@ -369,6 +361,11 @@ pub const Buffer = struct {
          self.history_index = self.history.items.len - 1;
  
-         try main.editor.dotRepeatCommitReady();
+         main.editor.dotRepeatCommitReady();
 +
 +        if (main.editor.config.autosave) {
-+            try self.write();
 +            log.debug(@This(), "autosave {s}\n", .{self.path});
++            self.write() catch |e| log.err(@This(), "write buffer error: {}", .{e});
 +        }
      }
  
-     pub fn changeInsertText(self: *Buffer, text: []const u21) !void {
-@@ -513,6 +510,11 @@ pub const Buffer = struct {
+     pub fn changeInsertText(self: *Buffer, text: []const u21) FatalError!void {
+@@ -504,7 +501,7 @@ pub const Buffer = struct {
+         }
+     }
+ 
+-    pub fn undo(self: *Buffer) !void {
++    pub fn undo(self: *Buffer) FatalError!void {
+         log.debug(@This(), "undo: {?}/{}\n", .{ self.history_index, self.history.items.len });
+         if (self.history_index) |h_idx| {
+             const hist_to_undo = self.history.items[h_idx].items;
+@@ -517,6 +514,11 @@ pub const Buffer = struct {
                  self.moveCursor(inv_change.new_span.?.start);
              }
              self.history_index = if (h_idx > 0) h_idx - 1 else null;
 +
 +            if (main.editor.config.autosave) {
-+                try self.write();
++                self.write() catch |e| log.err(@This(), "write buffer error: {}", .{e});
 +                log.debug(@This(), "autosave {s}\n", .{self.path});
 +            }
          }
      }
  
-@@ -528,6 +530,11 @@ pub const Buffer = struct {
+@@ -532,6 +534,11 @@ pub const Buffer = struct {
              self.moveCursor(change.new_span.?.start);
          }
          self.history_index = redo_idx;
 +
 +        if (main.editor.config.autosave) {
-+            try self.write();
++            self.write() catch |e| log.err(@This(), "write buffer error: {}", .{e});
 +            log.debug(@This(), "autosave {s}\n", .{self.path});
 +        }
      }
  
      pub fn textAt(self: *const Buffer, span: Span) []const u21 {
 diff --git a/src/editor.zig b/src/editor.zig
-index 9767970..2bfd3e5 100644
+index fd3655c..aeb59f3 100644
 --- a/src/editor.zig
 +++ b/src/editor.zig
-@@ -30,6 +30,7 @@ pub const DotRepeat = enum {
+@@ -32,6 +32,7 @@ pub const DotRepeat = enum {
  };
  
  pub const Config = struct {
@@ -65,21 +74,3 @@ index 9767970..2bfd3e5 100644
      /// Char to denote terminal lines after end of buffer
      /// See vim's :h fillchars -> eob
      end_of_buffer_char: ?u8 = null,
-diff --git a/src/main.zig b/src/main.zig
-index d6b06e8..2e19b14 100644
---- a/src/main.zig
-+++ b/src/main.zig
-@@ -331,6 +331,13 @@ fn startEditor(allocator: std.mem.Allocator) !void {
- 
-                     if (editor.mode == .normal and eql(u8, multi_key, " w")) {
-                         try buffer.write();
-+                        const msg = try std.fmt.allocPrint(
-+                            allocator,
-+                            "{s} {}B written",
-+                            .{ buffer.path, buffer.content_raw.items.len },
-+                        );
-+                        defer allocator.free(msg);
-+                        try editor.sendMessage(msg);
-                     } else if (editor.mode == .normal and eql(u8, multi_key, " d")) {
-                         try buffer.goToDefinition();
-                     } else if (editor.mode == .normal and eql(u8, multi_key, " r")) {
