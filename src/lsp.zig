@@ -274,7 +274,7 @@ pub const LspConnection = struct {
             .textDocument = .{ .uri = buffer.uri },
             .position = buffer.cursor.toLsp(),
         });
-        }
+    }
 
     pub fn rename(self: *LspConnection, new_name: []const u8) !void {
         const buffer = main.editor.active_buffer;

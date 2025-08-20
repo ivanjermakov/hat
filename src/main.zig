@@ -34,7 +34,6 @@ pub const std_out = std.io.getStdOut();
 pub const std_err = std.io.getStdErr();
 pub var tty_in: std.fs.File = undefined;
 
-
 pub var editor: edi.Editor = undefined;
 pub var term: ter.Terminal = undefined;
 pub var args: Args = .{};
@@ -185,7 +184,7 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                         try editor.command_line.insert(raw_key.printable.?);
                     }
 
-                // code action menu
+                    // code action menu
                 } else if (code_action) |action| {
                     try buffer.codeActionExecute(action);
 
@@ -439,7 +438,7 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                 // redraw next frame to clear invalid highlights
                 editor.dirty.draw = true;
             }
-            try buffer.highlight();
+            buffer.highlight() catch |e| log.err(@This(), "highlight LSP error: {}", .{e});
         }
         perf.draw = timer.lap();
 
