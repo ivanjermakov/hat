@@ -11,10 +11,10 @@ index 17f68e6..955a94c 100644
      buffer: Area,
  };
 diff --git a/src/editor.zig b/src/editor.zig
-index d84af08..d0124c2 100644
+index 9767970..15d1b4a 100644
 --- a/src/editor.zig
 +++ b/src/editor.zig
-@@ -32,6 +32,11 @@ pub const Config = struct {
+@@ -33,6 +33,11 @@ pub const Config = struct {
      /// Char to denote terminal lines after end of buffer
      /// See vim's :h fillchars -> eob
      end_of_buffer_char: ?u8 = null,
@@ -27,7 +27,7 @@ index d84af08..d0124c2 100644
  
  pub const Editor = struct {
 diff --git a/src/main.zig b/src/main.zig
-index 2270272..51c092f 100644
+index d6b06e8..790667b 100644
 --- a/src/main.zig
 +++ b/src/main.zig
 @@ -91,7 +91,7 @@ pub fn main() !void {

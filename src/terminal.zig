@@ -183,7 +183,7 @@ pub const Terminal = struct {
             if (buffer.offset.col > 0) {
                 if (buffer.offset.col >= line.len) continue;
                 const offscreen_line = line[0..@intCast(buffer.offset.col)];
-                byte += try uni.utf8ByteLen(offscreen_line);
+                byte += try uni.unicodeByteLen(offscreen_line);
                 line = line[@intCast(buffer.offset.col)..];
             } else {
                 for (0..@intCast(-buffer.offset.col)) |_| {
@@ -441,17 +441,20 @@ pub fn parseAnsi(allocator: Allocator, input: *std.ArrayList(u8)) !inp.Key {
     var key: inp.Key = .{ .allocator = allocator };
     const code = input.orderedRemove(0);
     switch (code) {
-        0x00...0x08, 0x0e, 0x10...0x19 => {
+        0x00...0x03, 0x05...0x08, 0x0e, 0x10...0x19 => {
             // offset 96 converts \x1 to 'a', \x2 to 'b', and so on
-            // TODO: might not be printable
-            key.printable = try allocator.dupe(u8, &.{code + 96});
+            key.printable = try uni.unicodeFromBytes(allocator, &.{code + 96});
+            key.modifiers = @intFromEnum(inp.Modifier.control);
+        },
+        0x04 => {
+            key.printable = try uni.unicodeFromBytes(allocator, "d");
             key.modifiers = @intFromEnum(inp.Modifier.control);
         },
         0x09 => key.code = .tab,
         0x7f => key.code = .backspace,
-        0x0d => key.printable = try allocator.dupe(u8, &.{'\n'}),
+        0x0d => key.printable = try uni.unicodeFromBytes(allocator, "\n"),
         0x1b => {
-            // ANSI escape sequences \e[
+            // CSI ANSI escape sequences (prefix ^[ or 0x1b)
             if (input.items.len > 0 and input.items[0] == '[') {
                 _ = input.orderedRemove(0);
                 if (input.items.len > 0) {
@@ -472,16 +475,34 @@ pub fn parseAnsi(allocator: Allocator, input: *std.ArrayList(u8)) !inp.Key {
                             _ = input.orderedRemove(0);
                             key.code = .left;
                         },
+                        'F' => {
+                            _ = input.orderedRemove(0);
+                            key.code = .end;
+                        },
+                        'H' => {
+                            _ = input.orderedRemove(0);
+                            key.code = .home;
+                        },
                         '3' => {
                             _ = input.orderedRemove(0);
                             if (input.items.len > 0 and input.items[0] == '~') _ = input.orderedRemove(0);
                             key.code = .delete;
                         },
+                        '5' => {
+                            _ = input.orderedRemove(0);
+                            if (input.items.len > 0 and input.items[0] == '~') _ = input.orderedRemove(0);
+                            key.code = .pgup;
+                        },
+                        '6' => {
+                            _ = input.orderedRemove(0);
+                            if (input.items.len > 0 and input.items[0] == '~') _ = input.orderedRemove(0);
+                            key.code = .pgdown;
+                        },
                         else => return error.TodoCsi,
                     }
                 }
             } else if (input.items.len > 0 and isPrintableAscii(input.items[0])) {
-                key.printable = try allocator.dupe(u8, &.{input.items[0]});
+                key.printable = try uni.unicodeFromBytes(allocator, &.{input.items[0]});
                 key.modifiers |= @intFromEnum(inp.Modifier.alt);
                 _ = input.orderedRemove(0);
             } else if (input.items.len > 0 and input.items[0] == 'O') {
@@ -510,7 +531,7 @@ pub fn parseAnsi(allocator: Allocator, input: *std.ArrayList(u8)) !inp.Key {
                 const code2 = input.orderedRemove(0);
                 try printable.append(code2);
             }
-            key.printable = try printable.toOwnedSlice();
+            key.printable = try uni.unicodeFromBytes(allocator, printable.items);
         },
     }
     return key;
