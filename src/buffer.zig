@@ -134,7 +134,7 @@ pub const Buffer = struct {
         };
         if (self.ts_state) |*ts_state| try ts_state.reparse(self.content_raw.items);
         try self.updateLinePositions();
-        try self.updateGitHunks();
+        self.updateGitHunks() catch |e| log.err(@This(), "update git signs error: {}\n", .{e});
     }
 
     pub fn updateContent(self: *Buffer) !void {
