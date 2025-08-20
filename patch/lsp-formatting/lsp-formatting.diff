@@ -1,8 +1,8 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index 2f7c4b9..8c6b915 100644
+index 8955c3c..3a788d5 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
-@@ -679,6 +679,12 @@ pub const Buffer = struct {
+@@ -669,6 +669,12 @@ pub const Buffer = struct {
          try self.commitChanges();
      }
  
@@ -16,7 +16,7 @@ index 2f7c4b9..8c6b915 100644
          if (self.selection) |selection| {
              try clp.write(self.allocator, self.rawTextAt(selection));
 diff --git a/src/lsp.zig b/src/lsp.zig
-index 07fa78a..49e765a 100644
+index 8ed46b8..d58cdbe 100644
 --- a/src/lsp.zig
 +++ b/src/lsp.zig
 @@ -119,6 +119,7 @@ pub const LspConnection = struct {
@@ -77,7 +77,7 @@ index 07fa78a..49e765a 100644
          _ = self;
          // log.debug(@This(), "notification: {s}\n", .{notif.method});
 diff --git a/src/main.zig b/src/main.zig
-index 2270272..b45a5c3 100644
+index d6b06e8..91a6d67 100644
 --- a/src/main.zig
 +++ b/src/main.zig
 @@ -337,6 +337,8 @@ fn startEditor(allocator: std.mem.Allocator) !void {
