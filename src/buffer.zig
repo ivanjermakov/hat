@@ -637,9 +637,6 @@ pub const Buffer = struct {
         defer self.allocator.free(command_b);
         log.debug(@This(), "pipe command: {s}\n", .{command_b});
 
-        const argv = try ext.toArgv(self.allocator, command_b);
-        defer self.allocator.free(argv);
-
         const span = if (self.selection) |selection|
             selection
         else
@@ -649,7 +646,7 @@ pub const Buffer = struct {
         defer self.allocator.free(in_b);
 
         var exit_code: u8 = undefined;
-        const out_b = ext.runExternalWait(self.allocator, argv, in_b, &exit_code) catch |e| {
+        const out_b = ext.runExternalWait(self.allocator, &.{ "sh", "-c", command_b }, in_b, &exit_code) catch |e| {
             log.err(@This(), "{}\n", .{e});
             if (@errorReturnTrace()) |trace| std.debug.dumpStackTrace(trace.*);
             return;
