@@ -376,8 +376,8 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     removed.deinit();
                     repeat_count = null;
                 }
-                // log.debug(@This(), "uncommitted: {any}\n", .{editor.dot_repeat_input_uncommitted.items});
-                // log.debug(@This(), "committed: {any}\n", .{editor.dot_repeat_input.items});
+                log.trace(@This(), "uncommitted: {any}\n", .{editor.dot_repeat_input_uncommitted.items});
+                log.trace(@This(), "committed: {any}\n", .{editor.dot_repeat_input.items});
             }
         }
         perf.mapping = timer.lap();

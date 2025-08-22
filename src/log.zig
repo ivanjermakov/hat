@@ -12,13 +12,15 @@ const Level = enum(u8) {
     warn,
     info,
     debug,
+    trace,
 
     fn ansi(self: Level) co.AnsiColor {
         return switch (self) {
             .err => .red,
             .warn => .yellow,
             .info => .blue,
-            .debug => .bright_black,
+            .debug => .white,
+            .trace => .bright_black,
         };
     }
 
@@ -36,6 +38,7 @@ const Level = enum(u8) {
             .warn => writer.writeAll("wrn"),
             .info => writer.writeAll("inf"),
             .debug => writer.writeAll("dbg"),
+            .trace => writer.writeAll("trc"),
         };
         try writer.writeAll(co.AnsiColor.reset);
     }
@@ -55,6 +58,10 @@ pub fn info(comptime caller: type, comptime fmt: []const u8, args: anytype) void
 
 pub fn debug(comptime caller: type, comptime fmt: []const u8, args: anytype) void {
     log(caller, .debug, fmt, args);
+}
+
+pub fn trace(comptime caller: type, comptime fmt: []const u8, args: anytype) void {
+    log(caller, .trace, fmt, args);
 }
 
 pub fn assertEql(comptime Caller: type, comptime T: type, actual: []const T, expected: []const T) void {

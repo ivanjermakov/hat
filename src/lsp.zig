@@ -163,7 +163,7 @@ pub const LspConnection = struct {
             const rpc_message: lsp.JsonRPCMessage = msg_json.value;
             switch (rpc_message) {
                 .response => |resp| {
-                    // log.debug(@This(), "< raw response: {s}\n", .{raw_msg_json});
+                    log.trace(@This(), "< raw response: {s}\n", .{raw_msg_json});
                     const response_id = resp.id.?.number;
 
                     const response_result = b: switch (resp.result_or_error) {
@@ -196,7 +196,7 @@ pub const LspConnection = struct {
                     try self.handleNotification(arena.allocator(), notif);
                 },
                 .request => {
-                    // log.debug(@This(), "< raw request: {s}\n", .{raw_msg_json});
+                    log.trace(@This(), "< raw request: {s}\n", .{raw_msg_json});
                 },
             }
         }
@@ -358,7 +358,7 @@ pub const LspConnection = struct {
             .params = params,
         };
         const json_message = try std.json.stringifyAlloc(self.allocator, request, default_stringify_opts);
-        // log.debug(@This(), "> raw request: {s}\n", .{json_message});
+        log.trace(@This(), "> raw request: {s}\n", .{json_message});
         const rpc_message = try std.fmt.allocPrint(self.allocator, "Content-Length: {}\r\n\r\n{s}", .{ json_message.len, json_message });
         _ = try self.child.stdin.?.write(rpc_message);
         defer self.allocator.free(rpc_message);
@@ -376,7 +376,7 @@ pub const LspConnection = struct {
         };
         const json_message = try std.json.stringifyAlloc(self.allocator, request, default_stringify_opts);
         defer self.allocator.free(json_message);
-        // log.debug(@This(), "> raw notification: {s}\n", .{json_message});
+        log.trace(@This(), "> raw notification: {s}\n", .{json_message});
         const rpc_message = try std.fmt.allocPrint(self.allocator, "Content-Length: {}\r\n\r\n{s}", .{ json_message.len, json_message });
         _ = try self.child.stdin.?.write(rpc_message);
         defer self.allocator.free(rpc_message);
@@ -394,7 +394,7 @@ pub const LspConnection = struct {
         };
         const json_message = try std.json.stringifyAlloc(self.allocator, request, default_stringify_opts);
         defer self.allocator.free(json_message);
-        // log.debug(@This(), "> raw response: {s}\n", .{json_message});
+        log.trace(@This(), "> raw response: {s}\n", .{json_message});
         const rpc_message = try std.fmt.allocPrint(self.allocator, "Content-Length: {}\r\n\r\n{s}", .{ json_message.len, json_message });
         _ = try self.child.stdin.?.write(rpc_message);
         defer self.allocator.free(rpc_message);
@@ -515,7 +515,7 @@ pub const LspConnection = struct {
 
     fn handleNotification(self: *LspConnection, arena: Allocator, notif: lsp.JsonRPCMessage.Notification) !void {
         _ = self;
-        // log.debug(@This(), "notification: {s}\n", .{notif.method});
+        log.trace(@This(), "notification: {s}\n", .{notif.method});
         if (std.mem.eql(u8, notif.method, "window/logMessage")) {
             const params_typed = try std.json.parseFromValue(types.LogMessageParams, arena, notif.params.?, .{});
             log.debug(@This(), "server log: {s}\n", .{params_typed.value.message});
