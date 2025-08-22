@@ -73,7 +73,17 @@ pub fn main() !void {
         args.path = @constCast(arg);
     }
     log.enabled = args.log;
-    log.info(@This(), "logging enabled\n", .{});
+    if (log.enabled) {
+        if (std.posix.getenv(log.log_level_var)) |level_var| {
+            inline for (std.meta.fields(log.Level)) |l| {
+                if (std.mem.eql(u8, l.name, level_var)) {
+                    log.level = @enumFromInt(l.value);
+                    break;
+                }
+            }
+        }
+    }
+    log.info(@This(), "logging enabled, level: {}\n", .{log.level});
 
     if (args.printer) {
         const path = args.path orelse return error.NoPath;

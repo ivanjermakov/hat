@@ -4,10 +4,11 @@ const co = @import("color.zig");
 const dt = @import("datetime.zig");
 const main = @import("main.zig");
 
+pub const log_level_var = "HAT_LOG";
 pub var enabled = false;
 pub var level: Level = .debug;
 
-const Level = enum(u8) {
+pub const Level = enum(u8) {
     err = 0,
     warn,
     info,
