@@ -9,7 +9,7 @@ pub var enabled = false;
 pub var level: Level = .debug;
 
 pub const Level = enum(u8) {
-    err = 0,
+    @"error" = 0,
     warn,
     info,
     debug,
@@ -17,7 +17,7 @@ pub const Level = enum(u8) {
 
     fn ansi(self: Level) co.AnsiColor {
         return switch (self) {
-            .err => .red,
+            .@"error" => .red,
             .warn => .yellow,
             .info => .blue,
             .debug => .white,
@@ -35,7 +35,7 @@ pub const Level = enum(u8) {
         _ = options;
         try std.fmt.format(writer, "{}", .{self.ansi()});
         try switch (self) {
-            .err => writer.writeAll("err"),
+            .@"error" => writer.writeAll("err"),
             .warn => writer.writeAll("wrn"),
             .info => writer.writeAll("inf"),
             .debug => writer.writeAll("dbg"),
@@ -46,7 +46,7 @@ pub const Level = enum(u8) {
 };
 
 pub fn err(comptime caller: type, comptime fmt: []const u8, args: anytype) void {
-    log(caller, .err, fmt, args);
+    log(caller, .@"error", fmt, args);
 }
 
 pub fn warn(comptime caller: type, comptime fmt: []const u8, args: anytype) void {
