@@ -275,7 +275,7 @@ pub const Buffer = struct {
         main.editor.dirty.draw = true;
     }
 
-    /// TODO: search for next word in subsequent lines
+    /// Move to the next word start on the current line
     pub fn moveToNextWord(self: *Buffer) void {
         const old_cursor = self.cursor;
         const line = self.lineContent(@intCast(self.cursor.row));
@@ -290,7 +290,7 @@ pub const Buffer = struct {
         }
     }
 
-    /// TODO: search for next word in preceding lines
+    /// Move to the previous word start on the current line
     pub fn moveToPrevWord(self: *Buffer) void {
         const old_cursor = self.cursor;
         const line = self.lineContent(@intCast(self.cursor.row));
@@ -312,7 +312,7 @@ pub const Buffer = struct {
         main.editor.dotRepeatInside();
     }
 
-    /// TODO: search for next word in subsequent lines
+    /// Move to the next word end on the current line
     pub fn moveToWordEnd(self: *Buffer) void {
         const old_cursor = self.cursor;
         const line = self.lineContent(@intCast(self.cursor.row));
@@ -327,6 +327,8 @@ pub const Buffer = struct {
         }
     }
 
+    /// Move to the next token end on the current line
+    /// @see `tokenEnd()`
     pub fn moveToTokenEnd(self: *Buffer) void {
         const old_cursor = self.cursor;
         const line = self.lineContent(@intCast(self.cursor.row));
@@ -510,7 +512,6 @@ pub const Buffer = struct {
             const hist_to_undo = self.history.items[h_idx].items;
             var change_iter = std.mem.reverseIterator(hist_to_undo);
             while (change_iter.next()) |change_to_undo| {
-                // log.debug(@This(), "undo change: {}\n", .{change_to_undo});
                 var inv_change = try change_to_undo.invert();
                 try self.applyChange(&inv_change);
                 try self.pending_changes.append(inv_change);

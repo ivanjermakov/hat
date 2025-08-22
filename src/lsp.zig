@@ -427,7 +427,7 @@ pub const LspConnection = struct {
             },
             .array_of_Location => |locations| {
                 if (locations.len == 0) break :b null;
-                if (locations.len > 1) log.debug(@This(), "TODO: multiple locations\n", .{});
+                // pick first location if multiple provided
                 break :b locations[0];
             },
         };
