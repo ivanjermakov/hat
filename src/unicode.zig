@@ -8,8 +8,7 @@ pub fn unicodeFromBytes(allocator: Allocator, bytes: []const u8) ![]const u21 {
 }
 
 pub fn unicodeFromBytesBuf(buf: []u21, bytes: []const u8) !usize {
-    const view = std.unicode.Utf8View.initUnchecked(bytes);
-    var iter = view.iterator();
+    var iter = LooseUtf8Iterator{ .bytes = bytes };
     var written: usize = 0;
     while (iter.nextCodepoint()) |ch| {
         buf[written] = ch;
@@ -39,3 +38,25 @@ pub fn unicodeByteLen(utf: []const u21) !usize {
     for (utf) |ch| len += try std.unicode.utf8CodepointSequenceLength(ch);
     return len;
 }
+
+/// Similar to std.unicode.Utf8Iterator, but handles non-unicode without panics.
+/// Non-unicode bytes are returned as-is, just casting u8 to u21
+pub const LooseUtf8Iterator = struct {
+    bytes: []const u8,
+    i: usize = 0,
+
+    pub fn nextCodepointSlice(self: *LooseUtf8Iterator) ?[]const u8 {
+        if (self.i >= self.bytes.len) {
+            return null;
+        }
+
+        const cp_len = std.unicode.utf8ByteSequenceLength(self.bytes[self.i]) catch 1;
+        self.i += cp_len;
+        return self.bytes[self.i - cp_len .. self.i];
+    }
+
+    pub fn nextCodepoint(self: *LooseUtf8Iterator) ?u21 {
+        const slice = self.nextCodepointSlice() orelse return null;
+        return std.unicode.utf8Decode(slice) catch slice[0];
+    }
+};
