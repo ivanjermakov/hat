@@ -94,7 +94,7 @@ pub const Terminal = struct {
         try self.drawNumberLine(buffer, layout.number_line);
         if (main.editor.command_line.command == null) try self.drawMessage();
 
-        try self.moveCursor(buffer.cursor
+        try self.moveCursor((Cursor{ .row = buffer.cursor.row, .col = @intCast(cursorTermCol(buffer, buffer.cursor)) })
             .applyOffset(buffer.offset.negate())
             .applyOffset(layout.buffer.pos));
 
@@ -181,7 +181,7 @@ pub const Terminal = struct {
             if (buffer_row >= buffer.line_positions.items.len) break;
 
             var byte: usize = if (buffer_row > 0) buffer.line_byte_positions.items[@intCast(buffer_row - 1)] else 0;
-            var term_col: i32 = 0;
+            var area_col: i32 = 0;
 
             var line = buffer.lineContent(@intCast(buffer_row));
             try self.moveCursor(.{ .row = @intCast(term_row), .col = area.pos.col });
@@ -200,9 +200,9 @@ pub const Terminal = struct {
             for (0..line.len + 1) |i| {
                 const ch = if (i == line.len) ' ' else line[i];
                 attrs_stream.reset();
-                const buffer_col = @as(i32, @intCast(term_col)) + buffer.offset.col;
+                const buffer_col = @as(i32, @intCast(area_col)) + buffer.offset.col;
 
-                if (term_col >= @as(i32, @intCast(area.dims.width))) break;
+                if (area_col >= @as(i32, @intCast(area.dims.width))) break;
                 if (buffer.ts_state) |ts_state| {
                     const highlight_spans = ts_state.highlight.spans.items;
                     const ch_attrs: []const co.Attr = b: while (span_index < highlight_spans.len) {
@@ -247,7 +247,9 @@ pub const Terminal = struct {
                 try self.writeChar(ch);
 
                 byte += try std.unicode.utf8CodepointSequenceLength(ch);
-                term_col += 1;
+                const col_width = colWidth(ch);
+                area_col += @intCast(col_width);
+                if (col_width > 1) try self.moveCursor(.{ .row = @intCast(term_row), .col = area.pos.col + area_col });
             }
             // reached line end
             try self.resetAttributes();
@@ -587,4 +589,23 @@ fn ansiCodeToString(allocator: Allocator, code: u8) ![]const u8 {
 
 fn isPrintableAscii(code: u8) bool {
     return code >= 0x21 and code <= 0x7e;
+}
+
+/// Display with in term columns of a written codepoint
+/// Has to be coherent with `Buffer.writeChar`
+fn colWidth(ch: u21) usize {
+    return switch (ch) {
+        0x00...0x7F => 1,
+        0x80...0xA0 => 4,
+        else => uni.colWidth(ch) orelse 1,
+    };
+}
+
+fn cursorTermCol(buffer: *const buf.Buffer, cursor: Cursor) usize {
+    const line = buffer.lineContent(@intCast(cursor.row));
+    var col: usize = 0;
+    for (0..@intCast(cursor.col)) |char_idx| {
+        col += colWidth(line[char_idx]);
+    }
+    return col;
 }
