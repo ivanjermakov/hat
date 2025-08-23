@@ -238,8 +238,7 @@ pub const Terminal = struct {
                     last_attrs = last_attrs_buf[0..try attrs_stream.getPos()];
                 }
 
-                // TODO: handle tab/unprintable/wide chars to have more convenient representation
-                try self.format("{u}", .{ch});
+                try self.writeChar(ch);
 
                 byte += try std.unicode.utf8CodepointSequenceLength(ch);
                 term_col += 1;
@@ -390,6 +389,17 @@ pub const Terminal = struct {
         }
         try self.resetAttributes();
         try self.moveCursor(.{ .row = @intCast(last_row), .col = @intCast(prefix.len + command_line.cursor) });
+    }
+
+    /// Some codepoints need special treatment before writing to terminal
+    fn writeChar(self: *Terminal, ch: u21) !void {
+        switch (ch) {
+            // @see https://www.compart.com/en/unicode/U+2400
+            0x00...0x09, 0x0B...0x1F => try self.format("{u}", .{ch + 0x2400}),
+            0x7F => try self.format("{u}", .{0x2421}),
+            0x80...0xA0 => try self.format("<{X:0>2}>", .{ch}),
+            else => try self.format("{u}", .{ch}),
+        }
     }
 };
 
