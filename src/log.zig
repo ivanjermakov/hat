@@ -5,11 +5,11 @@ const dt = @import("datetime.zig");
 const main = @import("main.zig");
 
 pub const log_level_var = "HAT_LOG";
-pub var enabled = false;
-pub var level: Level = .debug;
+pub var level: Level = .none;
 
 pub const Level = enum(u8) {
-    @"error" = 0,
+    none = 0,
+    @"error",
     warn,
     info,
     debug,
@@ -17,6 +17,7 @@ pub const Level = enum(u8) {
 
     fn ansi(self: Level) co.AnsiColor {
         return switch (self) {
+            .none => unreachable,
             .@"error" => .red,
             .warn => .yellow,
             .info => .blue,
@@ -35,6 +36,7 @@ pub const Level = enum(u8) {
         _ = options;
         try std.fmt.format(writer, "{}", .{self.ansi()});
         try switch (self) {
+            .none => unreachable,
             .@"error" => writer.writeAll("err"),
             .warn => writer.writeAll("wrn"),
             .info => writer.writeAll("inf"),
@@ -72,8 +74,24 @@ pub fn assertEql(comptime Caller: type, comptime T: type, actual: []const T, exp
     }
 }
 
+pub fn enabled(lvl: Level) bool {
+    return @intFromEnum(lvl) <= @intFromEnum(level);
+}
+
+pub fn init() void {
+    if (std.posix.getenv(log_level_var)) |level_var| {
+        inline for (std.meta.fields(Level)) |l| {
+            if (std.mem.eql(u8, l.name, level_var)) {
+                level = @enumFromInt(l.value);
+                break;
+            }
+        }
+    }
+    info(@This(), "logging enabled, level: {}\n", .{level});
+}
+
 fn log(comptime caller: type, comptime lvl: Level, comptime fmt: []const u8, args: anytype) void {
-    if (!(enabled and @intFromEnum(lvl) <= @intFromEnum(level))) return;
+    if (!enabled(lvl)) return;
     const writer = main.std_err.writer();
 
     var now_buf: [32]u8 = undefined;

@@ -101,7 +101,7 @@ pub const CompletionMenu = struct {
         }
         self.active_item = 0;
 
-        if (log.enabled) {
+        if (log.enabled(.debug)) {
             if (self.display_items.items.len > 0) {
                 log.debug(@This(), "menu:", .{});
                 for (self.display_items.items) |i| {

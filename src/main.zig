@@ -21,7 +21,6 @@ const uni = @import("unicode.zig");
 
 pub const Args = struct {
     path: ?[]const u8 = null,
-    log: bool = false,
     printer: bool = false,
     highlight_line: ?usize = null,
     term_height: ?usize = null,
@@ -42,6 +41,8 @@ pub var args: Args = .{};
 pub var main_loop_mutex: std.Thread.Mutex = .{};
 
 pub fn main() !void {
+    log.init();
+
     var debug_allocator: std.heap.DebugAllocator(.{ .stack_trace_frames = 10 }) = .init;
     defer _ = debug_allocator.deinit();
     const allocator = if (builtin.mode == .Debug) debug_allocator.allocator() else std.heap.c_allocator;
@@ -53,10 +54,7 @@ pub fn main() !void {
     var cmd_args = std.process.args();
     _ = cmd_args.skip();
     while (cmd_args.next()) |arg| {
-        if (std.mem.eql(u8, arg, "-v")) {
-            args.log = true;
-            continue;
-        } else if (std.mem.eql(u8, arg, "--printer")) {
+        if (std.mem.eql(u8, arg, "--printer")) {
             args.printer = true;
             continue;
         } else if (std.mem.startsWith(u8, arg, "--highlight-line=")) {
@@ -72,18 +70,6 @@ pub fn main() !void {
         }
         args.path = @constCast(arg);
     }
-    log.enabled = args.log;
-    if (log.enabled) {
-        if (std.posix.getenv(log.log_level_var)) |level_var| {
-            inline for (std.meta.fields(log.Level)) |l| {
-                if (std.mem.eql(u8, l.name, level_var)) {
-                    log.level = @enumFromInt(l.value);
-                    break;
-                }
-            }
-        }
-    }
-    log.info(@This(), "logging enabled, level: {}\n", .{log.level});
 
     if (args.printer) {
         const path = args.path orelse return error.NoPath;
@@ -488,7 +474,7 @@ comptime {
 
 pub fn testSetup() !void {
     const allocator = std.testing.allocator;
-    log.enabled = true;
+    log.level = .@"error";
     editor = try edi.Editor.init(allocator, .{});
     term = ter.Terminal{
         .writer = .{ .unbuffered_writer = std.io.null_writer.any() },

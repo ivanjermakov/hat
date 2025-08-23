@@ -293,7 +293,7 @@ pub const Editor = struct {
                 rm.deinit();
             }
             try self.sendMessageFmt("recorded @{c}", .{name});
-            if (log.enabled) {
+            if (log.enabled(.debug)) {
                 var keys_str = std.ArrayList(u8).init(self.allocator);
                 defer keys_str.deinit();
                 for (macro.items) |key| {

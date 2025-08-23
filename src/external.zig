@@ -11,7 +11,7 @@ pub fn runExternalWait(
     input: ?[]const u8,
     exit_code: ?*u8,
 ) ![]const u8 {
-    if (log.enabled) {
+    if (log.enabled(.debug)) {
         log.debug(@This(), "running command:", .{});
         for (cmd) |c| std.debug.print(" \"{s}\"", .{c});
         std.debug.print("\n", .{});
