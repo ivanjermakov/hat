@@ -127,11 +127,12 @@ pub const Buffer = struct {
         try self.updateLinePositions();
     }
 
-    pub fn updateContent(self: *Buffer) !void {
+    pub fn updateContent(self: *Buffer) FatalError!void {
         self.content.clearRetainingCapacity();
-        const view = try std.unicode.Utf8View.init(self.content_raw.items);
-        var iter = view.iterator();
-        while (iter.nextCodepoint()) |ch| try self.content.append(ch);
+        try self.content.ensureUnusedCapacity(self.content_raw.items.len);
+        self.content.expandToCapacity();
+        const len = try uni.unicodeFromBytesBuf(self.content.items, self.content_raw.items);
+        self.content.items.len = len;
     }
 
     pub fn deinit(self: *Buffer) void {

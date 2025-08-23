@@ -2,11 +2,20 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 
 pub fn unicodeFromBytes(allocator: Allocator, bytes: []const u8) ![]const u21 {
-    var b = std.ArrayList(u21).init(allocator);
-    const view = try std.unicode.Utf8View.init(bytes);
+    const b = try allocator.alloc(u21, bytes.len);
+    const len = try unicodeFromBytesBuf(b, bytes);
+    return b[0..len];
+}
+
+pub fn unicodeFromBytesBuf(buf: []u21, bytes: []const u8) !usize {
+    const view = std.unicode.Utf8View.initUnchecked(bytes);
     var iter = view.iterator();
-    while (iter.nextCodepoint()) |ch| try b.append(ch);
-    return b.toOwnedSlice();
+    var written: usize = 0;
+    while (iter.nextCodepoint()) |ch| {
+        buf[written] = ch;
+        written += 1;
+    }
+    return written;
 }
 
 pub fn unicodeToBytes(allocator: Allocator, utf: []const u21) ![]const u8 {
