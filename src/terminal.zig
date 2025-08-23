@@ -58,11 +58,13 @@ pub const Terminal = struct {
         _ = c.tcsetattr(main.tty_in.handle, c.TCSANOW, &tty);
 
         try self.switchBuf(true);
+        try self.wrapAround(false);
     }
 
     pub fn deinit(self: *Terminal) void {
         self.clear() catch {};
         self.switchBuf(false) catch {};
+        self.wrapAround(true) catch {};
         self.write(cursor_type.steady_block) catch {};
         self.flush() catch {};
     }
@@ -115,6 +117,10 @@ pub const Terminal = struct {
     pub fn switchBuf(self: *Terminal, alternative: bool) !void {
         try self.write(if (alternative) "\x1b[?1049h" else "\x1b[?1049l");
         try self.flush();
+    }
+
+    pub fn wrapAround(self: *Terminal, enable: bool) !void {
+        try self.write(if (enable) "\x1b[?7h" else "\x1b[?7l");
     }
 
     fn resetAttributes(self: *Terminal) !void {
