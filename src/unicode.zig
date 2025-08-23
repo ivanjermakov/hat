@@ -10,7 +10,7 @@ pub fn unicodeFromBytes(allocator: Allocator, bytes: []const u8) ![]const u21 {
 pub fn unicodeFromBytesBuf(buf: []u21, bytes: []const u8) !usize {
     var iter = LooseUtf8Iterator{ .bytes = bytes };
     var written: usize = 0;
-    while (iter.nextCodepoint()) |ch| {
+    while (iter.next()) |ch| {
         buf[written] = ch;
         written += 1;
     }
@@ -45,18 +45,15 @@ pub const LooseUtf8Iterator = struct {
     bytes: []const u8,
     i: usize = 0,
 
-    pub fn nextCodepointSlice(self: *LooseUtf8Iterator) ?[]const u8 {
-        if (self.i >= self.bytes.len) {
-            return null;
-        }
+    pub fn next(self: *LooseUtf8Iterator) ?u21 {
+        if (self.i >= self.bytes.len) return null;
 
-        const cp_len = std.unicode.utf8ByteSequenceLength(self.bytes[self.i]) catch 1;
-        self.i += cp_len;
-        return self.bytes[self.i - cp_len .. self.i];
-    }
-
-    pub fn nextCodepoint(self: *LooseUtf8Iterator) ?u21 {
-        const slice = self.nextCodepointSlice() orelse return null;
-        return std.unicode.utf8Decode(slice) catch slice[0];
+        var cp_len = std.unicode.utf8ByteSequenceLength(self.bytes[self.i]) catch 1;
+        defer self.i += cp_len;
+        const try_slice = self.bytes[self.i .. self.i + cp_len];
+        return std.unicode.utf8Decode(try_slice) catch {
+            cp_len = 1;
+            return try_slice[0];
+        };
     }
 };
