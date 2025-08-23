@@ -238,6 +238,7 @@ pub const Terminal = struct {
                     last_attrs = last_attrs_buf[0..try attrs_stream.getPos()];
                 }
 
+                // TODO: handle tab/unprintable/wide chars to have more convenient representation
                 try self.format("{u}", .{ch});
 
                 byte += try std.unicode.utf8CodepointSequenceLength(ch);

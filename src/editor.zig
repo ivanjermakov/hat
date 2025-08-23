@@ -123,7 +123,6 @@ pub const Editor = struct {
 
     pub fn findBufferByPath(self: *Editor, path: []const u8) ?*buf.Buffer {
         for (self.buffers.items) |buffer| {
-            // TODO: resolve paths
             if (std.mem.eql(u8, buffer.path, path)) {
                 return buffer;
             }

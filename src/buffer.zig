@@ -998,7 +998,6 @@ fn isAlphabet(ch: u21) bool {
 }
 
 fn isWhitespace(ch: u21) bool {
-    // TODO: tabs, other
     return ch == ' ';
 }
 
