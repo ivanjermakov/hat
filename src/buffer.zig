@@ -196,17 +196,16 @@ pub const Buffer = struct {
             self.moveCursor(.{ .row = 0, .col = new_cursor.col });
             return;
         }
-        self.scrollForCursor(new_cursor);
-
-        const term_cursor = new_cursor.applyOffset(self.offset.negate());
-        if (term_cursor.row < 0 or term_cursor.col < 0) return;
-
         if (new_cursor.row >= self.line_positions.items.len) {
-            log.debug(@This(), "nooo!\n", .{});
             self.moveCursor(.{ .row = @intCast(self.line_positions.items.len - 1), .col = new_cursor.col });
             return;
         }
-        const max_col = self.lineLength(@intCast(new_cursor.row));
+        if (new_cursor.col < 0) {
+            self.moveCursor(.{ .row = new_cursor.row, .col = 0 });
+            return;
+        }
+
+        const max_col = ter.lineColLength(self.lineContent(@intCast(new_cursor.row)));
         var col: i32 = @intCast(@min(new_cursor.col, max_col));
         if (vertical_only) {
             if (self.cursor_desired_col) |desired| {
@@ -217,14 +216,11 @@ pub const Buffer = struct {
             self.cursor_desired_col = @intCast(col);
         }
 
-        const valid_cursor = Cursor{
+        self.cursor = .{
             .row = new_cursor.row,
             .col = col,
         };
-
-        self.scrollForCursor(valid_cursor);
-
-        (&self.cursor).* = valid_cursor;
+        self.scrollForCursor(self.cursor);
 
         switch (main.editor.mode) {
             .select => {
@@ -884,20 +880,24 @@ pub const Buffer = struct {
     }
 
     fn scrollForCursor(self: *Buffer, new_buf_cursor: Cursor) void {
-        const term_cursor = new_buf_cursor.applyOffset(self.offset.negate());
+        const area_cursor = (Cursor{ .row = new_buf_cursor.row, .col = @intCast(ter.cursorTermCol(self, new_buf_cursor)) })
+            .applyOffset(self.offset.negate());
         const dims = ter.computeLayout(main.term.dimensions).buffer.dims;
-        if (term_cursor.row < 0 and new_buf_cursor.row >= 0) {
-            self.offset.row += term_cursor.row;
+        if (area_cursor.row < 0) {
+            self.offset.row += area_cursor.row;
             main.editor.dirty.draw = true;
-        } else if (term_cursor.row >= dims.height and new_buf_cursor.row < self.line_positions.items.len) {
-            self.offset.row += 1 + term_cursor.row - @as(i32, @intCast(dims.height));
+        }
+        if (area_cursor.row >= dims.height and new_buf_cursor.row < self.line_positions.items.len) {
+            self.offset.row += 1 + area_cursor.row - @as(i32, @intCast(dims.height));
             main.editor.dirty.draw = true;
-        } else if (term_cursor.col < 0 and new_buf_cursor.col >= 0) {
-            self.offset.col += term_cursor.col;
+        }
+        if (area_cursor.col < 0) {
+            self.offset.col += area_cursor.col;
             main.editor.dirty.draw = true;
-        } else if (term_cursor.col >= dims.width and new_buf_cursor.row >= 0 and new_buf_cursor.row < self.line_positions.items.len) {
+        }
+        if (area_cursor.col >= dims.width and new_buf_cursor.row < self.line_positions.items.len) {
             if (new_buf_cursor.col <= self.lineLength(@intCast(new_buf_cursor.row))) {
-                self.offset.col += 1 + term_cursor.col - @as(i32, @intCast(dims.width));
+                self.offset.col += 1 + area_cursor.col - @as(i32, @intCast(dims.width));
                 main.editor.dirty.draw = true;
             }
         }
