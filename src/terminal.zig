@@ -578,6 +578,32 @@ pub fn getKeys(allocator: Allocator, codes: []const u8) ![]inp.Key {
     return try keys.toOwnedSlice();
 }
 
+/// Display with in term columns of a written codepoint
+/// Has to be coherent with `Buffer.writeChar`
+pub fn colWidth(ch: u21) usize {
+    return switch (ch) {
+        0x00...0x7F => 1,
+        0x80...0xA0 => 4,
+        else => @max(1, uni.colWidth(ch) orelse 1),
+    };
+}
+
+pub fn cursorTermCol(buffer: *const buf.Buffer, cursor: Cursor) usize {
+    const line = buffer.lineContent(@intCast(cursor.row));
+    var col: usize = 0;
+    for (0..@intCast(cursor.col)) |char_idx| {
+        col += colWidth(line[char_idx]);
+    }
+    return col;
+}
+
+/// Length of a line in term columns
+pub fn lineColLength(line: []const u21) usize {
+    var len: usize = 0;
+    for (line) |ch| len += colWidth(ch);
+    return len;
+}
+
 fn ansiCodeToString(allocator: Allocator, code: u8) ![]const u8 {
     const is_printable = code >= 32 and code < 127;
     if (is_printable) {
@@ -591,21 +617,10 @@ fn isPrintableAscii(code: u8) bool {
     return code >= 0x21 and code <= 0x7e;
 }
 
-/// Display with in term columns of a written codepoint
-/// Has to be coherent with `Buffer.writeChar`
-fn colWidth(ch: u21) usize {
-    return switch (ch) {
-        0x00...0x7F => 1,
-        0x80...0xA0 => 4,
-        else => uni.colWidth(ch) orelse 1,
-    };
-}
-
-fn cursorTermCol(buffer: *const buf.Buffer, cursor: Cursor) usize {
-    const line = buffer.lineContent(@intCast(cursor.row));
-    var col: usize = 0;
-    for (0..@intCast(cursor.col)) |char_idx| {
-        col += colWidth(line[char_idx]);
-    }
-    return col;
+test "colWidth" {
+    try std.testing.expectEqual(1, colWidth('a'));
+    try std.testing.expectEqual(4, colWidth('\x80'));
+    try std.testing.expectEqual(2, colWidth('🚧'));
+    try std.testing.expectEqual(2, colWidth('✔'));
+    try std.testing.expectEqual(1, colWidth('\u{FE0F}'));
 }
