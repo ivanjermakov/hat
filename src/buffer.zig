@@ -26,6 +26,7 @@ const ts = @import("ts.zig");
 const uni = @import("unicode.zig");
 const dia = @import("ui/diagnostic.zig");
 const act = @import("ui/code_action.zig");
+const fzf = @import("ui/fzf.zig");
 
 pub const Buffer = struct {
     path: []const u8,
@@ -348,7 +349,7 @@ pub const Buffer = struct {
         try self.pending_changes.append(try change.clone(self.allocator));
     }
 
-    pub fn commitChanges(self: *Buffer) FatalError!void {
+    pub fn commitChanges(self: *Buffer) !void {
         if (self.uncommitted_changes.items.len == 0) {
             log.debug(@This(), "no changes to commit\n", .{});
             return;
@@ -599,6 +600,27 @@ pub const Buffer = struct {
     pub fn findReferences(self: *Buffer) !void {
         for (self.lsp_connections.items) |conn| {
             try conn.findReferences();
+        }
+    }
+
+    pub fn findSymbols(self: *Buffer) !void {
+        if (self.ts_state) |*ts_state| {
+            if (ts_state.symbol) |*parse_result| {
+                try parse_result.makeSpans(ts_state.tree.?);
+                for (parse_result.spans.items) |span| {
+                    const symbol_name = self.content_raw.items[span.start..span.end];
+                    log.debug(@This(), "symbol span: {s}\n", .{symbol_name});
+                }
+                const pick_result = fzf.pickSymbol(self.allocator, self, parse_result.spans.items) catch |e| {
+                    log.err(@This(), "{}\n", .{e});
+                    if (@errorReturnTrace()) |trace| std.debug.dumpStackTrace(trace.*);
+                    return;
+                };
+                defer self.allocator.free(pick_result.path);
+                log.debug(@This(), "picked symbol: {}\n", .{pick_result});
+                self.moveCursor(pick_result.position);
+                self.centerCursor();
+            }
         }
     }
 

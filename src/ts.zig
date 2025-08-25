@@ -72,6 +72,7 @@ pub const State = struct {
     tree: ?*ts.TSTree = null,
     highlight: ParseResult(AttrsSpan),
     indent: ParseResult(IndentSpanTuple),
+    symbol: ?ParseResult(ByteSpan) = null,
     allocator: Allocator,
 
     pub fn init(allocator: Allocator, ts_conf: ft.TsConfig) !State {
@@ -80,14 +81,18 @@ pub const State = struct {
         defer allocator.free(highlight_query);
         const indent_query = try ft.TsConfig.loadQuery(allocator, ts_conf.indent_query);
         defer allocator.free(indent_query);
+        const symbol_query = if (ts_conf.symbol_query) |sq| try ft.TsConfig.loadQuery(allocator, sq) else null;
+        defer if (symbol_query) |sq| allocator.free(sq);
 
-        const self = State{
+        var self = State{
             .parser = ts.ts_parser_new(),
             .allocator = allocator,
             .highlight = try ParseResult(AttrsSpan).init(allocator, language(), highlight_query),
             .indent = try ParseResult(IndentSpanTuple).init(allocator, language(), indent_query),
         };
+        if (symbol_query) |sq| self.symbol = try ParseResult(ByteSpan).init(allocator, language(), sq);
         _ = ts.ts_parser_set_language(self.parser, language());
+
         return self;
     }
 
@@ -115,6 +120,7 @@ pub const State = struct {
         if (self.tree) |t| ts.ts_tree_delete(t);
         self.highlight.deinit();
         self.indent.deinit();
+        if (self.symbol) |*s| s.deinit();
     }
 };
 
