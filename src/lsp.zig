@@ -71,6 +71,8 @@ pub const LspConnection = struct {
     poll_header: ?lsp.BaseProtocolHeader,
     buffers: std.ArrayList(*buf.Buffer),
     thread: std.Thread,
+    client_capabilities: types.ClientCapabilities,
+    server_init: ?std.json.Parsed(types.InitializeResult) = null,
     allocator: Allocator,
 
     pub fn connect(allocator: Allocator, config: LspConfig) !LspConnection {
@@ -84,6 +86,30 @@ pub const LspConnection = struct {
         try child.spawn();
         try child.waitForSpawn();
 
+        const client_capabilities: types.ClientCapabilities = .{
+            .textDocument = .{
+                .definition = .{},
+                .references = .{},
+                .diagnostic = .{},
+                .publishDiagnostics = .{},
+                .completion = .{
+                    .completionItem = .{
+                        .insertReplaceSupport = true,
+                        .documentationFormat = &.{ .plaintext, .markdown },
+                    },
+                },
+                .hover = .{
+                    .contentFormat = &.{ .plaintext, .markdown },
+                },
+                .rename = .{
+                    .prepareSupport = true,
+                },
+            },
+            .workspace = .{
+                .workspaceFolders = true,
+            },
+        };
+
         var self = LspConnection{
             .config = config,
             .status = .Created,
@@ -93,6 +119,7 @@ pub const LspConnection = struct {
             .poll_header = null,
             .buffers = std.ArrayList(*buf.Buffer).init(allocator),
             .thread = undefined,
+            .client_capabilities = client_capabilities,
             .allocator = allocator,
         };
 
@@ -101,29 +128,7 @@ pub const LspConnection = struct {
         const workspace_uri = try uri.fromPath(allocator, cwd);
         defer allocator.free(workspace_uri);
         try self.sendRequest("initialize", types.InitializeParams{
-            .capabilities = .{
-                .textDocument = .{
-                    .definition = .{},
-                    .references = .{},
-                    .diagnostic = .{},
-                    .publishDiagnostics = .{},
-                    .completion = .{
-                        .completionItem = .{
-                            .insertReplaceSupport = true,
-                            .documentationFormat = &.{ .plaintext, .markdown },
-                        },
-                    },
-                    .hover = .{
-                        .contentFormat = &.{ .plaintext, .markdown },
-                    },
-                    .rename = .{
-                        .prepareSupport = true,
-                    },
-                },
-                .workspace = .{
-                    .workspaceFolders = true,
-                },
-            },
+            .capabilities = client_capabilities,
             .workspaceFolders = &.{.{ .uri = workspace_uri, .name = cwd }},
             .rootPath = cwd,
             .rootUri = workspace_uri,
@@ -209,6 +214,7 @@ pub const LspConnection = struct {
         }
         self.messages_unreplied.deinit();
         self.buffers.deinit();
+        if (self.server_init) |si| si.deinit();
     }
 
     pub fn goToDefinition(self: *LspConnection) !void {
@@ -401,9 +407,10 @@ pub const LspConnection = struct {
     }
 
     fn handleInitializeResponse(self: *LspConnection, arena: Allocator, resp: ?std.json.Value) !void {
+        _ = arena;
         if (resp == null or resp.? == .null) return;
-        const resp_typed = try std.json.parseFromValue(types.InitializeResult, arena, resp.?, .{});
-        log.debug(@This(), "got init response: {}\n", .{resp_typed});
+        self.server_init = try std.json.parseFromValue(types.InitializeResult, self.allocator, resp.?, .{});
+        log.debug(@This(), "server capabilities: {}\n", .{std.json.fmt(self.server_init.?.value.capabilities, .{})});
         try self.sendNotification("initialized", .{});
         self.status = .Initialized;
         for (self.buffers.items) |buffer| {

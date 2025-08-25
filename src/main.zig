@@ -27,7 +27,7 @@ pub const Args = struct {
     term_height: ?usize = null,
 };
 
-pub const sleep_ns: u64 = 16 * 1e6;
+pub const sleep_ns: u64 = 16 * std.time.ns_per_ms;
 pub const sleep_lsp_ns: u64 = sleep_ns;
 pub const std_in = std.io.getStdIn();
 pub const std_out = std.io.getStdOut();
