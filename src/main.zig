@@ -155,6 +155,15 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                 const cmd_active = editor.command_line.command != null;
                 var repeat_or_1: i32 = 1;
                 if (repeat_count) |rc| repeat_or_1 = @intCast(rc);
+                const code_action = if (editor.code_actions) |code_actions| b: {
+                    if (raw_key.printable) |printable| {
+                        for (code_actions) |action| {
+                            if (action.hint == printable[0])
+                                break :b action;
+                        }
+                    }
+                    break :b null;
+                } else null;
 
                 // command line menu
                 if (cmd_active) {
@@ -173,6 +182,10 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     } else if (cmd_active and raw_key.printable != null) {
                         try editor.command_line.insert(raw_key.printable.?);
                     }
+
+                // code action menu
+                } else if (code_action) |action| {
+                    buffer.codeActionExecute(action) catch |e| log.err(@This(), "code action exec error: {}\n", .{e});
 
                     // text insertion
                 } else if (editor.mode == .insert and editor.key_queue.items[0].printable != null) {
@@ -329,6 +342,8 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                         buffer.goToDefinition() catch |e| log.err(@This(), "go to def LSP error: {}", .{e});
                     } else if (editor.mode == .normal and eql(u8, multi_key, " r")) {
                         buffer.findReferences() catch |e| log.err(@This(), "find references LSP error: {}", .{e});
+                    } else if (editor.mode == .normal and eql(u8, multi_key, " c")) {
+                        buffer.codeAction() catch |e| log.err(@This(), "code action LSP error: {}\n", .{e});
                     } else if (editor.mode == .normal and eql(u8, multi_key, " n")) {
                         try buffer.renamePrompt();
                     } else if (editor.mode == .normal and eql(u8, key, "r") and editor.key_queue.items[1].printable != null) {
@@ -337,6 +352,9 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     } else if (editor.mode == .normal and eql(u8, key, "@") and editor.key_queue.items[1].printable != null) {
                         const macro_name: u8 = @intCast(key2.printable.?[0]);
                         try editor.replayMacro(macro_name);
+                    } else if (normal_or_select and eql(u8, multi_key, "gi")) {
+                        buffer.moveCursor(.{ .col = buffer.cursor.col });
+                        buffer.centerCursor();
                     } else if (normal_or_select and eql(u8, multi_key, "gk")) {
                         buffer.moveCursor(.{ .col = buffer.cursor.col });
                         buffer.centerCursor();

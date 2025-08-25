@@ -13,6 +13,7 @@ const main = @import("main.zig");
 const ter = @import("terminal.zig");
 const cmd = @import("ui/command_line.zig");
 const cmp = @import("ui/completion_menu.zig");
+const act = @import("ui/code_action.zig");
 const fzf = @import("ui/fzf.zig");
 const uni = @import("unicode.zig");
 const ur = @import("uri.zig");
@@ -51,6 +52,7 @@ pub const Editor = struct {
     messages: std.ArrayList([]const u8),
     message_read_idx: usize = 0,
     hover_contents: ?[]const u8 = null,
+    code_actions: ?[]const act.CodeAction = null,
     key_queue: std.ArrayList(inp.Key),
     dot_repeat_input: std.ArrayList(inp.Key),
     dot_repeat_input_uncommitted: std.ArrayList(inp.Key),
@@ -152,6 +154,7 @@ pub const Editor = struct {
 
     pub fn enterMode(self: *Editor, mode: Mode) FatalError!void {
         self.resetHover();
+        self.resetCodeActions();
 
         if (self.mode == mode) return;
         if (self.mode == .insert) try self.active_buffer.commitChanges();
@@ -193,6 +196,7 @@ pub const Editor = struct {
         self.messages.deinit();
 
         self.resetHover();
+        self.resetCodeActions();
 
         for (self.key_queue.items) |key| key.deinit();
         self.key_queue.deinit();
@@ -367,6 +371,15 @@ pub const Editor = struct {
         if (self.hover_contents) |c| {
             self.hover_contents = null;
             self.allocator.free(c);
+            main.editor.dirty.draw = true;
+        }
+    }
+
+    pub fn resetCodeActions(self: *Editor) void {
+        if (self.code_actions) |code_actions| {
+            for (code_actions) |code_action| code_action.deinit();
+            self.allocator.free(code_actions);
+            self.code_actions = null;
             main.editor.dirty.draw = true;
         }
     }
