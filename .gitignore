@@ -3,4 +3,4 @@ example
 zig-out
 *.log
 callgrind*
-perf*
+/perf*

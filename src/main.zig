@@ -19,6 +19,7 @@ const ter = @import("terminal.zig");
 const fzf = @import("ui/fzf.zig");
 const uni = @import("unicode.zig");
 const mut = @import("mutex.zig");
+const per = @import("perf.zig");
 
 pub const Args = struct {
     path: ?[]const u8 = null,
@@ -104,7 +105,7 @@ pub fn main() !void {
 fn startEditor(allocator: std.mem.Allocator) FatalError!void {
     var timer = std.time.Timer.start() catch unreachable;
     var timer_total = std.time.Timer.start() catch unreachable;
-    var perf = std.mem.zeroes(PerfInfo);
+    var perf = std.mem.zeroes(per.PerfInfo);
     var buffer = editor.active_buffer;
     var repeat_count: ?usize = null;
 
@@ -427,47 +428,11 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
         perf.sync = timer.lap();
 
         perf.total = timer_total.lap();
-        if (perf.total > 10 * std.time.ns_per_ms) {
+        if (perf.total > per.report_perf_threshold_ns) {
             log.debug(@This(), "frame perf: \n{}", .{perf});
         }
     }
 }
-
-const PerfInfo = struct {
-    input: u64,
-    mapping: u64,
-    parse: u64,
-    did_change: u64,
-    draw: u64,
-    commit: u64,
-    sync: u64,
-    total: u64,
-
-    pub fn format(
-        self: *const PerfInfo,
-        comptime fmt: []const u8,
-        options: std.fmt.FormatOptions,
-        writer: anytype,
-    ) !void {
-        _ = fmt;
-        _ = options;
-
-        try std.fmt.format(
-            writer,
-            "total: {}, input: {}, parse: {}, mapping: {}, did_change: {}, draw: {}, commit: {}, sync: {}\n",
-            .{
-                self.total / std.time.ns_per_us,
-                self.input / std.time.ns_per_us,
-                self.parse / std.time.ns_per_us,
-                self.mapping / std.time.ns_per_us,
-                self.did_change / std.time.ns_per_us,
-                self.draw / std.time.ns_per_us,
-                self.commit / std.time.ns_per_us,
-                self.sync / std.time.ns_per_us,
-            },
-        );
-    }
-};
 
 comptime {
     std.testing.refAllDecls(@This());

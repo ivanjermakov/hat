@@ -3,7 +3,7 @@ const Instant = std.time.Instant;
 
 const log = @import("log.zig");
 
-pub var report_lock_threshold_ns: u64 = 1 * std.time.ns_per_ms;
+pub var report_lock_threshold_ns: u64 = 10 * std.time.ns_per_ms;
 
 pub const Mutex = struct {
     mutex: std.Thread.Mutex = .{},
