@@ -95,6 +95,7 @@ pub const ByteSpan = struct {
 };
 
 pub const Layout = struct {
+    left_padding: Area,
     number_line: Area,
     buffer: Area,
 };
