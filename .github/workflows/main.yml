@@ -22,3 +22,6 @@ jobs:
 
       - name: zig build test
         run: zig build test --summary all
+
+      - name: test-patches.zig
+        run: zig run script/test-patches.zig
