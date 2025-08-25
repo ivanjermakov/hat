@@ -76,6 +76,7 @@ pub const Attr = union(enum) {
     bg: RgbColor,
     underline: RgbColor,
     curly_underline,
+    bold,
 
     pub fn write(self: Attr, writer: anytype) !void {
         switch (self) {
@@ -83,6 +84,7 @@ pub const Attr = union(enum) {
             .bg => |c| try std.fmt.format(writer, "\x1b[48;2;{};{};{}m", .{ c.r, c.g, c.b }),
             .underline => |c| try std.fmt.format(writer, "\x1b[58;2;{};{};{}m", .{ c.r, c.g, c.b }),
             .curly_underline => _ = try writer.write("\x1b[4:3m"),
+            .bold => _ = try writer.write("\x1b[1m"),
         }
     }
 };
@@ -102,6 +104,9 @@ pub const attributes = enum {
     pub const message = &[_]Attr{.{ .bg = color.gray2 }};
     pub const command_line = &[_]Attr{.{ .bg = color.gray2 }};
     pub const number_line = &[_]Attr{.{ .fg = color.gray4 }};
+    pub const git_added = &[_]Attr{ .{ .fg = color.green }, .bold };
+    pub const git_modified = &[_]Attr{ .{ .fg = color.yellow }, .bold };
+    pub const git_deleted = &[_]Attr{ .{ .fg = color.red }, .bold };
 
     pub fn write(attrs: []const Attr, writer: anytype) !void {
         for (attrs) |attr| {

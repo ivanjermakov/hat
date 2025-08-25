@@ -35,9 +35,9 @@ pub const std_out = std.io.getStdOut();
 pub const std_err = std.io.getStdErr();
 pub var tty_in: std.fs.File = undefined;
 
+
 pub var editor: edi.Editor = undefined;
 pub var term: ter.Terminal = undefined;
-
 pub var args: Args = .{};
 
 pub var main_loop_mutex: mut.Mutex = .{};
