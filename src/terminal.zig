@@ -249,6 +249,14 @@ pub const Terminal = struct {
                     }
                 }
 
+                if (main.editor.mode == .normal) {
+                    for (buffer.highlights.items) |hi| {
+                        if (hi.inRange(.{ .row = buffer_row, .col = buffer_col })) {
+                            try co.attributes.write(co.attributes.highlight, attrs_stream.writer());
+                        }
+                    }
+                }
+
                 if (buffer.diagnostics.items.len > 0) {
                     for (buffer.diagnostics.items) |diagnostic| {
                         const span = diagnostic.span;
