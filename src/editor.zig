@@ -41,6 +41,12 @@ pub const Config = struct {
     /// If >`term_width`, padding is 0,
     /// If <`term_width`, left padding is `(term_width-centering_width)/2`
     centering_width: ?usize = null,
+    number_line_mode: NumberLineMode = .absolute,
+};
+
+pub const NumberLineMode = enum {
+    absolute,
+    relative,
 };
 
 pub const Editor = struct {

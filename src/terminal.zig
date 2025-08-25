@@ -152,19 +152,42 @@ pub const Terminal = struct {
     fn drawNumberLine(self: *Terminal, buffer: *buf.Buffer, area: Area) !void {
         try co.attributes.write(co.attributes.number_line, self.writer.writer());
         defer self.resetAttributes() catch {};
+        const cursor_row = buffer.cursor.row;
         for (@intCast(area.pos.row)..@as(usize, @intCast(area.pos.row)) + area.dims.height) |term_row| {
             const buffer_row = @as(i32, @intCast(term_row)) + buffer.offset.row;
             try self.moveCursor(.{ .row = @intCast(term_row), .col = area.pos.col });
             if (buffer_row < 0 or buffer_row >= buffer.line_positions.items.len) {
                 if (main.editor.config.end_of_buffer_char) |ch| _ = try self.write(&.{ch});
             } else {
-                try std.fmt.formatInt(
-                    @as(usize, @intCast(buffer_row + 1)),
-                    10,
-                    .lower,
-                    .{ .width = area.dims.width - 1, .alignment = .right },
-                    self.writer.writer(),
-                );
+                switch (main.editor.config.number_line_mode) {
+                    .absolute => {
+                        try std.fmt.formatInt(
+                            @as(usize, @intCast(buffer_row + 1)),
+                            10,
+                            .lower,
+                            .{ .width = area.dims.width - 1, .alignment = .right },
+                            self.writer.writer(),
+                        );
+                    },
+                    .relative => {
+                        var display_num: usize = 0;
+                        var alignment: std.fmt.Alignment = .right;
+                        const line_num: i32 = cursor_row - buffer_row;
+                        if (line_num == 0) {
+                            display_num = @intCast(cursor_row + 1);
+                            alignment = .center;
+                        } else {
+                            display_num = @abs(line_num);
+                        }
+                        try std.fmt.formatInt(
+                            display_num,
+                            10,
+                            .lower,
+                            .{ .width = area.dims.width - 1, .alignment = alignment },
+                            self.writer.writer(),
+                        );
+                    },
+                }
             }
         }
     }
