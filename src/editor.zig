@@ -33,6 +33,7 @@ pub const DotRepeat = enum {
 };
 
 pub const Config = struct {
+    autosave: bool = false,
     /// Char to denote terminal lines after end of buffer
     /// See vim's :h fillchars -> eob
     end_of_buffer_char: ?u8 = null,
