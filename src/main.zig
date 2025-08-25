@@ -18,6 +18,7 @@ const sig = @import("signal.zig");
 const ter = @import("terminal.zig");
 const fzf = @import("ui/fzf.zig");
 const uni = @import("unicode.zig");
+const mut = @import("mutex.zig");
 
 pub const Args = struct {
     path: ?[]const u8 = null,
@@ -38,7 +39,7 @@ pub var term: ter.Terminal = undefined;
 
 pub var args: Args = .{};
 
-pub var main_loop_mutex: std.Thread.Mutex = .{};
+pub var main_loop_mutex: mut.Mutex = .{};
 
 pub fn main() !void {
     log.init();

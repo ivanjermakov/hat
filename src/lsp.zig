@@ -501,15 +501,7 @@ pub const LspConnection = struct {
         if (resp == null or resp.? == .null) return;
         const result = try std.json.parseFromValue(types.WorkspaceEdit, arena, resp.?, .{});
         main.main_loop_mutex.lock();
-        // TODO: mutex wrapper reporting long running and long to acquire locks
-        var timer = try std.time.Timer.start();
-        defer {
-            main.main_loop_mutex.unlock();
-            const elapsed = timer.read();
-            if (elapsed > 1 * std.time.ns_per_ms) {
-                log.debug(@This(), "main loop blocked for: {}us\n", .{elapsed / std.time.ns_per_us});
-            }
-        }
+        defer main.main_loop_mutex.unlock();
         try main.editor.applyWorkspaceEdit(result.value);
     }
 
