@@ -107,6 +107,7 @@ pub const LspConnection = struct {
                     .prepareSupport = true,
                 },
                 .codeAction = .{},
+                .formatting = .{},
             },
             .workspace = .{
                 .workspaceFolders = true,
@@ -200,6 +201,8 @@ pub const LspConnection = struct {
                         try self.handleRenameResponse(arena.allocator(), response_result);
                     } else if (std.mem.eql(u8, method, "textDocument/codeAction")) {
                         try self.handleCodeActionResponse(arena.allocator(), response_result);
+                    } else if (std.mem.eql(u8, method, "textDocument/formatting")) {
+                        try self.handleFormattingResponse(arena.allocator(), response_result);
                     }
                 },
                 .notification => |notif| {
@@ -256,6 +259,18 @@ pub const LspConnection = struct {
             .textDocument = .{ .uri = buffer.uri },
             .range = (Span{ .start = buffer.cursor, .end = buffer.cursor }).toLsp(),
             .context = .{ .diagnostics = &.{} },
+        });
+    }
+
+    pub fn format(self: *LspConnection) !void {
+        const buffer = main.editor.active_buffer;
+        try self.sendRequest("textDocument/formatting", .{
+            .textDocument = .{ .uri = buffer.uri },
+            .options = .{
+                .tabSize = 4,
+                .insertSpaces = true,
+                .trimTrailingWhitespace = true,
+            },
         });
     }
 
@@ -540,6 +555,20 @@ pub const LspConnection = struct {
         editor.code_actions = try act.fromLsp(editor.allocator, result.value);
         log.debug(@This(), "got {} code actions\n", .{editor.code_actions.?.len});
         editor.dirty.draw = true;
+    }
+
+    fn handleFormattingResponse(self: *LspConnection, arena: Allocator, resp: ?std.json.Value) !void {
+        _ = self;
+        if (resp == null or resp.? == .null) return;
+        const result = try std.json.parseFromValue([]const types.TextEdit, arena, resp.?, .{});
+        log.debug(@This(), "got {} formatting edits\n", .{result.value.len});
+        {
+            main.main_loop_mutex.lock();
+            defer main.main_loop_mutex.unlock();
+            const buffer = main.editor.active_buffer;
+            try buffer.applyTextEdits(result.value);
+            try buffer.commitChanges();
+        }
     }
 
     fn handleNotification(self: *LspConnection, arena: Allocator, notif: lsp.JsonRPCMessage.Notification) !void {

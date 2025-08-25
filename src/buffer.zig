@@ -682,6 +682,12 @@ pub const Buffer = struct {
         try self.commitChanges();
     }
 
+    pub fn format(self: *Buffer) !void {
+        for (self.lsp_connections.items) |conn| {
+            try conn.format();
+        }
+    }
+
     pub fn copySelectionToClipboard(self: *Buffer) !void {
         if (self.selection) |selection| {
             try clp.write(self.allocator, self.rawTextAt(selection));

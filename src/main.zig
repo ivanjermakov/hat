@@ -346,6 +346,8 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                         buffer.codeAction() catch |e| log.err(@This(), "code action LSP error: {}\n", .{e});
                     } else if (editor.mode == .normal and eql(u8, multi_key, " n")) {
                         try buffer.renamePrompt();
+                    } else if (editor.mode == .normal and eql(u8, multi_key, " l")) {
+                        buffer.format() catch |e| log.err(@This(), "format LSP error: {}", .{e});
                     } else if (editor.mode == .normal and eql(u8, key, "r") and editor.key_queue.items[1].printable != null) {
                         const macro_name: u8 = @intCast(key2.printable.?[0]);
                         try editor.startMacro(macro_name);
