@@ -218,6 +218,7 @@ pub const LspConnection = struct {
     }
 
     pub fn goToDefinition(self: *LspConnection) !void {
+        if ((self.server_init orelse return).value.capabilities.definitionProvider == null) return;
         const buffer = main.editor.active_buffer;
         try self.sendRequest("textDocument/definition", .{
             .textDocument = .{ .uri = buffer.uri },
@@ -226,6 +227,7 @@ pub const LspConnection = struct {
     }
 
     pub fn findReferences(self: *LspConnection) !void {
+        if ((self.server_init orelse return).value.capabilities.referencesProvider == null) return;
         const buffer = main.editor.active_buffer;
         try self.sendRequest("textDocument/references", .{
             .textDocument = .{ .uri = buffer.uri },
@@ -235,6 +237,7 @@ pub const LspConnection = struct {
     }
 
     pub fn hover(self: *LspConnection) !void {
+        if ((self.server_init orelse return).value.capabilities.hoverProvider == null) return;
         const buffer = main.editor.active_buffer;
         try self.sendRequest("textDocument/hover", .{
             .textDocument = .{ .uri = buffer.uri },
@@ -243,6 +246,7 @@ pub const LspConnection = struct {
     }
 
     pub fn rename(self: *LspConnection, new_name: []const u8) !void {
+        if ((self.server_init orelse return).value.capabilities.renameProvider == null) return;
         const buffer = main.editor.active_buffer;
         try self.sendRequest("textDocument/rename", .{
             .textDocument = .{ .uri = buffer.uri },
@@ -296,6 +300,7 @@ pub const LspConnection = struct {
     }
 
     pub fn sendCompletionRequest(self: *LspConnection) !void {
+        if ((self.server_init orelse return).value.capabilities.completionProvider == null) return;
         const buffer = main.editor.active_buffer;
         try self.sendRequest("textDocument/completion", .{
             .textDocument = .{ .uri = buffer.uri },
@@ -352,7 +357,6 @@ pub const LspConnection = struct {
         return try messages.toOwnedSlice();
     }
 
-    /// TODO: send only if server has capability
     fn sendRequest(
         self: *LspConnection,
         comptime method: []const u8,
