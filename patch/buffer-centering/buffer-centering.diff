@@ -1,16 +1,3 @@
-diff --git a/src/buffer.zig b/src/buffer.zig
-index 70ee73d..4902cec 100644
---- a/src/buffer.zig
-+++ b/src/buffer.zig
-@@ -347,7 +347,7 @@ pub const Buffer = struct {
-         try self.pending_changes.append(try change.clone(self.allocator));
-     }
- 
--    pub fn commitChanges(self: *Buffer) FatalError!void {
-+    pub fn commitChanges(self: *Buffer) !void {
-         if (self.uncommitted_changes.items.len == 0) {
-             log.debug(@This(), "no changes to commit\n", .{});
-             return;
 diff --git a/src/core.zig b/src/core.zig
 index 880684d..aa148d2 100644
 --- a/src/core.zig
@@ -24,7 +11,7 @@ index 880684d..aa148d2 100644
      buffer: Area,
  };
 diff --git a/src/editor.zig b/src/editor.zig
-index fd3655c..1dc8870 100644
+index 2230f75..8b1bb20 100644
 --- a/src/editor.zig
 +++ b/src/editor.zig
 @@ -35,6 +35,11 @@ pub const Config = struct {
@@ -39,33 +26,11 @@ index fd3655c..1dc8870 100644
  };
  
  pub const Editor = struct {
-@@ -151,7 +156,7 @@ pub const Editor = struct {
-         main.editor.dirty.draw = true;
-     }
- 
--    pub fn enterMode(self: *Editor, mode: Mode) FatalError!void {
-+    pub fn enterMode(self: *Editor, mode: Mode) !void {
-         self.resetHover();
- 
-         if (self.mode == mode) return;
-diff --git a/src/main.zig b/src/main.zig
-index 0093d54..cc07248 100644
---- a/src/main.zig
-+++ b/src/main.zig
-@@ -93,7 +93,7 @@ pub fn main() !void {
-     term = try ter.Terminal.init(allocator, std_out.writer().any(), try ter.terminalSize());
-     defer term.deinit();
- 
--    editor = try edi.Editor.init(allocator, .{});
-+    editor = try edi.Editor.init(allocator, .{ .centering_width = 140 });
-     defer editor.deinit();
- 
-     const path = if (args.path) |path| try allocator.dupe(u8, path) else fzf.pickFile(allocator) catch return;
 diff --git a/src/terminal.zig b/src/terminal.zig
-index f7efb9f..928c23d 100644
+index 9e49057..07c183a 100644
 --- a/src/terminal.zig
 +++ b/src/terminal.zig
-@@ -405,20 +405,32 @@ pub fn terminalSize() !Dimensions {
+@@ -424,20 +424,32 @@ pub fn terminalSize() !Dimensions {
  
  pub fn computeLayout(term_dims: Dimensions) Layout {
      const number_line_width = 5;

@@ -1,5 +1,5 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index 70ee73d..d1862fb 100644
+index e3674ac..4429ee3 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
 @@ -23,8 +23,9 @@ const lsp = @import("lsp.zig");
@@ -13,7 +13,7 @@ index 70ee73d..d1862fb 100644
  
  pub const Buffer = struct {
      path: []const u8,
-@@ -347,7 +348,7 @@ pub const Buffer = struct {
+@@ -346,7 +347,7 @@ pub const Buffer = struct {
          try self.pending_changes.append(try change.clone(self.allocator));
      }
  
@@ -22,7 +22,7 @@ index 70ee73d..d1862fb 100644
          if (self.uncommitted_changes.items.len == 0) {
              log.debug(@This(), "no changes to commit\n", .{});
              return;
-@@ -602,6 +603,27 @@ pub const Buffer = struct {
+@@ -600,6 +601,27 @@ pub const Buffer = struct {
          }
      }
  
@@ -67,10 +67,10 @@ index 880684d..5bfe4da 100644
          return .{
              .start = buffer.cursorToBytePos(span.start),
 diff --git a/src/editor.zig b/src/editor.zig
-index fd3655c..0bdd9c0 100644
+index 2230f75..38823a1 100644
 --- a/src/editor.zig
 +++ b/src/editor.zig
-@@ -151,7 +151,7 @@ pub const Editor = struct {
+@@ -150,7 +150,7 @@ pub const Editor = struct {
          main.editor.dirty.draw = true;
      }
  
@@ -130,10 +130,10 @@ index f166cf9..14329fd 100644
      } },
      .{ ".zig", FileTypeConfig{
 diff --git a/src/main.zig b/src/main.zig
-index 0093d54..09d6755 100644
+index 314bfd8..d249de3 100644
 --- a/src/main.zig
 +++ b/src/main.zig
-@@ -219,7 +219,6 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+@@ -217,7 +217,6 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
  
                      // normal or select mode
                  } else if (normal_or_select and eql(u8, key, "k")) {
@@ -141,7 +141,7 @@ index 0093d54..09d6755 100644
                  } else if (normal_or_select and eql(u8, key, "j")) {
                      buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = 1 * repeat_or_1 }));
                  } else if (normal_or_select and eql(u8, key, "h")) {
-@@ -333,6 +332,8 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+@@ -331,6 +330,8 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                          buffer.findReferences() catch |e| log.err(@This(), "find references LSP error: {}", .{e});
                      } else if (editor.mode == .normal and eql(u8, multi_key, " n")) {
                          try buffer.renamePrompt();
@@ -151,7 +151,7 @@ index 0093d54..09d6755 100644
                          const macro_name: u8 = @intCast(key2.printable.?[0]);
                          try editor.startMacro(macro_name);
 diff --git a/src/ts.zig b/src/ts.zig
-index 995de5f..1694e8d 100644
+index 4754119..6f9f894 100644
 --- a/src/ts.zig
 +++ b/src/ts.zig
 @@ -72,6 +72,7 @@ pub const State = struct {
@@ -182,7 +182,7 @@ index 995de5f..1694e8d 100644
          return self;
      }
  
-@@ -119,6 +124,7 @@ pub const State = struct {
+@@ -115,6 +120,7 @@ pub const State = struct {
          if (self.tree) |t| ts.ts_tree_delete(t);
          self.highlight.deinit();
          self.indent.deinit();

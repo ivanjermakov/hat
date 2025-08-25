@@ -1,5 +1,5 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index 70ee73d..2805611 100644
+index e3674ac..d2826fd 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
 @@ -66,6 +66,7 @@ pub const Buffer = struct {
@@ -18,7 +18,7 @@ index 70ee73d..2805611 100644
              .allocator = allocator,
          };
          _ = try self.syncFs();
-@@ -154,6 +156,7 @@ pub const Buffer = struct {
+@@ -155,6 +157,7 @@ pub const Buffer = struct {
          self.line_positions.deinit();
          self.line_byte_positions.deinit();
          self.indents.deinit();
@@ -26,7 +26,7 @@ index 70ee73d..2805611 100644
  
          for (self.history.items) |*i| {
              for (i.items) |*c| c.deinit();
-@@ -347,7 +350,7 @@ pub const Buffer = struct {
+@@ -346,7 +349,7 @@ pub const Buffer = struct {
          try self.pending_changes.append(try change.clone(self.allocator));
      }
  
@@ -35,7 +35,7 @@ index 70ee73d..2805611 100644
          if (self.uncommitted_changes.items.len == 0) {
              log.debug(@This(), "no changes to commit\n", .{});
              return;
-@@ -608,6 +611,12 @@ pub const Buffer = struct {
+@@ -606,6 +609,12 @@ pub const Buffer = struct {
          }
      }
  
@@ -60,21 +60,8 @@ index 1335218..20721b7 100644
      pub const keyword = &[_]Attr{.{ .fg = color.magenta }};
      pub const string = &[_]Attr{.{ .fg = color.green }};
      pub const literal = &[_]Attr{.{ .fg = color.yellow }};
-diff --git a/src/editor.zig b/src/editor.zig
-index fd3655c..0bdd9c0 100644
---- a/src/editor.zig
-+++ b/src/editor.zig
-@@ -151,7 +151,7 @@ pub const Editor = struct {
-         main.editor.dirty.draw = true;
-     }
- 
--    pub fn enterMode(self: *Editor, mode: Mode) FatalError!void {
-+    pub fn enterMode(self: *Editor, mode: Mode) !void {
-         self.resetHover();
- 
-         if (self.mode == mode) return;
 diff --git a/src/lsp.zig b/src/lsp.zig
-index 8ed46b8..fcd3676 100644
+index 68504d8..5c4e56d 100644
 --- a/src/lsp.zig
 +++ b/src/lsp.zig
 @@ -9,6 +9,7 @@ const buf = @import("buffer.zig");
@@ -85,15 +72,15 @@ index 8ed46b8..fcd3676 100644
  const fs = @import("fs.zig");
  const log = @import("log.zig");
  const main = @import("main.zig");
-@@ -119,6 +120,7 @@ pub const LspConnection = struct {
-                     .rename = .{
-                         .prepareSupport = true,
-                     },
-+                    .documentHighlight = .{},
+@@ -104,6 +105,7 @@ pub const LspConnection = struct {
+                 .rename = .{
+                     .prepareSupport = true,
                  },
-                 .workspace = .{
-                     .workspaceFolders = true,
-@@ -190,6 +192,8 @@ pub const LspConnection = struct {
++                .documentHighlight = .{},
+             },
+             .workspace = .{
+                 .workspaceFolders = true,
+@@ -195,6 +197,8 @@ pub const LspConnection = struct {
                          try self.handleHoverResponse(arena.allocator(), response_result);
                      } else if (std.mem.eql(u8, method, "textDocument/rename")) {
                          try self.handleRenameResponse(arena.allocator(), response_result);
@@ -102,7 +89,7 @@ index 8ed46b8..fcd3676 100644
                      }
                  },
                  .notification => |notif| {
-@@ -236,6 +240,14 @@ pub const LspConnection = struct {
+@@ -245,6 +249,14 @@ pub const LspConnection = struct {
          });
      }
  
@@ -115,9 +102,9 @@ index 8ed46b8..fcd3676 100644
 +    }
 +
      pub fn rename(self: *LspConnection, new_name: []const u8) !void {
+         if ((self.server_init orelse return).value.capabilities.renameProvider == null) return;
          const buffer = main.editor.active_buffer;
-         try self.sendRequest("textDocument/rename", .{
-@@ -513,6 +525,21 @@ pub const LspConnection = struct {
+@@ -516,6 +528,21 @@ pub const LspConnection = struct {
          try main.editor.applyWorkspaceEdit(result.value);
      }
  
@@ -138,20 +125,12 @@ index 8ed46b8..fcd3676 100644
 +
      fn handleNotification(self: *LspConnection, arena: Allocator, notif: lsp.JsonRPCMessage.Notification) !void {
          _ = self;
-         // log.debug(@This(), "notification: {s}\n", .{notif.method});
+         log.trace(@This(), "notification: {s}\n", .{notif.method});
 diff --git a/src/main.zig b/src/main.zig
-index 0093d54..63f3408 100644
+index 314bfd8..e8dfe19 100644
 --- a/src/main.zig
 +++ b/src/main.zig
-@@ -342,7 +342,6 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
-                     } else if (normal_or_select and eql(u8, multi_key, "gk")) {
-                         buffer.moveCursor(.{ .col = buffer.cursor.col });
-                         buffer.centerCursor();
--                    } else if (normal_or_select and eql(u8, multi_key, "gj")) {
-                         buffer.moveCursor(.{
-                             .row = @as(i32, @intCast(buffer.line_positions.items.len)) - 1,
-                             .col = buffer.cursor.col,
-@@ -406,6 +405,13 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+@@ -404,6 +404,13 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
          } else if (editor.dirty.cursor) {
              editor.dirty.cursor = false;
              term.updateCursor() catch |e| log.err(@This(), "update cursor error: {}", .{e});
@@ -166,10 +145,10 @@ index 0093d54..63f3408 100644
          perf.draw = timer.lap();
  
 diff --git a/src/terminal.zig b/src/terminal.zig
-index f7efb9f..5a1954f 100644
+index 9e49057..2b15d06 100644
 --- a/src/terminal.zig
 +++ b/src/terminal.zig
-@@ -218,6 +218,14 @@ pub const Terminal = struct {
+@@ -224,6 +224,14 @@ pub const Terminal = struct {
                      }
                  }
  

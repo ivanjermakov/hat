@@ -1,5 +1,5 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index 70ee73d..859fc62 100644
+index e3674ac..883ed06 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
 @@ -24,11 +24,14 @@ const main = @import("main.zig");
@@ -39,11 +39,11 @@ index 70ee73d..859fc62 100644
          };
          if (self.ts_state) |*ts_state| try ts_state.reparse(self.content_raw.items);
          try self.updateLinePositions();
-+        try self.updateGitHunks();
++        self.updateGitHunks() catch |e| log.err(@This(), "git hunk update error: {}", .{e});
      }
  
-     pub fn updateContent(self: *Buffer) !void {
-@@ -141,6 +151,8 @@ pub const Buffer = struct {
+     pub fn updateContent(self: *Buffer) FatalError!void {
+@@ -142,6 +152,8 @@ pub const Buffer = struct {
          self.lsp_connections.deinit();
  
          self.allocator.free(self.uri);
@@ -52,7 +52,7 @@ index 70ee73d..859fc62 100644
          self.allocator.free(self.path);
  
          if (self.ts_state) |*ts_state| ts_state.deinit();
-@@ -347,7 +359,7 @@ pub const Buffer = struct {
+@@ -346,7 +358,7 @@ pub const Buffer = struct {
          try self.pending_changes.append(try change.clone(self.allocator));
      }
  
@@ -61,7 +61,7 @@ index 70ee73d..859fc62 100644
          if (self.uncommitted_changes.items.len == 0) {
              log.debug(@This(), "no changes to commit\n", .{});
              return;
-@@ -504,6 +516,31 @@ pub const Buffer = struct {
+@@ -503,6 +515,31 @@ pub const Buffer = struct {
          }
      }
  
@@ -124,10 +124,10 @@ index 1335218..5a225ea 100644
      pub fn write(attrs: []const Attr, writer: anytype) !void {
          for (attrs) |attr| {
 diff --git a/src/editor.zig b/src/editor.zig
-index fd3655c..0bdd9c0 100644
+index 2230f75..38823a1 100644
 --- a/src/editor.zig
 +++ b/src/editor.zig
-@@ -151,7 +151,7 @@ pub const Editor = struct {
+@@ -150,7 +150,7 @@ pub const Editor = struct {
          main.editor.dirty.draw = true;
      }
  
@@ -285,10 +285,10 @@ index 0000000..47cc91c
 +    try std.testing.expectEqualDeep(hunks[1], Hunk{ .type = .delete, .line = 37, .len = 0 });
 +}
 diff --git a/src/main.zig b/src/main.zig
-index 0093d54..00b6fb3 100644
+index 314bfd8..71efc04 100644
 --- a/src/main.zig
 +++ b/src/main.zig
-@@ -34,9 +34,9 @@ pub const std_out = std.io.getStdOut();
+@@ -35,9 +35,9 @@ pub const std_out = std.io.getStdOut();
  pub const std_err = std.io.getStdErr();
  pub var tty_in: std.fs.File = undefined;
  
@@ -298,12 +298,12 @@ index 0093d54..00b6fb3 100644
 -
  pub var args: Args = .{};
  
- pub var main_loop_mutex: std.Thread.Mutex = .{};
+ pub var main_loop_mutex: mut.Mutex = .{};
 diff --git a/src/terminal.zig b/src/terminal.zig
-index f7efb9f..3e385e9 100644
+index 9e49057..7073798 100644
 --- a/src/terminal.zig
 +++ b/src/terminal.zig
-@@ -159,6 +159,38 @@ pub const Terminal = struct {
+@@ -165,6 +165,38 @@ pub const Terminal = struct {
                  );
              }
          }
@@ -342,7 +342,7 @@ index f7efb9f..3e385e9 100644
      }
  
      fn drawBuffer(self: *Terminal, buffer: *buf.Buffer, area: Area) !void {
-@@ -404,7 +436,7 @@ pub fn terminalSize() !Dimensions {
+@@ -423,7 +455,7 @@ pub fn terminalSize() !Dimensions {
  }
  
  pub fn computeLayout(term_dims: Dimensions) Layout {
