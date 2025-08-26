@@ -82,6 +82,11 @@ pub const ByteSpan = struct {
     start: usize,
     end: usize,
 
+    pub fn init(span: ByteSpan, capture_name: []const u8) ?ByteSpan {
+        if (!std.mem.eql(u8, capture_name, "name")) return null;
+        return span;
+    }
+
     pub fn fromBufSpan(buffer: *const buf.Buffer, span: Span) ByteSpan {
         return .{
             .start = buffer.cursorToBytePos(span.start),

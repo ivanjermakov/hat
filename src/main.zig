@@ -223,7 +223,6 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
 
                     // normal or select mode
                 } else if (normal_or_select and eql(u8, key, "k")) {
-                    buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = -1 * repeat_or_1 }));
                 } else if (normal_or_select and eql(u8, key, "j")) {
                     buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = 1 * repeat_or_1 }));
                 } else if (normal_or_select and eql(u8, key, "h")) {
@@ -337,6 +336,8 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                         buffer.findReferences() catch |e| log.err(@This(), "find references LSP error: {}", .{e});
                     } else if (editor.mode == .normal and eql(u8, multi_key, " n")) {
                         try buffer.renamePrompt();
+                    } else if (editor.mode == .normal and eql(u8, multi_key, " f")) {
+                        try buffer.findSymbols();
                     } else if (editor.mode == .normal and eql(u8, key, "r") and editor.key_queue.items[1].printable != null) {
                         const macro_name: u8 = @intCast(key2.printable.?[0]);
                         try editor.startMacro(macro_name);

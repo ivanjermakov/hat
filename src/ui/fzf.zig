@@ -5,6 +5,7 @@ const buf = @import("../buffer.zig");
 const col = @import("../color.zig");
 const core = @import("../core.zig");
 const Cursor = core.Cursor;
+const ByteSpan = core.ByteSpan;
 const ext = @import("../external.zig");
 const log = @import("../log.zig");
 const lsp = @import("../lsp.zig");
@@ -26,7 +27,7 @@ pub const FindResult = struct {
     position: Cursor,
 
     pub fn init(allocator: Allocator, fzf_out: []const u8) !FindResult {
-        var iter = std.mem.splitScalar(u8, fzf_out, ':');
+        var iter = std.mem.splitScalar(u8, std.mem.trimEnd(u8, fzf_out, "\n"), ':');
         return .{
             .path = try allocator.dupe(u8, iter.next().?),
             .position = .{
@@ -90,6 +91,36 @@ pub fn pickLspLocation(allocator: Allocator, locations: []const lsp.types.Locati
     defer allocator.free(bufs_str);
 
     const out = try ext.runExternalWait(allocator, fzf_cmd_with_preview, bufs_str, null);
+    defer allocator.free(out);
+    if (out.len == 0) return error.EmptyOut;
+    return .init(allocator, out);
+}
+
+pub fn pickSymbol(allocator: Allocator, buffer: *const buf.Buffer, symbols: []const ByteSpan) !FindResult {
+    var lines = std.array_list.Managed(u8).init(allocator);
+    for (symbols) |symbol| {
+        const pos = buffer.posToCursor(symbol.start);
+        const symbol_name = buffer.content_raw.items[symbol.start..symbol.end];
+        const s = try std.fmt.allocPrint(
+            allocator,
+            "{s}:{}:{}\n",
+            .{ symbol_name, pos.row + 1, pos.col + 1 },
+        );
+        defer allocator.free(s);
+        try lines.appendSlice(s);
+    }
+    const bufs_str = try lines.toOwnedSlice();
+    defer allocator.free(bufs_str);
+
+    const preview_cmd = try std.fmt.allocPrint(
+        allocator,
+        "hat --printer --term-height=$FZF_PREVIEW_LINES --highlight-line={{2}} {s}",
+        .{buffer.path},
+    );
+    defer allocator.free(preview_cmd);
+
+    const cmd: []const []const u8 = fzf_command ++ .{ "--preview", preview_cmd, "--delimiter", ":" };
+    const out = try ext.runExternalWait(allocator, cmd, bufs_str, null);
     defer allocator.free(out);
     if (out.len == 0) return error.EmptyOut;
     return .init(allocator, out);
