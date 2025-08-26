@@ -33,7 +33,7 @@ pub const Buffer = struct {
     path: []const u8,
     uri: []const u8,
     git_root: ?[]const u8,
-    git_hunks: std.ArrayList(git.Hunk),
+    git_hunks: std.array_list.Managed(git.Hunk),
     file: ?std.fs.File,
     stat: ?std.fs.File.Stat = null,
     /// Incremented on every content change
@@ -71,7 +71,7 @@ pub const Buffer = struct {
     uncommitted_changes: std.array_list.Managed(cha.Change),
     lsp_connections: std.array_list.Managed(*lsp.LspConnection),
     scratch: bool = false,
-    highlights: std.ArrayList(Span),
+    highlights: std.array_list.Managed(Span),
     allocator: Allocator,
 
     pub fn init(allocator: Allocator, path: ?[]const u8, content_raw: []const u8) !Buffer {
@@ -106,7 +106,7 @@ pub const Buffer = struct {
             .file_type = file_type,
             .uri = uri,
             .git_root = git_root,
-            .git_hunks = std.ArrayList(git.Hunk).init(allocator),
+            .git_hunks = std.array_list.Managed(git.Hunk).init(allocator),
             .content = std.array_list.Managed(u21).init(allocator),
             .content_raw = raw,
             .diagnostics = std.array_list.Managed(dia.Diagnostic).init(allocator),
@@ -118,7 +118,7 @@ pub const Buffer = struct {
             .uncommitted_changes = std.array_list.Managed(cha.Change).init(allocator),
             .lsp_connections = std.array_list.Managed(*lsp.LspConnection).init(allocator),
             .scratch = scratch,
-            .highlights = std.ArrayList(Span).init(allocator),
+            .highlights = std.array_list.Managed(Span).init(allocator),
             .allocator = allocator,
         };
         _ = try self.syncFs();

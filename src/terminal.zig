@@ -192,16 +192,16 @@ pub const Terminal = struct {
                     try self.moveCursor(.{ .row = @intCast(term_row), .col = area.pos.col });
                     switch (hunk.type) {
                         .add => {
-                            try co.attributes.write(co.attributes.git_added, self.writer.writer());
-                            _ = try self.write("┃");
+                            try co.attributes.write(co.attributes.git_added, self.writer);
+                            try self.writer.writeAll("┃");
                         },
                         .delete => {
-                            try co.attributes.write(co.attributes.git_deleted, self.writer.writer());
-                            _ = try self.write("▁");
+                            try co.attributes.write(co.attributes.git_deleted, self.writer);
+                            try self.writer.writeAll("▁");
                         },
                         .modify => {
-                            try co.attributes.write(co.attributes.git_modified, self.writer.writer());
-                            _ = try self.write("┃");
+                            try co.attributes.write(co.attributes.git_modified, self.writer);
+                            try self.writer.writeAll("┃");
                         },
                     }
                 }
@@ -400,7 +400,7 @@ pub const Terminal = struct {
     }
 
     fn drawCodeActions(self: *Terminal, code_actions: []const act.CodeAction, area: Area) !void {
-        var overlay_lines = std.ArrayList([]const u8).init(self.allocator);
+        var overlay_lines = std.array_list.Managed([]const u8).init(self.allocator);
         defer {
             for (overlay_lines.items) |l| self.allocator.free(l);
             overlay_lines.deinit();

@@ -24,7 +24,7 @@ pub fn gitRoot(allocator: Allocator, file_path: []const u8) !?[]const u8 {
 }
 
 pub fn show(allocator: Allocator, file_path: []const u8) !?[]const u8 {
-    var path_arg = std.ArrayList(u8).init(allocator);
+    var path_arg = std.array_list.Managed(u8).init(allocator);
     defer path_arg.deinit();
     try path_arg.appendSlice(":");
     try path_arg.appendSlice(file_path);
@@ -66,7 +66,7 @@ pub const Hunk = struct {
 };
 
 pub fn parseDiff(allocator: Allocator, diff: []const u8) ![]const Hunk {
-    var hunks = std.ArrayList(Hunk).init(allocator);
+    var hunks = std.array_list.Managed(Hunk).init(allocator);
     var hunk_iter = std.mem.splitSequence(u8, diff, "\n@@");
     // skip file info before first hunk
     _ = hunk_iter.next();

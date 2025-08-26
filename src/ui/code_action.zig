@@ -17,7 +17,7 @@ pub const CodeAction = struct {
         return .{
             .hint = title[0],
             .title = title,
-            .edit_json = try std.json.stringifyAlloc(allocator, code_action.edit.?, .{}),
+            .edit_json = try std.json.Stringify.valueAlloc(allocator, code_action.edit.?, .{}),
             .allocator = allocator,
         };
     }
@@ -29,10 +29,10 @@ pub const CodeAction = struct {
 };
 
 pub fn fromLsp(allocator: Allocator, lsp_code_actions: []const lsp.types.CodeAction) ![]const CodeAction {
-    var bag = std.ArrayList(u8).init(allocator);
+    var bag = std.array_list.Managed(u8).init(allocator);
     try bag.appendSlice(hint_bag);
     defer bag.deinit();
-    var code_actions = std.ArrayList(CodeAction).init(allocator);
+    var code_actions = std.array_list.Managed(CodeAction).init(allocator);
     for (lsp_code_actions) |lsp_code_action| {
         var action = try CodeAction.init(allocator, lsp_code_action);
         if (std.mem.indexOfScalar(u8, bag.items, action.hint)) |available_idx| {
