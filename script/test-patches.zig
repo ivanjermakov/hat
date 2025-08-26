@@ -14,7 +14,7 @@ pub fn main() !void {
     _ = try runCmd(arena_allocator, &.{ "git", "diff" }, &exit_code);
     if (exit_code != 0) {
         std.debug.print("uncommitted changes, aborting", .{});
-        return;
+        return error.UncommittedChanges;
     }
 
     var patch_names = std.array_list.Managed([]const u8).init(arena_allocator);
@@ -70,8 +70,8 @@ fn applyPatch(arena: std.mem.Allocator, patch_name: []const u8) !void {
     const patch_path = try std.fmt.allocPrint(arena, "patch/{s}/{s}.diff", .{ patch_name, patch_name });
     _ = try runCmd(arena, &.{ "git", "apply", patch_path }, &exit_code);
     if (exit_code != 0) {
-        std.debug.print("git apply failed, exit code {}", .{exit_code});
-        return;
+        std.debug.print("git apply failed, exit code {}\n", .{exit_code});
+        return error.Apply;
     }
 }
 
@@ -79,7 +79,7 @@ fn runTest(arena: std.mem.Allocator) !void {
     var exit_code: u8 = undefined;
     _ = try runCmd(arena, &.{ "zig", "build", "test", "--summary", "all" }, &exit_code);
     if (exit_code != 0) {
-        std.debug.print("zig test failed, exit code {}", .{exit_code});
-        return;
+        std.debug.print("zig test failed, exit code {}\n", .{exit_code});
+        return error.Test;
     }
 }
