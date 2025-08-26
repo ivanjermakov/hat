@@ -338,7 +338,7 @@ pub const Terminal = struct {
     }
 
     fn drawCodeActions(self: *Terminal, code_actions: []const act.CodeAction, area: Area) !void {
-        var overlay_lines = std.ArrayList([]const u8).init(self.allocator);
+        var overlay_lines = std.array_list.Managed([]const u8).init(self.allocator);
         defer {
             for (overlay_lines.items) |l| self.allocator.free(l);
             overlay_lines.deinit();
