@@ -243,13 +243,19 @@ pub const Buffer = struct {
             },
             .select_line => {
                 var selection = &self.selection.?;
-                const move_start = selection.start.row == old_cursor.row and
-                    (selection.end.row != self.cursor.row or self.cursor.row < selection.start.row);
+                const move_start = old_cursor.row == selection.start.row;
                 if (move_start) {
-                    selection.start = .{ .row = self.cursor.row, .col = 0 };
+                    selection.start.row = self.cursor.row;
                 } else {
-                    selection.start.col = 0;
                     selection.end.row = self.cursor.row + 1;
+                }
+                // restore ends order
+                if (selection.start.row + 1 > selection.end.row) {
+                    const tmp = selection.start.row;
+                    // exclusive end becomes inclusive start
+                    selection.start.row = selection.end.row - 1;
+                    // inclusive start becomes exclusive end
+                    selection.end.row = tmp + 1;
                 }
                 main.editor.dirty.draw = true;
             },
