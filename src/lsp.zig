@@ -311,15 +311,20 @@ pub const LspConnection = struct {
 
     fn poll(self: *LspConnection) !?[]const []const u8 {
         if (log.enabled(.@"error")) b: {
-            const err = fs.readNonblock(self.allocator, self.child.stderr.?) catch break :b;
-            if (err) |e| {
-                defer self.allocator.free(e);
-                log.err(@This(), "{s}\n", .{e});
+            var err_writer = std.io.Writer.Allocating.init(self.allocator);
+            defer err_writer.deinit();
+            fs.readNonblock(&err_writer.writer, self.child.stderr.?) catch break :b;
+            const written = err_writer.written();
+            if (written.len > 0) {
+                log.err(@This(), "{s}\n", .{written});
             }
         }
 
-        const read = try fs.readNonblock(self.allocator, self.child.stdout.?) orelse return null;
-        defer self.allocator.free(read);
+        var out_writer = std.io.Writer.Allocating.init(self.allocator);
+        defer out_writer.deinit();
+        try fs.readNonblock(&out_writer.writer, self.child.stdout.?);
+        const read = out_writer.written();
+        if (read.len == 0) return null;
         try self.poll_buf.appendSlice(read);
 
         var messages = std.array_list.Managed([]const u8).init(self.allocator);

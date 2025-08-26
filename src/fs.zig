@@ -1,24 +1,16 @@
 const std = @import("std");
 const posix = std.posix;
 
-pub fn readNonblock(allocator: std.mem.Allocator, file: std.fs.File) !?[]u8 {
-    if (!poll(file)) return null;
-
-    var res = std.array_list.Managed(u8).init(allocator);
-    errdefer res.deinit();
+pub fn readNonblock(writer: *std.io.Writer, file: std.fs.File) !void {
+    if (!poll(file)) return;
 
     var b: [4096]u8 = undefined;
     while (true) {
         if (!poll(file)) break;
         const read_len = try file.read(&b);
         if (read_len == 0) break;
-        try res.appendSlice(b[0..read_len]);
+        try writer.writeAll(b[0..read_len]);
     }
-    if (res.items.len == 0) {
-        res.deinit();
-        return null;
-    }
-    return try res.toOwnedSlice();
 }
 
 pub fn poll(file: std.fs.File) bool {
