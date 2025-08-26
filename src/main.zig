@@ -239,18 +239,19 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     repeat_count = null;
 
                     // normal or select mode
+                } else if (normal_or_select and eql(u8, key, "i")) {
+                    buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = -1 * repeat_or_1 }));
                 } else if (normal_or_select and eql(u8, key, "k")) {
-                } else if (normal_or_select and eql(u8, key, "j")) {
                     buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = 1 * repeat_or_1 }));
-                } else if (normal_or_select and eql(u8, key, "h")) {
+                } else if (normal_or_select and eql(u8, key, "j")) {
                     buffer.moveCursor(buffer.cursor.applyOffset(.{ .col = -1 * repeat_or_1 }));
                 } else if (normal_or_select and eql(u8, key, "l")) {
                     buffer.moveCursor(buffer.cursor.applyOffset(.{ .col = 1 * repeat_or_1 }));
-                } else if (normal_or_select and eql(u8, key, "<c-u>")) {
+                } else if (normal_or_select and (eql(u8, key, "I") or eql(u8, key, "<pgup>"))) {
                     const half_screen = @divFloor(@as(i32, @intCast(term.dimensions.height)), 2);
                     buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = -1 * repeat_or_1 * half_screen }));
                     buffer.centerCursor();
-                } else if (normal_or_select and eql(u8, key, "<c-d>")) {
+                } else if (normal_or_select and (eql(u8, key, "K") or eql(u8, key, "<pgdown>"))) {
                     const half_screen = @divFloor(@as(i32, @intCast(term.dimensions.height)), 2);
                     buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = repeat_or_1 * half_screen }));
                     buffer.centerCursor();
@@ -262,7 +263,7 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     buffer.moveToWordEnd();
                 } else if (normal_or_select and eql(u8, key, "E")) {
                     buffer.moveToTokenEnd();
-                } else if (normal_or_select and eql(u8, key, "i")) {
+                } else if (normal_or_select and eql(u8, key, "h")) {
                     try editor.enterMode(.insert);
                 } else if (normal_or_select and eql(u8, key, "c")) {
                     try buffer.changeSelectionDelete();
@@ -326,7 +327,7 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     editor.findInFiles() catch |e| log.err(@This(), "find in files error: {}", .{e});
                 } else if (editor.mode == .normal and eql(u8, key, "<c-e>")) {
                     editor.pickBuffer() catch |e| log.err(@This(), "pick buffer error: {}", .{e});
-                } else if (editor.mode == .normal and eql(u8, key, "<K>")) {
+                } else if (editor.mode == .normal and eql(u8, key, "<c-d>")) {
                     if (editor.hover_contents) |hover| {
                         editor.openScratch(hover) catch |e| log.err(@This(), "open scratch error: {}", .{e});
                     } else {
