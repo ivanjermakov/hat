@@ -26,15 +26,8 @@ pub const Level = enum(u8) {
         };
     }
 
-    pub fn format(
-        self: Level,
-        comptime fmt: []const u8,
-        options: std.fmt.FormatOptions,
-        writer: anytype,
-    ) !void {
-        _ = fmt;
-        _ = options;
-        try std.fmt.format(writer, "{}", .{self.ansi()});
+    pub fn format(self: Level, writer: *std.io.Writer) std.io.Writer.Error!void {
+        try writer.print("{f}", .{self.ansi()});
         try switch (self) {
             .none => unreachable,
             .@"error" => writer.writeAll("err"),
@@ -87,22 +80,21 @@ pub fn init() void {
             }
         }
     }
-    info(@This(), "logging enabled, level: {}\n", .{level});
+    info(@This(), "logging enabled, level: {f}\n", .{level});
 }
 
 fn log(comptime caller: type, comptime lvl: Level, comptime fmt: []const u8, args: anytype) void {
     if (!enabled(lvl)) return;
-    const writer = main.std_err.writer();
-
     var now_buf: [32]u8 = undefined;
     const now_str = dt.Datetime.now().formatISO8601Buf(&now_buf, false) catch "";
 
-    std.fmt.format(
-        writer,
-        "{s} {} {}{s: <16}{s} ",
+    const writer = &main.std_err_writer.interface;
+    writer.print(
+        "{s} {f} {f}{s: <16}{s} ",
         .{ now_str, lvl, co.AnsiColor.magenta, callerName(caller), co.AnsiColor.reset },
     ) catch {};
-    std.fmt.format(writer, fmt, args) catch {};
+    writer.print(fmt, args) catch {};
+    writer.flush() catch {};
 }
 
 fn callerName(comptime caller: type) []const u8 {

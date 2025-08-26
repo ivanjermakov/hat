@@ -18,7 +18,7 @@ pub fn unicodeFromBytesBuf(buf: []u21, bytes: []const u8) !usize {
 }
 
 pub fn unicodeToBytes(allocator: Allocator, utf: []const u21) ![]const u8 {
-    var b = try std.ArrayList(u8).initCapacity(allocator, utf.len);
+    var b = try std.array_list.Managed(u8).initCapacity(allocator, utf.len);
     try unicodeToBytesWrite(b.writer(), utf);
     return b.toOwnedSlice();
 }

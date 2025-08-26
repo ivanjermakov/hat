@@ -2,15 +2,16 @@
     .name = .hat,
     .version = "0.0.0",
     .fingerprint = 0x920bac492a5fa19e,
-    .minimum_zig_version = "0.15.0-dev.643+dc6ffc28b",
+    .minimum_zig_version = "0.15.1",
     .dependencies = .{
-        .lsp_codegen = .{
-            .url = "git+https://github.com/zigtools/zig-lsp-codegen.git#30ccbd10fec9c4eaad5196f2d560b80d6cc2c078",
-            .hash = "lsp_codegen-0.1.0-CMjjo9nOCQA7rKs_uLFYA6A2FQ7hRqwXeID0CRnql0AD",
+        .lsp_kit = .{
+            .url = "git+https://github.com/zigtools/lsp-kit.git#576e9405b1ab22c17c0f9318feed3278aa66b0ea",
+            .hash = "lsp_kit-0.1.0-bi_PL04yCgAxLsF0hH2a5sZKT84MGQaKXouw2jvCE8Nl",
         },
         .pcrez = .{
-            .url = "git+https://github.com/qaptoR-zig/PCREz/#baa0793fa3ace5972367cc4786f22d9ab02e22b8",
-            .hash = "pcrez-0.0.1-f7US7RtXAACTgQMK1xiplwjrrLrUyavR82_nIrS2tjq-",
+            .path = "../clone/PCREz",
+            // .url = "git+https://github.com/qaptoR-zig/PCREz/#baa0793fa3ace5972367cc4786f22d9ab02e22b8",
+            // .hash = "pcrez-0.0.1-f7US7RtXAACTgQMK1xiplwjrrLrUyavR82_nIrS2tjq-",
         },
     },
     .paths = .{

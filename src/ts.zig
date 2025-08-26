@@ -21,7 +21,7 @@ pub fn ParseResult(comptime SpanType: type) type {
         const Self = @This();
 
         query: ?*ts.TSQuery = null,
-        spans: std.ArrayList(SpanType),
+        spans: std.array_list.Managed(SpanType),
         allocator: Allocator,
 
         pub fn init(allocator: Allocator, language: *ts.struct_TSLanguage, query_str: []const u8) !ParseResult(SpanType) {
@@ -31,7 +31,7 @@ pub fn ParseResult(comptime SpanType: type) type {
 
             return .{
                 .query = query,
-                .spans = std.ArrayList(SpanType).init(allocator),
+                .spans = std.array_list.Managed(SpanType).init(allocator),
                 .allocator = allocator,
             };
         }

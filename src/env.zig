@@ -6,7 +6,7 @@ const reg = @import("regex");
 /// Variable is a sequence in format of /\$[A-Z0-Z]+/
 /// Not resolved vars substituted with ""
 pub fn expand(allocator: std.mem.Allocator, str: []const u8, getenv: *const @TypeOf(std.posix.getenv)) ![]const u8 {
-    var res = std.ArrayList(u8).init(allocator);
+    var res = std.array_list.Managed(u8).init(allocator);
 
     var re = try reg.Regex.from("\\$[A-Z0-Z]+", false, allocator);
     defer re.deinit();

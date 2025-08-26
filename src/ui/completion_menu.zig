@@ -29,7 +29,7 @@ pub const CompletionItem = struct {
         } else null;
 
         return .{
-            .item_json = try std.json.stringifyAlloc(allocator, item, .{}),
+            .item_json = try std.json.Stringify.valueAlloc(allocator, item, .{}),
             .label = try allocator.dupe(u8, item.label),
             .filter_text = try allocator.dupe(u8, if (item.filterText) |ft| ft else item.label),
             .replace_text = try allocator.dupe(u8, text_edit.newText),
@@ -50,18 +50,18 @@ pub const CompletionItem = struct {
 };
 
 pub const CompletionMenu = struct {
-    completion_items: std.ArrayList(CompletionItem),
+    completion_items: std.array_list.Managed(CompletionItem),
     /// List of `completion_items` indices
     /// Empty means completion menu is not visible
-    display_items: std.ArrayList(usize),
+    display_items: std.array_list.Managed(usize),
     replace_range: ?lsp.types.Range,
     active_item: usize,
     allocator: Allocator,
 
     pub fn init(allocator: Allocator) CompletionMenu {
         return .{
-            .completion_items = std.ArrayList(CompletionItem).init(allocator),
-            .display_items = std.ArrayList(usize).init(allocator),
+            .completion_items = std.array_list.Managed(CompletionItem).init(allocator),
+            .display_items = std.array_list.Managed(usize).init(allocator),
             .replace_range = null,
             .active_item = 0,
             .allocator = allocator,

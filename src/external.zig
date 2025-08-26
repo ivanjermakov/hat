@@ -42,7 +42,7 @@ pub fn runExternalWait(
 }
 
 pub fn toArgv(allocator: Allocator, cmd: []const u8) ![]const []const u8 {
-    var parts = std.ArrayList([]const u8).init(allocator);
+    var parts = std.array_list.Managed([]const u8).init(allocator);
 
     var start: usize = 0;
     var quoted: bool = false;

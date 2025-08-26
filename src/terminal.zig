@@ -34,13 +34,13 @@ pub const cursor_type = union {
 };
 
 pub const Terminal = struct {
-    writer: std.io.BufferedWriter(8192, std.io.AnyWriter),
+    writer: *std.io.Writer,
     dimensions: Dimensions,
     allocator: Allocator,
 
-    pub fn init(allocator: Allocator, std_out_writer: std.io.AnyWriter, dimensions: Dimensions) !Terminal {
+    pub fn init(allocator: Allocator, writer: *std.io.Writer, dimensions: Dimensions) !Terminal {
         var self = Terminal{
-            .writer = .{ .unbuffered_writer = std_out_writer },
+            .writer = writer,
             .dimensions = dimensions,
             .allocator = allocator,
         };
@@ -65,8 +65,8 @@ pub const Terminal = struct {
         self.clear() catch {};
         self.switchBuf(false) catch {};
         self.wrapAround(true) catch {};
-        self.write(cursor_type.steady_block) catch {};
-        self.flush() catch {};
+        self.writer.writeAll(cursor_type.steady_block) catch {};
+        self.writer.flush() catch {};
     }
 
     pub fn draw(self: *Terminal) !void {
@@ -84,7 +84,7 @@ pub const Terminal = struct {
         try self.updateCursor();
         if (main.editor.command_line.command != null) try self.drawCmd(&main.editor.command_line);
 
-        try self.flush();
+        try self.writer.flush();
     }
 
     pub fn updateCursor(self: *Terminal) !void {
@@ -98,16 +98,16 @@ pub const Terminal = struct {
             .applyOffset(buffer.offset.negate())
             .applyOffset(layout.buffer.pos));
 
-        switch (main.editor.mode) {
-            .normal => _ = try self.write(cursor_type.steady_block),
-            .select, .select_line => _ = try self.write(cursor_type.steady_underline),
-            .insert => _ = try self.write(cursor_type.steady_bar),
-        }
-        try self.flush();
+        try self.writer.writeAll(switch (main.editor.mode) {
+            .normal => cursor_type.steady_block,
+            .select, .select_line => cursor_type.steady_underline,
+            .insert => cursor_type.steady_bar,
+        });
+        try self.writer.flush();
     }
 
     fn clear(self: *Terminal) !void {
-        try self.write("\x1b[2J");
+        try self.writer.writeAll("\x1b[2J");
     }
 
     fn clearUntilLineEnd(self: *Terminal) !void {
@@ -115,53 +115,40 @@ pub const Terminal = struct {
     }
 
     pub fn switchBuf(self: *Terminal, alternative: bool) !void {
-        try self.write(if (alternative) "\x1b[?1049h" else "\x1b[?1049l");
-        try self.flush();
+        try self.writer.writeAll(if (alternative) "\x1b[?1049h" else "\x1b[?1049l");
+        try self.writer.flush();
     }
 
     pub fn wrapAround(self: *Terminal, enable: bool) !void {
-        try self.write(if (enable) "\x1b[?7h" else "\x1b[?7l");
+        try self.writer.writeAll(if (enable) "\x1b[?7h" else "\x1b[?7l");
     }
 
     fn resetAttributes(self: *Terminal) !void {
-        try self.write("\x1b[0m");
+        try self.writer.writeAll("\x1b[0m");
     }
 
     fn moveCursor(self: *Terminal, cursor: Cursor) !void {
-        try self.format("\x1b[{};{}H", .{ cursor.row + 1, cursor.col + 1 });
+        try self.writer.print("\x1b[{};{}H", .{ cursor.row + 1, cursor.col + 1 });
     }
 
     fn writeAttr(self: *Terminal, attr: co.Attr) !void {
         try attr.write(self.writer.writer());
     }
 
-    fn write(self: *Terminal, str: []const u8) !void {
-        _ = try self.writer.write(str);
-    }
-
-    fn flush(self: *Terminal) !void {
-        try self.writer.flush();
-    }
-
-    fn format(self: *Terminal, comptime str: []const u8, args: anytype) !void {
-        try std.fmt.format(self.writer.writer(), str, args);
-    }
-
     fn drawNumberLine(self: *Terminal, buffer: *buf.Buffer, area: Area) !void {
-        try co.attributes.write(co.attributes.number_line, self.writer.writer());
+        try co.attributes.write(co.attributes.number_line, self.writer);
         defer self.resetAttributes() catch {};
         for (@intCast(area.pos.row)..@as(usize, @intCast(area.pos.row)) + area.dims.height) |term_row| {
             const buffer_row = @as(i32, @intCast(term_row)) + buffer.offset.row;
             try self.moveCursor(.{ .row = @intCast(term_row), .col = area.pos.col });
             if (buffer_row < 0 or buffer_row >= buffer.line_positions.items.len) {
-                if (main.editor.config.end_of_buffer_char) |ch| _ = try self.write(&.{ch});
+                if (main.editor.config.end_of_buffer_char) |ch| _ = try self.writer.writeAll(&.{ch});
             } else {
-                try std.fmt.formatInt(
+                try self.writer.printInt(
                     @as(usize, @intCast(buffer_row + 1)),
                     10,
                     .lower,
                     .{ .width = area.dims.width - 1, .alignment = .right },
-                    self.writer.writer(),
                 );
             }
         }
@@ -193,7 +180,7 @@ pub const Terminal = struct {
                 line = line[@intCast(buffer.offset.col)..];
             } else {
                 for (0..@intCast(-buffer.offset.col)) |_| {
-                    try self.write(" ");
+                    try self.writer.writeAll(" ");
                 }
             }
 
@@ -239,7 +226,7 @@ pub const Terminal = struct {
                 attrs = attrs_stream.getWritten();
                 if (last_attrs == null or !std.mem.eql(u8, attrs, last_attrs.?)) {
                     self.resetAttributes() catch {};
-                    try self.write(attrs);
+                    try self.writer.writeAll(attrs);
                     @memcpy(&last_attrs_buf, &attrs_buf);
                     last_attrs = last_attrs_buf[0..try attrs_stream.getPos()];
                 }
@@ -290,16 +277,16 @@ pub const Terminal = struct {
                     .col = menu_pos.col,
                 });
                 if (menu_row == cmp_menu.active_item) {
-                    try co.attributes.write(co.attributes.completion_menu_active, self.writer.writer());
+                    try co.attributes.write(co.attributes.completion_menu_active, self.writer);
                 } else {
-                    try co.attributes.write(co.attributes.completion_menu, self.writer.writer());
+                    try co.attributes.write(co.attributes.completion_menu, self.writer);
                 }
-                try self.write(cmp_item.label[0..@min(cmp_item.label.len, menu_width)]);
+                try self.writer.writeAll(cmp_item.label[0..@min(cmp_item.label.len, menu_width)]);
 
                 const padding_len: i32 = menu_width - @as(i32, @intCast(cmp_item.label.len));
                 if (padding_len > 0) {
                     for (0..@intCast(padding_len)) |_| {
-                        try self.write(" ");
+                        try self.writer.writeAll(" ");
                     }
                 }
             }
@@ -309,7 +296,7 @@ pub const Terminal = struct {
         {
             const cmp_item = cmp_menu.activeItem();
             if (cmp_item.detail == null and cmp_item.documentation == null) return;
-            var doc_lines = std.ArrayList([]const u8).init(self.allocator);
+            var doc_lines = std.array_list.Managed([]const u8).init(self.allocator);
             defer doc_lines.deinit();
             if (cmp_item.detail) |detail| try doc_lines.append(detail);
             if (cmp_item.documentation) |documentation| {
@@ -325,7 +312,7 @@ pub const Terminal = struct {
     }
 
     fn drawHover(self: *Terminal, text: []const u8, area: Area) !void {
-        var doc_lines = std.ArrayList([]const u8).init(self.allocator);
+        var doc_lines = std.array_list.Managed([]const u8).init(self.allocator);
         defer doc_lines.deinit();
         var doc_iter = std.mem.splitScalar(u8, text, '\n');
         while (doc_iter.next()) |line| {
@@ -351,7 +338,7 @@ pub const Terminal = struct {
     /// Draw a box on top of the editor's content, containing `lines`
     /// Box width is min(longest line, available area)
     fn drawOverlay(self: *Terminal, lines: []const []const u8, pos: Cursor) !void {
-        try co.attributes.write(co.attributes.overlay, self.writer.writer());
+        try co.attributes.write(co.attributes.overlay, self.writer);
         defer self.resetAttributes() catch {};
 
         const max_doc_width = 90;
@@ -369,9 +356,9 @@ pub const Terminal = struct {
             });
             const available_len = @min(self.dimensions.width - @as(usize, @intCast(pos.col)), doc_width);
             const visible_len = @min(available_len, doc_line.len);
-            try self.write(doc_line[0..visible_len]);
+            try self.writer.writeAll(doc_line[0..visible_len]);
             for (0..available_len - visible_len) |_| {
-                try self.write(" ");
+                try self.writer.writeAll(" ");
             }
         }
     }
@@ -381,8 +368,8 @@ pub const Terminal = struct {
         const message = main.editor.messages.items[main.editor.message_read_idx];
         const message_height = std.mem.count(u8, message, "\n") + 1;
         try self.moveCursor(.{ .row = @intCast(self.dimensions.height - message_height) });
-        try co.attributes.write(co.attributes.message, self.writer.writer());
-        try self.write(message);
+        try co.attributes.write(co.attributes.message, self.writer);
+        try self.writer.writeAll(message);
         try self.resetAttributes();
     }
 
@@ -390,10 +377,10 @@ pub const Terminal = struct {
         const last_row = self.dimensions.height - 1;
         const prefix = command_line.command.?.prefix();
         try self.moveCursor(.{ .row = @intCast(last_row) });
-        try co.attributes.write(co.attributes.command_line, self.writer.writer());
-        try self.write(prefix);
+        try co.attributes.write(co.attributes.command_line, self.writer);
+        try self.writer.writeAll(prefix);
         for (command_line.content.items) |ch| {
-            try self.format("{u}", .{ch});
+            try uni.unicodeToBytesWrite(self.writer, &.{ch});
         }
         try self.resetAttributes();
         try self.moveCursor(.{ .row = @intCast(last_row), .col = @intCast(prefix.len + command_line.cursor) });
@@ -403,10 +390,10 @@ pub const Terminal = struct {
     fn writeChar(self: *Terminal, ch: u21) !void {
         switch (ch) {
             // @see https://www.compart.com/en/unicode/U+2400
-            0x00...0x09, 0x0B...0x1F => try self.format("{u}", .{ch + 0x2400}),
-            0x7F => try self.format("{u}", .{0x2421}),
-            0x80...0xA0 => try self.format("<{X:0>2}>", .{ch}),
-            else => try self.format("{u}", .{ch}),
+            0x00...0x09, 0x0B...0x1F => try uni.unicodeToBytesWrite(self.writer, &.{ch + 0x2400}),
+            0x7F => try uni.unicodeToBytesWrite(self.writer, &.{0x2421}),
+            0x80...0xA0 => try self.writer.print("<{X:0>2}>", .{ch}),
+            else => try uni.unicodeToBytesWrite(self.writer, &.{ch}),
         }
     }
 };
@@ -443,7 +430,7 @@ pub fn computeLayout(term_dims: Dimensions) Layout {
     };
 }
 
-pub fn parseAnsi(allocator: Allocator, input: *std.ArrayList(u8)) !inp.Key {
+pub fn parseAnsi(allocator: Allocator, input: *std.array_list.Managed(u8)) !inp.Key {
     log.debug(@This(), "codes: {any}\n", .{input.items});
     var key: inp.Key = .{ .allocator = allocator };
     const code = input.orderedRemove(0);
@@ -529,7 +516,7 @@ pub fn parseAnsi(allocator: Allocator, input: *std.ArrayList(u8)) !inp.Key {
             }
         },
         else => {
-            var printable = std.ArrayList(u8).init(allocator);
+            var printable = std.array_list.Managed(u8).init(allocator);
             defer printable.deinit();
 
             try printable.append(code);
@@ -546,7 +533,7 @@ pub fn parseAnsi(allocator: Allocator, input: *std.ArrayList(u8)) !inp.Key {
 
 pub fn getCodes(allocator: Allocator) !?[]const u8 {
     if (!fs.poll(main.tty_in)) return null;
-    var in_buf = std.ArrayList(u8).init(allocator);
+    var in_buf = std.array_list.Managed(u8).init(allocator);
     while (true) {
         if (!fs.poll(main.tty_in)) break;
         var b: [1]u8 = undefined;
@@ -561,9 +548,9 @@ pub fn getCodes(allocator: Allocator) !?[]const u8 {
 }
 
 pub fn getKeys(allocator: Allocator, codes: []const u8) ![]inp.Key {
-    var keys = std.ArrayList(inp.Key).init(allocator);
+    var keys = std.array_list.Managed(inp.Key).init(allocator);
 
-    var cs = std.ArrayList(u8).init(allocator);
+    var cs = std.array_list.Managed(u8).init(allocator);
     defer cs.deinit();
     try cs.appendSlice(codes);
 
@@ -572,7 +559,7 @@ pub fn getKeys(allocator: Allocator, codes: []const u8) ![]inp.Key {
             log.debug(@This(), "{}\n", .{e});
             continue;
         };
-        log.debug(@This(), "key: \"{}\"\n", .{key});
+        log.debug(@This(), "key: \"{f}\"\n", .{key});
         try keys.append(key);
     }
     return try keys.toOwnedSlice();

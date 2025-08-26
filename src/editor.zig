@@ -41,39 +41,39 @@ pub const Editor = struct {
     config: Config = .{},
     /// List of buffers
     /// Must be always sorted recent-first
-    buffers: std.ArrayList(*buf.Buffer),
+    buffers: std.array_list.Managed(*buf.Buffer),
     active_buffer: *buf.Buffer = undefined,
     mode: Mode,
     dirty: Dirty,
     completion_menu: cmp.CompletionMenu,
     command_line: cmd.CommandLine,
     lsp_connections: std.StringHashMap(lsp.LspConnection),
-    messages: std.ArrayList([]const u8),
+    messages: std.array_list.Managed([]const u8),
     message_read_idx: usize = 0,
     hover_contents: ?[]const u8 = null,
-    key_queue: std.ArrayList(inp.Key),
-    dot_repeat_input: std.ArrayList(inp.Key),
-    dot_repeat_input_uncommitted: std.ArrayList(inp.Key),
+    key_queue: std.array_list.Managed(inp.Key),
+    dot_repeat_input: std.array_list.Managed(inp.Key),
+    dot_repeat_input_uncommitted: std.array_list.Managed(inp.Key),
     dot_repeat_state: DotRepeat = .outside,
     find_query: ?[]const u21 = null,
     recording_macro: ?u8 = null,
-    macros: std.AutoHashMap(u8, std.ArrayList(inp.Key)),
+    macros: std.AutoHashMap(u8, std.array_list.Managed(inp.Key)),
     allocator: Allocator,
 
     pub fn init(allocator: Allocator, config: Config) !Editor {
         const editor = Editor{
             .config = config,
-            .buffers = std.ArrayList(*buf.Buffer).init(allocator),
+            .buffers = std.array_list.Managed(*buf.Buffer).init(allocator),
             .mode = .normal,
             .dirty = .{},
             .completion_menu = cmp.CompletionMenu.init(allocator),
             .command_line = cmd.CommandLine.init(allocator),
             .lsp_connections = std.StringHashMap(lsp.LspConnection).init(allocator),
-            .messages = std.ArrayList([]const u8).init(allocator),
-            .key_queue = std.ArrayList(inp.Key).init(allocator),
-            .dot_repeat_input = std.ArrayList(inp.Key).init(allocator),
-            .dot_repeat_input_uncommitted = std.ArrayList(inp.Key).init(allocator),
-            .macros = std.AutoHashMap(u8, std.ArrayList(inp.Key)).init(allocator),
+            .messages = std.array_list.Managed([]const u8).init(allocator),
+            .key_queue = std.array_list.Managed(inp.Key).init(allocator),
+            .dot_repeat_input = std.array_list.Managed(inp.Key).init(allocator),
+            .dot_repeat_input_uncommitted = std.array_list.Managed(inp.Key).init(allocator),
+            .macros = std.AutoHashMap(u8, std.array_list.Managed(inp.Key)).init(allocator),
             .allocator = allocator,
         };
         return editor;
@@ -293,10 +293,10 @@ pub const Editor = struct {
             }
             try self.sendMessageFmt("recorded @{c}", .{name});
             if (log.enabled(.debug)) {
-                var keys_str = std.ArrayList(u8).init(self.allocator);
+                var keys_str = std.array_list.Managed(u8).init(self.allocator);
                 defer keys_str.deinit();
                 for (macro.items) |key| {
-                    try std.fmt.format(keys_str.writer(), "{}", .{key});
+                    try keys_str.writer().print("{f}", .{key});
                 }
                 log.debug(@This(), "@{c}: \"{s}\"\n", .{ name, keys_str.items });
             }
@@ -307,7 +307,7 @@ pub const Editor = struct {
     pub fn recordMacroKey(self: *Editor, key: inp.Key) !void {
         if (self.recording_macro) |name| {
             const gop = try self.macros.getOrPut(name);
-            if (!gop.found_existing) gop.value_ptr.* = std.ArrayList(inp.Key).init(self.allocator);
+            if (!gop.found_existing) gop.value_ptr.* = std.array_list.Managed(inp.Key).init(self.allocator);
             try gop.value_ptr.append(try key.clone(self.allocator));
         }
     }

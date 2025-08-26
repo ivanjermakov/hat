@@ -52,7 +52,7 @@ pub fn findInFiles(allocator: Allocator) !FindResult {
 }
 
 pub fn pickBuffer(allocator: Allocator, buffers: []const *buf.Buffer) ![]const u8 {
-    var bufs = std.ArrayList(u8).init(allocator);
+    var bufs = std.array_list.Managed(u8).init(allocator);
     for (buffers) |buffer| {
         const s = try std.fmt.allocPrint(
             allocator,
@@ -73,7 +73,7 @@ pub fn pickBuffer(allocator: Allocator, buffers: []const *buf.Buffer) ![]const u
 }
 
 pub fn pickLspLocation(allocator: Allocator, locations: []const lsp.types.Location) !FindResult {
-    var bufs = std.ArrayList(u8).init(allocator);
+    var bufs = std.array_list.Managed(u8).init(allocator);
     for (locations) |location| {
         const start = location.range.start;
         const path = try uri.toPath(allocator, location.uri);

@@ -17,7 +17,7 @@ pub fn main() !void {
         return;
     }
 
-    var patch_names = std.ArrayList([]const u8).init(arena_allocator);
+    var patch_names = std.array_list.Managed([]const u8).init(arena_allocator);
     var patch_dir = try std.fs.cwd().openDir("patch", .{ .iterate = true });
     defer patch_dir.close();
     var dir_iter = patch_dir.iterate();
