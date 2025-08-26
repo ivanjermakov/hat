@@ -6,6 +6,7 @@ const core = @import("core.zig");
 const log = @import("log.zig");
 const main = @import("main.zig");
 const ter = @import("terminal.zig");
+const uni = @import("unicode.zig");
 
 pub const HighlightConfig = struct {
     term_height: usize,
@@ -20,10 +21,7 @@ pub const HighlightConfig = struct {
     }
 };
 
-pub fn printBuffer(buffer: *buf.Buffer, writer: std.io.AnyWriter, highlight: ?HighlightConfig) !void {
-    var buf_writer = std.io.bufferedWriter(writer);
-    var w = buf_writer.writer();
-
+pub fn printBuffer(buffer: *buf.Buffer, writer: *std.io.Writer, highlight: ?HighlightConfig) !void {
     var attrs_buf = std.mem.zeroes([128]u8);
     var attrs_stream = std.io.fixedBufferStream(&attrs_buf);
     var attrs: []const u8 = undefined;
@@ -42,8 +40,8 @@ pub fn printBuffer(buffer: *buf.Buffer, writer: std.io.AnyWriter, highlight: ?Hi
     var row: i32 = start_row;
     while (row < end_row) {
         defer {
-            _ = w.write("\x1b[0m") catch {};
-            _ = w.write("\n") catch {};
+            _ = writer.write("\x1b[0m") catch {};
+            _ = writer.write("\n") catch {};
             last_attrs = null;
             row += 1;
         }
@@ -75,16 +73,16 @@ pub fn printBuffer(buffer: *buf.Buffer, writer: std.io.AnyWriter, highlight: ?Hi
 
             attrs = attrs_stream.getWritten();
             if (last_attrs == null or !std.mem.eql(u8, attrs, last_attrs.?)) {
-                _ = try w.write("\x1b[0m");
-                _ = try w.write(attrs);
+                _ = try writer.write("\x1b[0m");
+                _ = try writer.write(attrs);
                 @memcpy(&last_attrs_buf, &attrs_buf);
                 last_attrs = last_attrs_buf[0..try attrs_stream.getPos()];
             }
 
-            try std.fmt.format(w, "{u}", .{ch});
+            try uni.unicodeToBytesWrite(writer, &.{ch});
 
             byte += try std.unicode.utf8CodepointSequenceLength(ch);
         }
     }
-    try buf_writer.flush();
+    try writer.flush();
 }

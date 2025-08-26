@@ -23,14 +23,14 @@ pub const Command = enum {
 };
 
 pub const CommandLine = struct {
-    content: std.ArrayList(u21),
+    content: std.array_list.Managed(u21),
     command: ?Command = null,
     cursor: usize = 0,
     allocator: Allocator,
 
     pub fn init(allocator: Allocator) CommandLine {
         return .{
-            .content = std.ArrayList(u21).init(allocator),
+            .content = std.array_list.Managed(u21).init(allocator),
             .allocator = allocator,
         };
     }

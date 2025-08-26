@@ -30,9 +30,15 @@ pub const Args = struct {
 
 pub const sleep_ns: u64 = 16 * std.time.ns_per_ms;
 pub const sleep_lsp_ns: u64 = sleep_ns;
-pub const std_in = std.io.getStdIn();
-pub const std_out = std.io.getStdOut();
-pub const std_err = std.io.getStdErr();
+
+pub var std_out_buf: [2 << 14]u8 = undefined;
+pub const std_out = std.fs.File.stdout();
+pub var std_out_writer = std_out.writer(&std_out_buf);
+
+pub var std_err_buf: [2 << 14]u8 = undefined;
+pub const std_err = std.fs.File.stderr();
+pub var std_err_writer = std_err.writer(&std_err_buf);
+
 pub var tty_in: std.fs.File = undefined;
 
 
@@ -82,13 +88,13 @@ pub fn main() !void {
         defer buffer.deinit();
         try pri.printBuffer(
             &buffer,
-            std_out.writer().any(),
+            &std_out_writer.interface,
             try pri.HighlightConfig.fromArgs(args),
         );
         return;
     }
 
-    term = try ter.Terminal.init(allocator, std_out.writer().any(), try ter.terminalSize());
+    term = try ter.Terminal.init(allocator, &std_out_writer.interface, try ter.terminalSize());
     defer term.deinit();
 
     editor = try edi.Editor.init(allocator, .{
@@ -118,7 +124,7 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
         defer {
             main_loop_mutex.unlock();
             if (sleep_ns > perf.total) {
-                std.time.sleep(sleep_ns - perf.total);
+                std.Thread.sleep(sleep_ns - perf.total);
             }
         }
 
@@ -135,7 +141,7 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
             editor.dotRepeatExecuted();
             while (editor.key_queue.items.len > 0) {
                 const raw_key = editor.key_queue.items[0];
-                const key = try std.fmt.allocPrint(allocator, "{}", .{raw_key});
+                const key = try std.fmt.allocPrint(allocator, "{f}", .{raw_key});
                 defer allocator.free(key);
 
                 const normal_or_select = editor.mode.normalOrSelect();
@@ -193,7 +199,7 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
 
                     // text insertion
                 } else if (editor.mode == .insert and editor.key_queue.items[0].printable != null) {
-                    var printable = std.ArrayList(u21).init(allocator);
+                    var printable = std.array_list.Managed(u21).init(allocator);
                     keys_consumed = 0;
                     // read all cosecutive printable keys in case this is a paste command
                     while (true) {
@@ -336,7 +342,7 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     keys_consumed = 2;
                     const key2 = editor.key_queue.items[1];
                     // no need for more than 2 keys for now
-                    const multi_key = try std.fmt.allocPrint(allocator, "{s}{}", .{ key, key2 });
+                    const multi_key = try std.fmt.allocPrint(allocator, "{s}{f}", .{ key, key2 });
                     defer allocator.free(multi_key);
 
                     if (editor.mode == .normal and eql(u8, multi_key, " w")) {
@@ -461,7 +467,7 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
 
         perf.total = timer_total.lap();
         if (perf.total > per.report_perf_threshold_ns) {
-            log.debug(@This(), "frame perf: \n{}", .{perf});
+            log.debug(@This(), "frame perf: \n{f}", .{perf});
         }
     }
 }
@@ -474,8 +480,9 @@ pub fn testSetup() !void {
     const allocator = std.testing.allocator;
     log.level = .@"error";
     editor = try edi.Editor.init(allocator, .{});
+    var writer = std.io.Writer.Discarding.init(&std_out_buf).writer;
     term = ter.Terminal{
-        .writer = .{ .unbuffered_writer = std.io.null_writer.any() },
+        .writer = &writer,
         .dimensions = .{ .width = 50, .height = 30 },
         .allocator = allocator,
     };

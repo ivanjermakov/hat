@@ -40,17 +40,9 @@ pub const AnsiColor = enum(u8) {
 
     pub const reset = "\x1b[0m";
 
-    pub fn format(
-        self: AnsiColor,
-        comptime fmt: []const u8,
-        options: std.fmt.FormatOptions,
-        writer: anytype,
-    ) !void {
-        _ = fmt;
-        _ = options;
-
+    pub fn format(self: AnsiColor, writer: *std.io.Writer) std.io.Writer.Error!void {
         const escapeCode = "\x1b[38;5;";
-        try std.fmt.format(writer, "{s}{}{s}", .{ escapeCode, @intFromEnum(self), "m" });
+        try writer.print("{s}{}{s}", .{ escapeCode, @intFromEnum(self), "m" });
     }
 };
 
@@ -80,9 +72,9 @@ pub const Attr = union(enum) {
 
     pub fn write(self: Attr, writer: anytype) !void {
         switch (self) {
-            .fg => |c| try std.fmt.format(writer, "\x1b[38;2;{};{};{}m", .{ c.r, c.g, c.b }),
-            .bg => |c| try std.fmt.format(writer, "\x1b[48;2;{};{};{}m", .{ c.r, c.g, c.b }),
-            .underline => |c| try std.fmt.format(writer, "\x1b[58;2;{};{};{}m", .{ c.r, c.g, c.b }),
+            .fg => |c| try writer.print("\x1b[38;2;{};{};{}m", .{ c.r, c.g, c.b }),
+            .bg => |c| try writer.print("\x1b[48;2;{};{};{}m", .{ c.r, c.g, c.b }),
+            .underline => |c| try writer.print("\x1b[58;2;{};{};{}m", .{ c.r, c.g, c.b }),
             .curly_underline => _ = try writer.write("\x1b[4:3m"),
             .bold => _ = try writer.write("\x1b[1m"),
         }

@@ -12,17 +12,8 @@ pub const PerfInfo = struct {
     sync: u64,
     total: u64,
 
-    pub fn format(
-        self: *const PerfInfo,
-        comptime fmt: []const u8,
-        options: std.fmt.FormatOptions,
-        writer: anytype,
-    ) !void {
-        _ = fmt;
-        _ = options;
-
-        try std.fmt.format(
-            writer,
+    pub fn format(self: *const PerfInfo, writer: *std.io.Writer) std.io.Writer.Error!void {
+        try writer.print(
             "total: {}, input: {}, parse: {}, mapping: {}, did_change: {}, draw: {}, commit: {}, sync: {}\n",
             .{
                 self.total / std.time.ns_per_us,
@@ -37,4 +28,3 @@ pub const PerfInfo = struct {
         );
     }
 };
-

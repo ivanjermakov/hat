@@ -18,7 +18,7 @@ const dia = @import("ui/diagnostic.zig");
 const act = @import("ui/code_action.zig");
 const uri = @import("uri.zig");
 
-const default_stringify_opts = std.json.StringifyOptions{ .emit_null_optional_fields = false };
+const default_stringify_opts = std.json.Stringify.Options{ .emit_null_optional_fields = false };
 
 pub const LspConfig = struct {
     name: []const u8,
@@ -40,7 +40,7 @@ pub const lsp_config = [_]LspConfig{
 };
 
 pub fn findLspsByFileType(allocator: Allocator, file_type: []const u8) ![]LspConfig {
-    var res = std.ArrayList(LspConfig).init(allocator);
+    var res = std.array_list.Managed(LspConfig).init(allocator);
     for (lsp_config) |config| {
         for (config.file_types) |ft| {
             if (std.mem.eql(u8, file_type, ft)) {
@@ -69,9 +69,9 @@ pub const LspConnection = struct {
     status: LspConnectionStatus,
     child: std.process.Child,
     messages_unreplied: std.AutoHashMap(i64, LspRequest),
-    poll_buf: std.ArrayList(u8),
+    poll_buf: std.array_list.Managed(u8),
     poll_header: ?lsp.BaseProtocolHeader,
-    buffers: std.ArrayList(*buf.Buffer),
+    buffers: std.array_list.Managed(*buf.Buffer),
     thread: std.Thread,
     client_capabilities: types.ClientCapabilities,
     server_init: ?std.json.Parsed(types.InitializeResult) = null,
@@ -120,9 +120,9 @@ pub const LspConnection = struct {
             .status = .Created,
             .child = child,
             .messages_unreplied = std.AutoHashMap(i64, LspRequest).init(allocator),
-            .poll_buf = std.ArrayList(u8).init(allocator),
+            .poll_buf = std.array_list.Managed(u8).init(allocator),
             .poll_header = null,
-            .buffers = std.ArrayList(*buf.Buffer).init(allocator),
+            .buffers = std.array_list.Managed(*buf.Buffer).init(allocator),
             .thread = undefined,
             .client_capabilities = client_capabilities,
             .allocator = allocator,
@@ -226,6 +226,7 @@ pub const LspConnection = struct {
         self.messages_unreplied.deinit();
         self.buffers.deinit();
         if (self.server_init) |si| si.deinit();
+        self.poll_buf.deinit();
     }
 
     pub fn goToDefinition(self: *LspConnection) !void {
@@ -322,7 +323,7 @@ pub const LspConnection = struct {
                 .contentChanges = &changes,
             });
         } else {
-            var changes = try std.ArrayList(types.TextDocumentContentChangeEvent)
+            var changes = try std.array_list.Managed(types.TextDocumentContentChangeEvent)
                 .initCapacity(self.allocator, buffer.pending_changes.items.len);
             defer changes.deinit();
             for (buffer.pending_changes.items) |change| {
@@ -350,48 +351,49 @@ pub const LspConnection = struct {
 
     fn poll(self: *LspConnection) !?[]const []const u8 {
         if (log.enabled(.@"error")) b: {
-            const err = fs.readNonblock(self.allocator, self.child.stderr.?) catch break :b;
-            if (err) |e| {
-                defer self.allocator.free(e);
-                log.err(@This(), "{s}\n", .{e});
+            var err_writer = std.io.Writer.Allocating.init(self.allocator);
+            defer err_writer.deinit();
+            fs.readNonblock(&err_writer.writer, self.child.stderr.?) catch break :b;
+            const written = err_writer.written();
+            if (written.len > 0) {
+                log.err(@This(), "{s}\n", .{written});
             }
         }
 
-        const read = try fs.readNonblock(self.allocator, self.child.stdout.?) orelse return null;
-        defer self.allocator.free(read);
+        var out_writer = std.io.Writer.Allocating.init(self.allocator);
+        defer out_writer.deinit();
+        try fs.readNonblock(&out_writer.writer, self.child.stdout.?);
+        const read = out_writer.written();
+        if (read.len == 0) return null;
         try self.poll_buf.appendSlice(read);
 
-        var messages = std.ArrayList([]const u8).init(self.allocator);
+        var messages = std.array_list.Managed([]const u8).init(self.allocator);
         while (true) {
-            if (self.poll_buf.items.len == 0) break;
-            var read_stream = std.io.fixedBufferStream(self.poll_buf.items);
-            const reader = read_stream.reader();
+            if (self.poll_buf.items.len < lsp.BaseProtocolHeader.minimum_reader_buffer_size) break;
+            var reader = std.io.Reader.fixed(try self.poll_buf.toOwnedSlice());
+            defer self.allocator.free(reader.buffer);
 
-            const header = if (self.poll_header) |header| header else lsp.BaseProtocolHeader.parse(reader) catch |e| {
+            const header = if (self.poll_header) |header| header else lsp.BaseProtocolHeader.parse(&reader) catch |e| {
                 log.debug(@This(), "parse header error: {}\n", .{e});
                 break;
             };
-            const available: i32 = @as(i32, @intCast(self.poll_buf.items.len)) - @as(i32, @intCast(reader.context.pos));
+            const available: i32 = @as(i32, @intCast(reader.buffer.len)) - @as(i32, @intCast(reader.seek));
             if (header.content_length <= available) {
                 self.poll_header = null;
             } else {
                 // if message is incomplete, save header for next `poll` call
                 self.poll_header = header;
-                const old = try self.poll_buf.toOwnedSlice();
-                defer self.allocator.free(old);
-                try self.poll_buf.appendSlice(old[reader.context.pos..]);
+                try self.poll_buf.appendSlice(reader.buffer[reader.seek..]);
                 break;
             }
 
             const json_message = try self.allocator.alloc(u8, header.content_length);
             errdefer self.allocator.free(json_message);
-            _ = try reader.readAll(json_message);
+            _ = try reader.readSliceAll(json_message);
             try messages.append(json_message);
 
             // in case there is more messages in poll_buf, keep them
-            const old = try self.poll_buf.toOwnedSlice();
-            defer self.allocator.free(old);
-            try self.poll_buf.appendSlice(old[reader.context.pos..]);
+            try self.poll_buf.appendSlice(reader.buffer[reader.seek..]);
         }
 
         return try messages.toOwnedSlice();
@@ -407,7 +409,7 @@ pub const LspConnection = struct {
             .method = method,
             .params = params,
         };
-        const json_message = try std.json.stringifyAlloc(self.allocator, request, default_stringify_opts);
+        const json_message = try std.json.Stringify.valueAlloc(self.allocator, request, default_stringify_opts);
         log.trace(@This(), "> raw request: {s}\n", .{json_message});
         const rpc_message = try std.fmt.allocPrint(self.allocator, "Content-Length: {}\r\n\r\n{s}", .{ json_message.len, json_message });
         _ = try self.child.stdin.?.write(rpc_message);
@@ -424,7 +426,7 @@ pub const LspConnection = struct {
             .method = method,
             .params = params,
         };
-        const json_message = try std.json.stringifyAlloc(self.allocator, request, default_stringify_opts);
+        const json_message = try std.json.Stringify.valueAlloc(self.allocator, request, default_stringify_opts);
         defer self.allocator.free(json_message);
         log.trace(@This(), "> raw notification: {s}\n", .{json_message});
         const rpc_message = try std.fmt.allocPrint(self.allocator, "Content-Length: {}\r\n\r\n{s}", .{ json_message.len, json_message });
@@ -442,7 +444,7 @@ pub const LspConnection = struct {
             .id = id,
             .result_or_error = .{ .result = result },
         };
-        const json_message = try std.json.stringifyAlloc(self.allocator, request, default_stringify_opts);
+        const json_message = try std.json.Stringify.valueAlloc(self.allocator, request, default_stringify_opts);
         defer self.allocator.free(json_message);
         log.trace(@This(), "> raw response: {s}\n", .{json_message});
         const rpc_message = try std.fmt.allocPrint(self.allocator, "Content-Length: {}\r\n\r\n{s}", .{ json_message.len, json_message });
@@ -454,7 +456,7 @@ pub const LspConnection = struct {
         _ = arena;
         if (resp == null or resp.? == .null) return;
         self.server_init = try std.json.parseFromValue(types.InitializeResult, self.allocator, resp.?, .{});
-        log.debug(@This(), "server capabilities: {}\n", .{std.json.fmt(self.server_init.?.value.capabilities, .{})});
+        log.debug(@This(), "server capabilities: {f}\n", .{std.json.fmt(self.server_init.?.value.capabilities, .{})});
         try self.sendNotification("initialized", .{});
         self.status = .Initialized;
         for (self.buffers.items) |buffer| {

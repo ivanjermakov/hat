@@ -1,5 +1,5 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index e3674ac..2f0b0a3 100644
+index 7d382a0..3b3910f 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
 @@ -23,8 +23,9 @@ const lsp = @import("lsp.zig");
@@ -41,7 +41,7 @@ index e3674ac..2f0b0a3 100644
          const cmd = &main.editor.command_line;
          const line = self.lineContent(@intCast(self.cursor.row));
 diff --git a/src/editor.zig b/src/editor.zig
-index 2230f75..1663b3e 100644
+index 4ee7d23..3e857f5 100644
 --- a/src/editor.zig
 +++ b/src/editor.zig
 @@ -13,6 +13,7 @@ const main = @import("main.zig");
@@ -53,13 +53,13 @@ index 2230f75..1663b3e 100644
  const uni = @import("unicode.zig");
  const ur = @import("uri.zig");
 @@ -51,6 +52,7 @@ pub const Editor = struct {
-     messages: std.ArrayList([]const u8),
+     messages: std.array_list.Managed([]const u8),
      message_read_idx: usize = 0,
      hover_contents: ?[]const u8 = null,
 +    code_actions: ?[]const act.CodeAction = null,
-     key_queue: std.ArrayList(inp.Key),
-     dot_repeat_input: std.ArrayList(inp.Key),
-     dot_repeat_input_uncommitted: std.ArrayList(inp.Key),
+     key_queue: std.array_list.Managed(inp.Key),
+     dot_repeat_input: std.array_list.Managed(inp.Key),
+     dot_repeat_input_uncommitted: std.array_list.Managed(inp.Key),
 @@ -152,6 +154,7 @@ pub const Editor = struct {
  
      pub fn enterMode(self: *Editor, mode: Mode) FatalError!void {
@@ -93,7 +93,7 @@ index 2230f75..1663b3e 100644
          const keys = try ter.getKeys(self.allocator, str);
          defer self.allocator.free(keys);
 diff --git a/src/lsp.zig b/src/lsp.zig
-index 68504d8..65b092e 100644
+index d319506..11925e7 100644
 --- a/src/lsp.zig
 +++ b/src/lsp.zig
 @@ -9,11 +9,13 @@ const buf = @import("buffer.zig");
@@ -109,7 +109,7 @@ index 68504d8..65b092e 100644
 +const act = @import("ui/code_action.zig");
  const uri = @import("uri.zig");
  
- const default_stringify_opts = std.json.StringifyOptions{ .emit_null_optional_fields = false };
+ const default_stringify_opts = std.json.Stringify.Options{ .emit_null_optional_fields = false };
 @@ -104,6 +106,7 @@ pub const LspConnection = struct {
                  .rename = .{
                      .prepareSupport = true,
@@ -127,7 +127,7 @@ index 68504d8..65b092e 100644
                      }
                  },
                  .notification => |notif| {
-@@ -245,6 +250,15 @@ pub const LspConnection = struct {
+@@ -246,6 +251,15 @@ pub const LspConnection = struct {
          });
      }
  
@@ -143,7 +143,7 @@ index 68504d8..65b092e 100644
      pub fn rename(self: *LspConnection, new_name: []const u8) !void {
          if ((self.server_init orelse return).value.capabilities.renameProvider == null) return;
          const buffer = main.editor.active_buffer;
-@@ -516,6 +530,18 @@ pub const LspConnection = struct {
+@@ -518,6 +532,18 @@ pub const LspConnection = struct {
          try main.editor.applyWorkspaceEdit(result.value);
      }
  
@@ -163,10 +163,10 @@ index 68504d8..65b092e 100644
          _ = self;
          log.trace(@This(), "notification: {s}\n", .{notif.method});
 diff --git a/src/main.zig b/src/main.zig
-index 314bfd8..f9d613c 100644
+index db87e87..0c4fd0d 100644
 --- a/src/main.zig
 +++ b/src/main.zig
-@@ -155,6 +155,15 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+@@ -161,6 +161,15 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                  const cmd_active = editor.command_line.command != null;
                  var repeat_or_1: i32 = 1;
                  if (repeat_count) |rc| repeat_or_1 = @intCast(rc);
@@ -182,7 +182,7 @@ index 314bfd8..f9d613c 100644
  
                  // command line menu
                  if (cmd_active) {
-@@ -174,6 +183,10 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+@@ -180,6 +189,10 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                          try editor.command_line.insert(raw_key.printable.?);
                      }
  
@@ -192,8 +192,8 @@ index 314bfd8..f9d613c 100644
 +
                      // text insertion
                  } else if (editor.mode == .insert and editor.key_queue.items[0].printable != null) {
-                     var printable = std.ArrayList(u21).init(allocator);
-@@ -329,6 +342,8 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+                     var printable = std.array_list.Managed(u21).init(allocator);
+@@ -335,6 +348,8 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                          buffer.goToDefinition() catch |e| log.err(@This(), "go to def LSP error: {}", .{e});
                      } else if (editor.mode == .normal and eql(u8, multi_key, " r")) {
                          buffer.findReferences() catch |e| log.err(@This(), "find references LSP error: {}", .{e});
@@ -202,7 +202,7 @@ index 314bfd8..f9d613c 100644
                      } else if (editor.mode == .normal and eql(u8, multi_key, " n")) {
                          try buffer.renamePrompt();
                      } else if (editor.mode == .normal and eql(u8, key, "r") and editor.key_queue.items[1].printable != null) {
-@@ -337,6 +352,9 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+@@ -343,6 +358,9 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                      } else if (editor.mode == .normal and eql(u8, key, "@") and editor.key_queue.items[1].printable != null) {
                          const macro_name: u8 = @intCast(key2.printable.?[0]);
                          try editor.replayMacro(macro_name);
@@ -213,7 +213,7 @@ index 314bfd8..f9d613c 100644
                          buffer.moveCursor(.{ .col = buffer.cursor.col });
                          buffer.centerCursor();
 diff --git a/src/terminal.zig b/src/terminal.zig
-index 9e49057..ea12f97 100644
+index 464935f..870ffd2 100644
 --- a/src/terminal.zig
 +++ b/src/terminal.zig
 @@ -15,6 +15,7 @@ const log = @import("log.zig");
@@ -232,12 +232,12 @@ index 9e49057..ea12f97 100644
          if (main.editor.command_line.command == null) try self.drawMessage();
          try self.updateCursor();
          if (main.editor.command_line.command != null) try self.drawCmd(&main.editor.command_line);
-@@ -348,6 +350,34 @@ pub const Terminal = struct {
+@@ -335,6 +337,34 @@ pub const Terminal = struct {
          try self.drawOverlay(doc_lines.items, doc_pos);
      }
  
 +    fn drawCodeActions(self: *Terminal, code_actions: []const act.CodeAction, area: Area) !void {
-+        var overlay_lines = std.ArrayList([]const u8).init(self.allocator);
++        var overlay_lines = std.array_list.Managed([]const u8).init(self.allocator);
 +        defer {
 +            for (overlay_lines.items) |l| self.allocator.free(l);
 +            overlay_lines.deinit();
@@ -269,7 +269,7 @@ index 9e49057..ea12f97 100644
      fn drawOverlay(self: *Terminal, lines: []const []const u8, pos: Cursor) !void {
 diff --git a/src/ui/code_action.zig b/src/ui/code_action.zig
 new file mode 100644
-index 0000000..ab69d3c
+index 0000000..73b1730
 --- /dev/null
 +++ b/src/ui/code_action.zig
 @@ -0,0 +1,67 @@
@@ -292,7 +292,7 @@ index 0000000..ab69d3c
 +        return .{
 +            .hint = title[0],
 +            .title = title,
-+            .edit_json = try std.json.stringifyAlloc(allocator, code_action.edit.?, .{}),
++            .edit_json = try std.json.Stringify.valueAlloc(allocator, code_action.edit.?, .{}),
 +            .allocator = allocator,
 +        };
 +    }
@@ -304,10 +304,10 @@ index 0000000..ab69d3c
 +};
 +
 +pub fn fromLsp(allocator: Allocator, lsp_code_actions: []const lsp.types.CodeAction) ![]const CodeAction {
-+    var bag = std.ArrayList(u8).init(allocator);
++    var bag = std.array_list.Managed(u8).init(allocator);
 +    try bag.appendSlice(hint_bag);
 +    defer bag.deinit();
-+    var code_actions = std.ArrayList(CodeAction).init(allocator);
++    var code_actions = std.array_list.Managed(CodeAction).init(allocator);
 +    for (lsp_code_actions) |lsp_code_action| {
 +        var action = try CodeAction.init(allocator, lsp_code_action);
 +        if (std.mem.indexOfScalar(u8, bag.items, action.hint)) |available_idx| {

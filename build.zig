@@ -4,8 +4,8 @@ fn linkLibs(b: *std.Build, compile: *std.Build.Step.Compile) void {
     compile.linkLibC();
     compile.linkSystemLibrary("tree-sitter");
 
-    const lsp_codegen = b.dependency("lsp_codegen", .{});
-    compile.root_module.addImport("lsp", lsp_codegen.module("lsp"));
+    const lsp_kit = b.dependency("lsp_kit", .{});
+    compile.root_module.addImport("lsp", lsp_kit.module("lsp"));
 
     const regex = b.dependency("pcrez", .{});
     compile.root_module.addImport("regex", regex.module("pcrez"));
@@ -19,9 +19,11 @@ pub fn build(b: *std.Build) void {
 
     const exe = b.addExecutable(.{
         .name = "hat",
-        .root_source_file = b.path("src/main.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/main.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
     linkLibs(b, exe);
     b.installArtifact(exe);
@@ -35,9 +37,11 @@ pub fn build(b: *std.Build) void {
     run_step.dependOn(&run.step);
 
     const tests = b.addTest(.{
-        .root_source_file = b.path("src/main.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/main.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
     linkLibs(b, tests);
     const run_tests = b.addRunArtifact(tests);
@@ -46,14 +50,19 @@ pub fn build(b: *std.Build) void {
 
     const check_exe = b.addExecutable(.{
         .name = "hat",
-        .root_source_file = b.path("src/main.zig"),
-        .target = target,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/main.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
     linkLibs(b, check_exe);
     const check_tests = b.addTest(.{
-        .root_source_file = b.path("src/main.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/main.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
     linkLibs(b, check_tests);
     const check_step = b.step("check", "");

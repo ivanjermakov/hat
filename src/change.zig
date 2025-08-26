@@ -61,26 +61,19 @@ pub const Change = struct {
         if (self.new_text) |t| self.allocator.free(t);
     }
 
-    pub fn format(
-        self: *const Change,
-        comptime fmt: []const u8,
-        options: std.fmt.FormatOptions,
-        writer: anytype,
-    ) !void {
-        _ = fmt;
-        _ = options;
-        try std.fmt.format(writer, "change {},{}-{},{}", .{
+    pub fn format(self: *const Change, writer: *std.io.Writer) std.io.Writer.Error!void {
+        try writer.print("change {},{}-{},{}", .{
             self.old_span.start.row,
             self.old_span.start.col,
             self.old_span.end.row,
             self.old_span.end.col,
         });
         _ = try writer.write(" \"");
-        for (self.old_text) |ch| try std.fmt.format(writer, "{u}", .{ch});
+        for (self.old_text) |ch| uni.unicodeToBytesWrite(writer, &.{ch}) catch return error.WriteFailed;
         _ = try writer.write("\"");
 
         if (self.new_span) |new_span| {
-            try std.fmt.format(writer, " -> {},{}-{},{}", .{
+            try writer.print(" -> {},{}-{},{}", .{
                 new_span.start.row,
                 new_span.start.col,
                 new_span.end.row,
@@ -89,7 +82,7 @@ pub const Change = struct {
         }
         if (self.new_text) |new_text| {
             _ = try writer.write(" \"");
-            for (new_text) |ch| try std.fmt.format(writer, "{u}", .{ch});
+            for (new_text) |ch| uni.unicodeToBytesWrite(writer, &.{ch}) catch return error.WriteFailed;
             _ = try writer.write("\"");
         }
     }

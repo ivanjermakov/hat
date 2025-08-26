@@ -212,7 +212,7 @@ pub const Date = struct {
     }
 
     pub fn writeIso(self: Date, writer: anytype) !void {
-        try std.fmt.format(writer, ISO_DATE_FMT, .{ self.year, self.month, self.day });
+        try writer.print(ISO_DATE_FMT, .{ self.year, self.month, self.day });
     }
 };
 
@@ -343,11 +343,11 @@ pub const Time = struct {
     const ISO_HMS_FORMAT = "T{d:0>2}:{d:0>2}:{d:0>2}";
 
     pub fn writeIsoHM(self: Time, writer: anytype) !void {
-        try std.fmt.format(writer, ISO_HM_FORMAT, .{ self.hour, self.minute });
+        try writer.print(ISO_HM_FORMAT, .{ self.hour, self.minute });
     }
 
     pub fn writeIsoHMS(self: Time, writer: anytype) !void {
-        try std.fmt.format(writer, ISO_HMS_FORMAT, .{ self.hour, self.minute, self.second });
+        try writer.print(ISO_HMS_FORMAT, .{ self.hour, self.minute, self.second });
     }
 };
 

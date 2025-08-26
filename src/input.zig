@@ -31,14 +31,7 @@ pub const Modifier = enum(u8) {
     control = 4,
     meta = 8,
 
-    pub fn format(
-        self: Modifier,
-        comptime fmt: []const u8,
-        options: std.fmt.FormatOptions,
-        writer: anytype,
-    ) !void {
-        _ = fmt;
-        _ = options;
+    pub fn format(self: Modifier, writer: *std.io.Writer) std.io.Writer.Error!void {
         switch (self) {
             .shift => try writer.writeAll("s"),
             .alt => try writer.writeAll("m"),
@@ -81,23 +74,17 @@ pub const Key = struct {
     ///   * d - super/cmd
     ///
     /// Examples: a A ф 1 <c-a> <c-A> <left> <c-left> <m-c-s-d-left>
-    pub fn format(
-        self: *const Key,
-        comptime fmt: []const u8,
-        options: std.fmt.FormatOptions,
-        writer: anytype,
-    ) !void {
-        _ = fmt;
-        _ = options;
+    pub fn format(self: *const Key, writer: *std.io.Writer) std.io.Writer.Error!void {
         const in_brackets = self.modifiers > 0 or self.code != null;
         if (in_brackets) try writer.writeAll("<");
         if (self.modifiers > 0) {
             for ([_]Modifier{ .alt, .control, .shift, .meta }) |m| {
-                if (self.activeModifier(m)) try std.fmt.format(writer, "{}-", .{m});
+                if (self.activeModifier(m)) try writer.print("{f}-", .{m});
             }
         }
-        if (self.printable) |printable| for (printable) |p| try std.fmt.format(writer, "{u}", .{p});
-        if (self.code) |code| try std.fmt.format(writer, "{s}", .{@tagName(code)});
+        if (self.printable) |printable|
+            for (printable) |p| uni.unicodeToBytesWrite(writer, &.{p}) catch return error.WriteFailed;
+        if (self.code) |code| try writer.print("{s}", .{@tagName(code)});
         if (in_brackets) try writer.writeAll(">");
     }
 
@@ -132,7 +119,7 @@ test "key format" {
 
 fn expectKeyFormat(key: Key, expected: []const u8) !void {
     const allocator = std.testing.allocator;
-    const actual = try std.fmt.allocPrint(allocator, "{}", .{key});
+    const actual = try std.fmt.allocPrint(allocator, "{f}", .{key});
     defer allocator.free(actual);
     try std.testing.expectEqualStrings(expected, actual);
 }

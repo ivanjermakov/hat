@@ -1,5 +1,5 @@
 diff --git a/src/editor.zig b/src/editor.zig
-index 2230f75..f372186 100644
+index 4ee7d23..1c3346f 100644
 --- a/src/editor.zig
 +++ b/src/editor.zig
 @@ -35,6 +35,12 @@ pub const Config = struct {
@@ -16,35 +16,33 @@ index 2230f75..f372186 100644
  
  pub const Editor = struct {
 diff --git a/src/terminal.zig b/src/terminal.zig
-index 9e49057..0714a98 100644
+index 464935f..14b8de9 100644
 --- a/src/terminal.zig
 +++ b/src/terminal.zig
-@@ -150,19 +150,42 @@ pub const Terminal = struct {
+@@ -138,18 +138,40 @@ pub const Terminal = struct {
      fn drawNumberLine(self: *Terminal, buffer: *buf.Buffer, area: Area) !void {
-         try co.attributes.write(co.attributes.number_line, self.writer.writer());
+         try co.attributes.write(co.attributes.number_line, self.writer);
          defer self.resetAttributes() catch {};
 +        const cursor_row = buffer.cursor.row;
          for (@intCast(area.pos.row)..@as(usize, @intCast(area.pos.row)) + area.dims.height) |term_row| {
              const buffer_row = @as(i32, @intCast(term_row)) + buffer.offset.row;
              try self.moveCursor(.{ .row = @intCast(term_row), .col = area.pos.col });
              if (buffer_row < 0 or buffer_row >= buffer.line_positions.items.len) {
-                 if (main.editor.config.end_of_buffer_char) |ch| _ = try self.write(&.{ch});
+                 if (main.editor.config.end_of_buffer_char) |ch| _ = try self.writer.writeAll(&.{ch});
              } else {
--                try std.fmt.formatInt(
+-                try self.writer.printInt(
 -                    @as(usize, @intCast(buffer_row + 1)),
 -                    10,
 -                    .lower,
 -                    .{ .width = area.dims.width - 1, .alignment = .right },
--                    self.writer.writer(),
 -                );
 +                switch (main.editor.config.number_line_mode) {
 +                    .absolute => {
-+                        try std.fmt.formatInt(
++                        try self.writer.printInt(
 +                            @as(usize, @intCast(buffer_row + 1)),
 +                            10,
 +                            .lower,
 +                            .{ .width = area.dims.width - 1, .alignment = .right },
-+                            self.writer.writer(),
 +                        );
 +                    },
 +                    .relative => {
@@ -57,12 +55,11 @@ index 9e49057..0714a98 100644
 +                        } else {
 +                            display_num = @abs(line_num);
 +                        }
-+                        try std.fmt.formatInt(
++                        try self.writer.printInt(
 +                            display_num,
 +                            10,
 +                            .lower,
 +                            .{ .width = area.dims.width - 1, .alignment = alignment },
-+                            self.writer.writer(),
 +                        );
 +                    },
 +                }
