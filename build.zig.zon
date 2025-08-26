@@ -9,9 +9,8 @@
             .hash = "lsp_kit-0.1.0-bi_PL04yCgAxLsF0hH2a5sZKT84MGQaKXouw2jvCE8Nl",
         },
         .pcrez = .{
-            .path = "../clone/PCREz",
-            // .url = "git+https://github.com/qaptoR-zig/PCREz/#baa0793fa3ace5972367cc4786f22d9ab02e22b8",
-            // .hash = "pcrez-0.0.1-f7US7RtXAACTgQMK1xiplwjrrLrUyavR82_nIrS2tjq-",
+            .url = "git+https://github.com/ivanjermakov/PCREz#524755dfcd28898c3724c3504e50e34e01bc5c1d",
+            .hash = "pcrez-0.0.1-f7US7SRXAAA7H18ci8X0SOHvpQUjfJHH_YYyR5cnQ3Hj",
         },
     },
     .paths = .{
