@@ -41,9 +41,9 @@ pub var std_err_writer = std_err.writer(&std_err_buf);
 
 pub var tty_in: std.fs.File = undefined;
 
+
 pub var editor: edi.Editor = undefined;
 pub var term: ter.Terminal = undefined;
-
 pub var args: Args = .{};
 
 pub var main_loop_mutex: mut.Mutex = .{};
