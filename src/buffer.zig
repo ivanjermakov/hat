@@ -69,15 +69,6 @@ pub const Buffer = struct {
     allocator: Allocator,
 
     pub fn init(allocator: Allocator, path: ?[]const u8, content_raw: []const u8) !Buffer {
-        var raw = std.array_list.Managed(u8).init(allocator);
-        try raw.appendSlice(content_raw);
-        // make sure last line always ends with newline
-        if (raw.getLastOrNull()) |last| {
-            if (last != '\n') {
-                try raw.append('\n');
-            }
-        }
-
         const scratch = path == null;
         const buf_path = if (path) |p|
             try allocator.dupe(u8, p)
@@ -96,7 +87,7 @@ pub const Buffer = struct {
             .file_type = file_type,
             .uri = uri,
             .content = std.array_list.Managed(u21).init(allocator),
-            .content_raw = raw,
+            .content_raw = std.array_list.Managed(u8).fromOwnedSlice(allocator, try allocator.dupe(u8, content_raw)),
             .diagnostics = std.array_list.Managed(dia.Diagnostic).init(allocator),
             .line_positions = std.array_list.Managed(usize).init(allocator),
             .line_byte_positions = std.array_list.Managed(usize).init(allocator),
@@ -463,12 +454,8 @@ pub const Buffer = struct {
             try self.line_positions.append(char);
             try self.line_byte_positions.append(byte);
         }
-        // remove phantom line
-        const line_count = self.line_positions.items.len;
-        if (line_count > 1 and self.line_positions.items[line_count - 1] - self.line_positions.items[line_count - 2] == 1) {
-            _ = self.line_positions.orderedRemove(line_count - 1);
-            _ = self.line_byte_positions.orderedRemove(line_count - 1);
-        }
+        log.trace(@This(), "line positions: {any}\n", .{self.line_positions.items});
+        log.trace(@This(), "line byte positions: {any}\n", .{self.line_positions.items});
     }
 
     pub fn updateIndents(self: *Buffer) !void {
@@ -829,6 +816,7 @@ pub const Buffer = struct {
     }
 
     fn applyChange(self: *Buffer, change: *cha.Change) FatalError!void {
+        log.trace(@This(), "apply change {f}\n", .{change});
         const span = change.old_span;
 
         if (builtin.mode == .Debug) {
@@ -849,6 +837,7 @@ pub const Buffer = struct {
         self.cursor = change.new_span.?.end;
 
         if (self.ts_state) |*ts_state| try ts_state.edit(change);
+        log.trace(@This(), "buf content after change: {any}\n", .{self.content.items});
     }
 
     /// Delete every character from cursor (including) to the end of line

@@ -392,6 +392,7 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
             buffer.version += 1;
             buffer.clearDiagnostics();
             try buffer.reparse();
+            log.trace(@This(), "buf raw content after reparse:\n{s}\n", .{buffer.content_raw.items});
             perf.parse = timer.lap();
             for (buffer.lsp_connections.items) |conn| {
                 conn.didChange(editor.active_buffer) catch |e| log.err(@This(), "did change LSP error: {}", .{e});
