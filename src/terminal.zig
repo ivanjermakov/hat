@@ -621,6 +621,8 @@ test "parseAnsi" {
     try expectEqlKey("\x1b[A", "<up>", 0);
     try expectEqlKey("\x1bOQ", "<f2>", 0);
     try expectEqlKey("\x1b\x4d\x1b", "<m-M>", 1);
+    try expectEqlKey("ф", "ф", 0);
+    try expectEqlKey("🚧", "🚧", 0);
 }
 
 fn expectEqlKey(input: []const u8, expected: []const u8, remaining: usize) !void {

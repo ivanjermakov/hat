@@ -120,10 +120,7 @@ pub const Buffer = struct {
 
     pub fn updateContent(self: *Buffer) FatalError!void {
         self.content.clearRetainingCapacity();
-        try self.content.ensureUnusedCapacity(self.content_raw.items.len);
-        self.content.expandToCapacity();
-        const len = try uni.unicodeFromBytesBuf(self.content.items, self.content_raw.items);
-        self.content.items.len = len;
+        try uni.unicodeFromBytesArrayList(&self.content, self.content_raw.items);
     }
 
     pub fn deinit(self: *Buffer) void {
