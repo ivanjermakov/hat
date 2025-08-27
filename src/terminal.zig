@@ -518,16 +518,21 @@ pub fn parseAnsi(allocator: Allocator, input: *std.array_list.Managed(u8)) !inp.
             }
         },
         else => {
-            var printable = std.array_list.Managed(u8).init(allocator);
-            defer printable.deinit();
+            if (isPrintableAscii(code)) {
+                key.printable = try uni.unicodeFromBytes(allocator, &.{code});
+            } else {
+                var printable = std.array_list.Managed(u8).init(allocator);
+                defer printable.deinit();
 
-            try printable.append(code);
-            while (input.items.len > 0) {
-                if (isPrintableAscii(input.items[0])) break;
-                const code2 = input.orderedRemove(0);
-                try printable.append(code2);
+                try printable.append(code);
+                while (input.items.len > 0) {
+                    // TODO: this is incorrect way to check for unicode codepoint end
+                    if (isPrintableAscii(input.items[0])) break;
+                    const code2 = input.orderedRemove(0);
+                    try printable.append(code2);
+                }
+                key.printable = try uni.unicodeFromBytes(allocator, printable.items);
             }
-            key.printable = try uni.unicodeFromBytes(allocator, printable.items);
         },
     }
     return key;
@@ -603,14 +608,14 @@ fn ansiCodeToString(allocator: Allocator, code: u8) ![]const u8 {
 }
 
 fn isPrintableAscii(code: u8) bool {
-    return code >= 0x21 and code <= 0x7e;
+    return code >= 0x20 and code <= 0x7e;
 }
 
 test "parseAnsi" {
     try expectEqlKey("a", "a", 0);
     try expectEqlKey("A", "A", 0);
     try expectEqlKey("0", "0", 0);
-    try expectEqlKey("?", "?", 0);
+    try expectEqlKey("?\x01", "?", 1);
     try expectEqlKey("\x01", "<c-a>", 0);
     try expectEqlKey("\x1b", "<escape>", 0);
     try expectEqlKey("\x1b[A", "<up>", 0);
@@ -629,6 +634,20 @@ fn expectEqlKey(input: []const u8, expected: []const u8, remaining: usize) !void
     defer a.free(actual);
     try std.testing.expectEqualStrings(expected, actual);
     try std.testing.expectEqual(remaining, input_list.items.len);
+}
+
+test "getKeys" {
+    const a = std.testing.allocator;
+    const keys = try getKeys(a, "aA0?\x01\x1b\x1b[A\x1bOQ\x1b\x4d");
+    defer {
+        for (keys) |k| k.deinit();
+        a.free(keys);
+    }
+    inline for (.{ "a", "A", "0", "?", "<c-a>", "<escape>", "<up>", "<f2>", "<m-M>" }, 0..) |expected, i| {
+        const actual = try std.fmt.allocPrint(a, "{f}", .{keys[i]});
+        defer a.free(actual);
+        try std.testing.expectEqualStrings(expected, actual);
+    }
 }
 
 test "colWidth" {
