@@ -41,11 +41,21 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "");
     test_step.dependOn(&run_tests.step);
 
-    const check_exe = b.addExecutable(.{ .name = "hat", .root_module = root_module });
-    linkLibs(b, check_exe);
-    const check_tests = b.addTest(.{ .root_module = root_module });
-    linkLibs(b, check_tests);
     const check_step = b.step("check", "");
-    check_step.dependOn(&check_exe.step);
-    check_step.dependOn(&check_tests.step);
+    check_step.dependOn(&exe.step);
+    check_step.dependOn(&tests.step);
+
+    const cov_tests = b.addTest(.{ .root_module = root_module });
+    linkLibs(b, cov_tests);
+    cov_tests.use_llvm = true;
+    cov_tests.setExecCmd(&.{
+        "kcov",
+        "--clean",
+        "--include-path=src/",
+        b.pathJoin(&.{ b.install_path, "kcov" }),
+        null,
+    });
+    const run_cov = b.addRunArtifact(cov_tests);
+    const cov_step = b.step("coverage", "");
+    cov_step.dependOn(&run_cov.step);
 }
