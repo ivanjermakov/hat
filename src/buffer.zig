@@ -155,6 +155,7 @@ pub const Buffer = struct {
 
         for (self.pending_changes.items) |*c| c.deinit();
         self.pending_changes.deinit();
+        for (self.uncommitted_changes.items) |*c| c.deinit();
         self.uncommitted_changes.deinit();
 
         if (self.file) |f| f.close();
@@ -1021,7 +1022,7 @@ fn nextScratchId() usize {
     return scratch_id;
 }
 
-fn testSetup(content: []const u8) !*Buffer {
+fn testSetupScratch(content: []const u8) !*Buffer {
     try main.testSetup();
     try main.editor.openScratch(content);
     const buffer = main.editor.active_buffer;
@@ -1029,8 +1030,27 @@ fn testSetup(content: []const u8) !*Buffer {
     return buffer;
 }
 
+fn testSetupTmp(content: []const u8) !*Buffer {
+    try main.testSetup();
+
+    const tmp_file_path = "/tmp/hat_write.txt";
+    {
+        const tmp_file = try std.fs.cwd().createFile(tmp_file_path, .{ .truncate = true });
+        defer tmp_file.close();
+        try tmp_file.writeAll(content);
+    }
+
+    try main.editor.openBuffer(tmp_file_path);
+    const buffer = main.editor.active_buffer;
+
+    try testing.expectEqualStrings("abc", buffer.content_raw.items);
+
+    log.debug(@This(), "opened tmp file buffer with content: \n{s}", .{buffer.content_raw.items});
+    return buffer;
+}
+
 test "test buffer" {
-    const buffer = try testSetup(
+    const buffer = try testSetupScratch(
         \\abc
         \\
     );
@@ -1040,7 +1060,7 @@ test "test buffer" {
 }
 
 test "moveCursor" {
-    var buffer = try testSetup(
+    var buffer = try testSetupScratch(
         \\abc
         \\def
         \\ghijk
@@ -1055,7 +1075,7 @@ test "moveCursor" {
 }
 
 test "moveToNextWord plain words" {
-    var buffer = try testSetup(
+    var buffer = try testSetupScratch(
         \\one two three
     );
     defer main.editor.deinit();
@@ -1069,7 +1089,7 @@ test "moveToNextWord plain words" {
 }
 
 test "changeSelectionDelete same line" {
-    var buffer = try testSetup(
+    var buffer = try testSetupScratch(
         \\abc
         \\
     );
@@ -1085,7 +1105,7 @@ test "changeSelectionDelete same line" {
 }
 
 test "changeSelectionDelete line to end" {
-    var buffer = try testSetup(
+    var buffer = try testSetupScratch(
         \\abc
         \\def
     );
@@ -1102,7 +1122,7 @@ test "changeSelectionDelete line to end" {
 }
 
 test "changeSelectionDelete multiple lines" {
-    var buffer = try testSetup(
+    var buffer = try testSetupScratch(
         \\abc
         \\def
         \\ghijk
@@ -1123,7 +1143,7 @@ test "changeSelectionDelete multiple lines" {
 }
 
 test "textAt full line" {
-    var buffer = try testSetup(
+    var buffer = try testSetupScratch(
         \\abc
         \\def
     );
@@ -1131,4 +1151,41 @@ test "textAt full line" {
 
     const span = buffer.lineSpan(0);
     try testing.expectEqualSlices(u21, buffer.textAt(span), &.{ 'a', 'b', 'c', '\n' });
+}
+
+test "write" {
+    const buffer = try testSetupTmp("abc");
+    defer main.editor.deinit();
+
+    try buffer.changeInsertText(&.{ 'd', 'e', 'f' });
+    try buffer.updateRaw();
+
+    try testing.expectEqualStrings("defabc", buffer.content_raw.items);
+
+    try buffer.write();
+
+    const written = try std.fs.cwd().readFileAlloc(buffer.allocator, buffer.path, std.math.maxInt(usize));
+    defer buffer.allocator.free(written);
+    try testing.expectEqualStrings("defabc", written);
+}
+
+test "undo/redo" {
+    var buffer = try testSetupScratch("abc");
+    defer main.editor.deinit();
+
+    try buffer.changeInsertText(&.{ 'd', 'e', 'f' });
+    try buffer.commitChanges();
+
+    try buffer.updateRaw();
+    try testing.expectEqualStrings("defabc", buffer.content_raw.items);
+
+    try buffer.undo();
+
+    try buffer.updateRaw();
+    try testing.expectEqualStrings("abc", buffer.content_raw.items);
+
+    try buffer.redo();
+
+    try buffer.updateRaw();
+    try testing.expectEqualStrings("defabc", buffer.content_raw.items);
 }
