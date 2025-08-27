@@ -533,13 +533,13 @@ pub fn parseAnsi(allocator: Allocator, input: *std.array_list.Managed(u8)) !inp.
     return key;
 }
 
-pub fn getCodes(allocator: Allocator) !?[]const u8 {
-    if (!fs.poll(main.tty_in)) return null;
+pub fn getCodes(allocator: Allocator, tty_file: std.fs.File) !?[]const u8 {
+    if (!fs.poll(tty_file)) return null;
     var in_buf = std.array_list.Managed(u8).init(allocator);
     while (true) {
-        if (!fs.poll(main.tty_in)) break;
+        if (!fs.poll(tty_file)) break;
         var b: [1]u8 = undefined;
-        const bytes_read = std.posix.read(main.tty_in.handle, &b) catch break;
+        const bytes_read = std.posix.read(tty_file.handle, &b) catch break;
         if (bytes_read == 0) break;
         try in_buf.appendSlice(b[0..]);
         // 1ns seems to be enough wait time for /dev/tty to fill up with the next code
