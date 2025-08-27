@@ -431,6 +431,7 @@ pub fn computeLayout(term_dims: Dimensions) Layout {
 }
 
 pub fn parseAnsi(allocator: Allocator, input: *std.array_list.Managed(u8)) !inp.Key {
+    if (input.items.len == 0) return error.NoInput;
     log.debug(@This(), "codes: {any}\n", .{input.items});
     var key: inp.Key = .{ .allocator = allocator };
     const code = input.orderedRemove(0);
@@ -448,7 +449,7 @@ pub fn parseAnsi(allocator: Allocator, input: *std.array_list.Managed(u8)) !inp.
         0x7f => key.code = .backspace,
         0x0d => key.printable = try uni.unicodeFromBytes(allocator, "\n"),
         0x1b => {
-            // CSI ANSI escape sequences (prefix ^[ or 0x1b)
+            // CSI ANSI escape sequences (prefix \e[)
             if (input.items.len > 0 and input.items[0] == '[') {
                 _ = input.orderedRemove(0);
                 if (input.items.len > 0) {
@@ -495,10 +496,7 @@ pub fn parseAnsi(allocator: Allocator, input: *std.array_list.Managed(u8)) !inp.
                         else => return error.TodoCsi,
                     }
                 }
-            } else if (input.items.len > 0 and isPrintableAscii(input.items[0])) {
-                key.printable = try uni.unicodeFromBytes(allocator, &.{input.items[0]});
-                key.modifiers |= @intFromEnum(inp.Modifier.alt);
-                _ = input.orderedRemove(0);
+                // Other escape sequences (prefix \e)
             } else if (input.items.len > 0 and input.items[0] == 'O') {
                 if (input.items.len > 1 and input.items[1] >= 'P' and input.items[1] <= 'S') {
                     switch (input.items[1]) {
@@ -511,6 +509,10 @@ pub fn parseAnsi(allocator: Allocator, input: *std.array_list.Managed(u8)) !inp.
                     _ = input.orderedRemove(0);
                     _ = input.orderedRemove(0);
                 }
+            } else if (input.items.len > 0 and isPrintableAscii(input.items[0])) {
+                key.printable = try uni.unicodeFromBytes(allocator, &.{input.items[0]});
+                key.modifiers |= @intFromEnum(inp.Modifier.alt);
+                _ = input.orderedRemove(0);
             } else {
                 key.code = .escape;
             }
@@ -602,6 +604,31 @@ fn ansiCodeToString(allocator: Allocator, code: u8) ![]const u8 {
 
 fn isPrintableAscii(code: u8) bool {
     return code >= 0x21 and code <= 0x7e;
+}
+
+test "parseAnsi" {
+    try expectEqlKey("a", "a", 0);
+    try expectEqlKey("A", "A", 0);
+    try expectEqlKey("0", "0", 0);
+    try expectEqlKey("?", "?", 0);
+    try expectEqlKey("\x01", "<c-a>", 0);
+    try expectEqlKey("\x1b", "<escape>", 0);
+    try expectEqlKey("\x1b[A", "<up>", 0);
+    try expectEqlKey("\x1bOQ", "<f2>", 0);
+    try expectEqlKey("\x1b\x4d\x1b", "<m-M>", 1);
+}
+
+fn expectEqlKey(input: []const u8, expected: []const u8, remaining: usize) !void {
+    const a = std.testing.allocator;
+    var input_list = std.array_list.Managed(u8).init(a);
+    defer input_list.deinit();
+    try input_list.appendSlice(input);
+    const key = try parseAnsi(a, &input_list);
+    defer key.deinit();
+    const actual = try std.fmt.allocPrint(a, "{f}", .{key});
+    defer a.free(actual);
+    try std.testing.expectEqualStrings(expected, actual);
+    try std.testing.expectEqual(remaining, input_list.items.len);
 }
 
 test "colWidth" {
