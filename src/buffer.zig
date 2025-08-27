@@ -1032,6 +1032,7 @@ fn testSetup(content: []const u8) !*Buffer {
 test "test buffer" {
     const buffer = try testSetup(
         \\abc
+        \\
     );
     defer main.editor.deinit();
 
@@ -1070,6 +1071,7 @@ test "moveToNextWord plain words" {
 test "changeSelectionDelete same line" {
     var buffer = try testSetup(
         \\abc
+        \\
     );
     defer main.editor.deinit();
 
@@ -1096,7 +1098,7 @@ test "changeSelectionDelete line to end" {
 
     try buffer.commitChanges();
     try buffer.updateRaw();
-    try testing.expectEqualStrings("adef\n", buffer.content_raw.items);
+    try testing.expectEqualStrings("adef", buffer.content_raw.items);
 }
 
 test "changeSelectionDelete multiple lines" {
@@ -1117,7 +1119,7 @@ test "changeSelectionDelete multiple lines" {
 
     try buffer.commitChanges();
     try buffer.updateRaw();
-    try testing.expectEqualStrings("ajk\n", buffer.content_raw.items);
+    try testing.expectEqualStrings("ajk", buffer.content_raw.items);
 }
 
 test "textAt full line" {

@@ -48,13 +48,7 @@ pub fn build(b: *std.Build) void {
     const cov_tests = b.addTest(.{ .root_module = root_module });
     linkLibs(b, cov_tests);
     cov_tests.use_llvm = true;
-    cov_tests.setExecCmd(&.{
-        "kcov",
-        "--clean",
-        "--include-path=src/",
-        b.pathJoin(&.{ b.install_path, "kcov" }),
-        null,
-    });
+    cov_tests.setExecCmd(&.{ "kcov", "--include-path=src/", b.pathJoin(&.{ b.install_path, "kcov" }), null });
     const run_cov = b.addRunArtifact(cov_tests);
     const cov_step = b.step("coverage", "");
     cov_step.dependOn(&run_cov.step);
