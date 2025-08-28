@@ -1,20 +1,20 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index e3674ac..d2826fd 100644
+index 7d382a0..ff0303a 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
 @@ -66,6 +66,7 @@ pub const Buffer = struct {
-     uncommitted_changes: std.ArrayList(cha.Change),
-     lsp_connections: std.ArrayList(*lsp.LspConnection),
+     uncommitted_changes: std.array_list.Managed(cha.Change),
+     lsp_connections: std.array_list.Managed(*lsp.LspConnection),
      scratch: bool = false,
-+    highlights: std.ArrayList(Span),
++    highlights: std.array_list.Managed(Span),
      allocator: Allocator,
  
      pub fn init(allocator: Allocator, path: ?[]const u8, content_raw: []const u8) !Buffer {
 @@ -106,6 +107,7 @@ pub const Buffer = struct {
-             .uncommitted_changes = std.ArrayList(cha.Change).init(allocator),
-             .lsp_connections = std.ArrayList(*lsp.LspConnection).init(allocator),
+             .uncommitted_changes = std.array_list.Managed(cha.Change).init(allocator),
+             .lsp_connections = std.array_list.Managed(*lsp.LspConnection).init(allocator),
              .scratch = scratch,
-+            .highlights = std.ArrayList(Span).init(allocator),
++            .highlights = std.array_list.Managed(Span).init(allocator),
              .allocator = allocator,
          };
          _ = try self.syncFs();
@@ -49,10 +49,10 @@ index e3674ac..d2826fd 100644
          const cmd = &main.editor.command_line;
          const line = self.lineContent(@intCast(self.cursor.row));
 diff --git a/src/color.zig b/src/color.zig
-index 1335218..20721b7 100644
+index 87e8d6c..597a257 100644
 --- a/src/color.zig
 +++ b/src/color.zig
-@@ -90,6 +90,7 @@ pub const Attr = union(enum) {
+@@ -82,6 +82,7 @@ pub const Attr = union(enum) {
  pub const attributes = enum {
      pub const text = &[_]Attr{.{ .fg = color.white }};
      pub const selection = &[_]Attr{.{ .bg = color.gray3 }};
@@ -61,7 +61,7 @@ index 1335218..20721b7 100644
      pub const string = &[_]Attr{.{ .fg = color.green }};
      pub const literal = &[_]Attr{.{ .fg = color.yellow }};
 diff --git a/src/lsp.zig b/src/lsp.zig
-index 68504d8..5c4e56d 100644
+index d319506..13e3f59 100644
 --- a/src/lsp.zig
 +++ b/src/lsp.zig
 @@ -9,6 +9,7 @@ const buf = @import("buffer.zig");
@@ -89,7 +89,7 @@ index 68504d8..5c4e56d 100644
                      }
                  },
                  .notification => |notif| {
-@@ -245,6 +249,14 @@ pub const LspConnection = struct {
+@@ -246,6 +250,14 @@ pub const LspConnection = struct {
          });
      }
  
@@ -104,7 +104,7 @@ index 68504d8..5c4e56d 100644
      pub fn rename(self: *LspConnection, new_name: []const u8) !void {
          if ((self.server_init orelse return).value.capabilities.renameProvider == null) return;
          const buffer = main.editor.active_buffer;
-@@ -516,6 +528,21 @@ pub const LspConnection = struct {
+@@ -518,6 +530,21 @@ pub const LspConnection = struct {
          try main.editor.applyWorkspaceEdit(result.value);
      }
  
@@ -127,10 +127,10 @@ index 68504d8..5c4e56d 100644
          _ = self;
          log.trace(@This(), "notification: {s}\n", .{notif.method});
 diff --git a/src/main.zig b/src/main.zig
-index 314bfd8..e8dfe19 100644
+index db87e87..6b091af 100644
 --- a/src/main.zig
 +++ b/src/main.zig
-@@ -404,6 +404,13 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+@@ -410,6 +410,13 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
          } else if (editor.dirty.cursor) {
              editor.dirty.cursor = false;
              term.updateCursor() catch |e| log.err(@This(), "update cursor error: {}", .{e});
@@ -145,10 +145,10 @@ index 314bfd8..e8dfe19 100644
          perf.draw = timer.lap();
  
 diff --git a/src/terminal.zig b/src/terminal.zig
-index 9e49057..2b15d06 100644
+index 464935f..3afe461 100644
 --- a/src/terminal.zig
 +++ b/src/terminal.zig
-@@ -224,6 +224,14 @@ pub const Terminal = struct {
+@@ -211,6 +211,14 @@ pub const Terminal = struct {
                      }
                  }
  

@@ -1,5 +1,5 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index e3674ac..4fee770 100644
+index 7d382a0..d0f2f3f 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
 @@ -668,6 +668,12 @@ pub const Buffer = struct {
@@ -16,7 +16,7 @@ index e3674ac..4fee770 100644
          if (self.selection) |selection| {
              try clp.write(self.allocator, self.rawTextAt(selection));
 diff --git a/src/editor.zig b/src/editor.zig
-index 2230f75..38823a1 100644
+index 4ee7d23..51f78fd 100644
 --- a/src/editor.zig
 +++ b/src/editor.zig
 @@ -150,7 +150,7 @@ pub const Editor = struct {
@@ -29,7 +29,7 @@ index 2230f75..38823a1 100644
  
          if (self.mode == mode) return;
 diff --git a/src/lsp.zig b/src/lsp.zig
-index 68504d8..4892b93 100644
+index d319506..d67df08 100644
 --- a/src/lsp.zig
 +++ b/src/lsp.zig
 @@ -104,6 +104,7 @@ pub const LspConnection = struct {
@@ -49,7 +49,7 @@ index 68504d8..4892b93 100644
                      }
                  },
                  .notification => |notif| {
-@@ -245,6 +248,18 @@ pub const LspConnection = struct {
+@@ -246,6 +249,18 @@ pub const LspConnection = struct {
          });
      }
  
@@ -68,7 +68,7 @@ index 68504d8..4892b93 100644
      pub fn rename(self: *LspConnection, new_name: []const u8) !void {
          if ((self.server_init orelse return).value.capabilities.renameProvider == null) return;
          const buffer = main.editor.active_buffer;
-@@ -516,6 +531,20 @@ pub const LspConnection = struct {
+@@ -518,6 +533,20 @@ pub const LspConnection = struct {
          try main.editor.applyWorkspaceEdit(result.value);
      }
  
@@ -90,10 +90,10 @@ index 68504d8..4892b93 100644
          _ = self;
          log.trace(@This(), "notification: {s}\n", .{notif.method});
 diff --git a/src/main.zig b/src/main.zig
-index 314bfd8..9f05895 100644
+index db87e87..0f68a64 100644
 --- a/src/main.zig
 +++ b/src/main.zig
-@@ -331,6 +331,8 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+@@ -337,6 +337,8 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                          buffer.findReferences() catch |e| log.err(@This(), "find references LSP error: {}", .{e});
                      } else if (editor.mode == .normal and eql(u8, multi_key, " n")) {
                          try buffer.renamePrompt();

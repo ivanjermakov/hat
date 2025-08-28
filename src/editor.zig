@@ -238,7 +238,7 @@ pub const Editor = struct {
     }
 
     pub fn updateInput(self: *Editor) !void {
-        if (try ter.getCodes(self.allocator)) |codes| {
+        if (try ter.getCodes(self.allocator, main.tty_in)) |codes| {
             defer self.allocator.free(codes);
             main.editor.dirty.input = true;
             const new_keys = try ter.getKeys(self.allocator, codes);

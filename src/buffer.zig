@@ -72,15 +72,6 @@ pub const Buffer = struct {
     allocator: Allocator,
 
     pub fn init(allocator: Allocator, path: ?[]const u8, content_raw: []const u8) !Buffer {
-        var raw = std.array_list.Managed(u8).init(allocator);
-        try raw.appendSlice(content_raw);
-        // make sure last line always ends with newline
-        if (raw.getLastOrNull()) |last| {
-            if (last != '\n') {
-                try raw.append('\n');
-            }
-        }
-
         const scratch = path == null;
         const buf_path = if (path) |p|
             try allocator.dupe(u8, p)
@@ -105,7 +96,7 @@ pub const Buffer = struct {
             .git_root = git_root,
             .git_hunks = std.array_list.Managed(git.Hunk).init(allocator),
             .content = std.array_list.Managed(u21).init(allocator),
-            .content_raw = raw,
+            .content_raw = std.array_list.Managed(u8).fromOwnedSlice(allocator, try allocator.dupe(u8, content_raw)),
             .diagnostics = std.array_list.Managed(dia.Diagnostic).init(allocator),
             .line_positions = std.array_list.Managed(usize).init(allocator),
             .line_byte_positions = std.array_list.Managed(usize).init(allocator),
@@ -139,10 +130,7 @@ pub const Buffer = struct {
 
     pub fn updateContent(self: *Buffer) FatalError!void {
         self.content.clearRetainingCapacity();
-        try self.content.ensureUnusedCapacity(self.content_raw.items.len);
-        self.content.expandToCapacity();
-        const len = try uni.unicodeFromBytesBuf(self.content.items, self.content_raw.items);
-        self.content.items.len = len;
+        try uni.unicodeFromBytesArrayList(&self.content, self.content_raw.items);
     }
 
     pub fn deinit(self: *Buffer) void {
@@ -176,6 +164,7 @@ pub const Buffer = struct {
 
         for (self.pending_changes.items) |*c| c.deinit();
         self.pending_changes.deinit();
+        for (self.uncommitted_changes.items) |*c| c.deinit();
         self.uncommitted_changes.deinit();
 
         if (self.file) |f| f.close();
@@ -255,13 +244,19 @@ pub const Buffer = struct {
             },
             .select_line => {
                 var selection = &self.selection.?;
-                const move_start = selection.start.row == old_cursor.row and
-                    (selection.end.row != self.cursor.row or self.cursor.row < selection.start.row);
+                const move_start = old_cursor.row == selection.start.row;
                 if (move_start) {
-                    selection.start = .{ .row = self.cursor.row, .col = 0 };
+                    selection.start.row = self.cursor.row;
                 } else {
-                    selection.start.col = 0;
                     selection.end.row = self.cursor.row + 1;
+                }
+                // restore ends order
+                if (selection.start.row + 1 > selection.end.row) {
+                    const tmp = selection.start.row;
+                    // exclusive end becomes inclusive start
+                    selection.start.row = selection.end.row - 1;
+                    // inclusive start becomes exclusive end
+                    selection.end.row = tmp + 1;
                 }
                 main.editor.dirty.draw = true;
             },
@@ -469,12 +464,8 @@ pub const Buffer = struct {
             try self.line_positions.append(char);
             try self.line_byte_positions.append(byte);
         }
-        // remove phantom line
-        const line_count = self.line_positions.items.len;
-        if (line_count > 1 and self.line_positions.items[line_count - 1] - self.line_positions.items[line_count - 2] == 1) {
-            _ = self.line_positions.orderedRemove(line_count - 1);
-            _ = self.line_byte_positions.orderedRemove(line_count - 1);
-        }
+        log.trace(@This(), "line positions: {any}\n", .{self.line_positions.items});
+        log.trace(@This(), "line byte positions: {any}\n", .{self.line_positions.items});
     }
 
     pub fn updateIndents(self: *Buffer) !void {
@@ -860,6 +851,7 @@ pub const Buffer = struct {
     }
 
     fn applyChange(self: *Buffer, change: *cha.Change) FatalError!void {
+        log.trace(@This(), "apply change {f}\n", .{change});
         const span = change.old_span;
 
         if (builtin.mode == .Debug) {
@@ -880,6 +872,7 @@ pub const Buffer = struct {
         self.cursor = change.new_span.?.end;
 
         if (self.ts_state) |*ts_state| try ts_state.edit(change);
+        log.trace(@This(), "buf content after change: {any}\n", .{self.content.items});
     }
 
     /// Delete every character from cursor (including) to the end of line
@@ -912,8 +905,12 @@ pub const Buffer = struct {
     }
 
     fn updateRaw(self: *Buffer) !void {
+        var writer = std.io.Writer.Allocating.init(self.allocator);
+        defer writer.deinit();
+        try uni.unicodeToBytesWrite(&writer.writer, self.content.items);
         self.content_raw.clearRetainingCapacity();
-        try uni.unicodeToBytesWrite(self.content_raw.writer(), self.content.items);
+        try self.content_raw.appendSlice(writer.written());
+        log.info(@This(), "updated raw: {s}\n", .{self.content_raw.items});
     }
 
     fn scrollForCursor(self: *Buffer, new_buf_cursor: Cursor) void {
@@ -1063,7 +1060,7 @@ fn nextScratchId() usize {
     return scratch_id;
 }
 
-fn testSetup(content: []const u8) !*Buffer {
+fn testSetupScratch(content: []const u8) !*Buffer {
     try main.testSetup();
     try main.editor.openScratch(content);
     const buffer = main.editor.active_buffer;
@@ -1071,9 +1068,29 @@ fn testSetup(content: []const u8) !*Buffer {
     return buffer;
 }
 
+fn testSetupTmp(content: []const u8) !*Buffer {
+    try main.testSetup();
+
+    const tmp_file_path = "/tmp/hat_write.txt";
+    {
+        const tmp_file = try std.fs.cwd().createFile(tmp_file_path, .{ .truncate = true });
+        defer tmp_file.close();
+        try tmp_file.writeAll(content);
+    }
+
+    try main.editor.openBuffer(tmp_file_path);
+    const buffer = main.editor.active_buffer;
+
+    try testing.expectEqualStrings("abc", buffer.content_raw.items);
+
+    log.debug(@This(), "opened tmp file buffer with content: \n{s}", .{buffer.content_raw.items});
+    return buffer;
+}
+
 test "test buffer" {
-    const buffer = try testSetup(
+    const buffer = try testSetupScratch(
         \\abc
+        \\
     );
     defer main.editor.deinit();
 
@@ -1081,7 +1098,7 @@ test "test buffer" {
 }
 
 test "moveCursor" {
-    var buffer = try testSetup(
+    var buffer = try testSetupScratch(
         \\abc
         \\def
         \\ghijk
@@ -1096,7 +1113,7 @@ test "moveCursor" {
 }
 
 test "moveToNextWord plain words" {
-    var buffer = try testSetup(
+    var buffer = try testSetupScratch(
         \\one two three
     );
     defer main.editor.deinit();
@@ -1110,8 +1127,9 @@ test "moveToNextWord plain words" {
 }
 
 test "changeSelectionDelete same line" {
-    var buffer = try testSetup(
+    var buffer = try testSetupScratch(
         \\abc
+        \\
     );
     defer main.editor.deinit();
 
@@ -1125,7 +1143,7 @@ test "changeSelectionDelete same line" {
 }
 
 test "changeSelectionDelete line to end" {
-    var buffer = try testSetup(
+    var buffer = try testSetupScratch(
         \\abc
         \\def
     );
@@ -1138,11 +1156,11 @@ test "changeSelectionDelete line to end" {
 
     try buffer.commitChanges();
     try buffer.updateRaw();
-    try testing.expectEqualStrings("adef\n", buffer.content_raw.items);
+    try testing.expectEqualStrings("adef", buffer.content_raw.items);
 }
 
 test "changeSelectionDelete multiple lines" {
-    var buffer = try testSetup(
+    var buffer = try testSetupScratch(
         \\abc
         \\def
         \\ghijk
@@ -1159,11 +1177,11 @@ test "changeSelectionDelete multiple lines" {
 
     try buffer.commitChanges();
     try buffer.updateRaw();
-    try testing.expectEqualStrings("ajk\n", buffer.content_raw.items);
+    try testing.expectEqualStrings("ajk", buffer.content_raw.items);
 }
 
 test "textAt full line" {
-    var buffer = try testSetup(
+    var buffer = try testSetupScratch(
         \\abc
         \\def
     );
@@ -1171,4 +1189,41 @@ test "textAt full line" {
 
     const span = buffer.lineSpan(0);
     try testing.expectEqualSlices(u21, buffer.textAt(span), &.{ 'a', 'b', 'c', '\n' });
+}
+
+test "write" {
+    const buffer = try testSetupTmp("abc");
+    defer main.editor.deinit();
+
+    try buffer.changeInsertText(&.{ 'd', 'e', 'f' });
+    try buffer.updateRaw();
+
+    try testing.expectEqualStrings("defabc", buffer.content_raw.items);
+
+    try buffer.write();
+
+    const written = try std.fs.cwd().readFileAlloc(buffer.allocator, buffer.path, std.math.maxInt(usize));
+    defer buffer.allocator.free(written);
+    try testing.expectEqualStrings("defabc", written);
+}
+
+test "undo/redo" {
+    var buffer = try testSetupScratch("abc");
+    defer main.editor.deinit();
+
+    try buffer.changeInsertText(&.{ 'd', 'e', 'f' });
+    try buffer.commitChanges();
+
+    try buffer.updateRaw();
+    try testing.expectEqualStrings("defabc", buffer.content_raw.items);
+
+    try buffer.undo();
+
+    try buffer.updateRaw();
+    try testing.expectEqualStrings("abc", buffer.content_raw.items);
+
+    try buffer.redo();
+
+    try buffer.updateRaw();
+    try testing.expectEqualStrings("defabc", buffer.content_raw.items);
 }
