@@ -73,6 +73,8 @@ pub const LspConnection = struct {
     thread: std.Thread,
     client_capabilities: types.ClientCapabilities,
     server_init: ?std.json.Parsed(types.InitializeResult) = null,
+    stdin_buf: [2 << 12]u8 = undefined,
+    stdin_writer: std.fs.File.Writer,
     allocator: Allocator,
 
     pub fn connect(allocator: Allocator, config: LspConfig) !LspConnection {
@@ -120,8 +122,10 @@ pub const LspConnection = struct {
             .buffers = std.array_list.Managed(*buf.Buffer).init(allocator),
             .thread = undefined,
             .client_capabilities = client_capabilities,
+            .stdin_writer = undefined,
             .allocator = allocator,
         };
+        self.stdin_writer = child.stdin.?.writer(&self.stdin_buf);
 
         const cwd = try std.fs.cwd().realpathAlloc(allocator, ".");
         defer allocator.free(cwd);
@@ -385,9 +389,8 @@ pub const LspConnection = struct {
         };
         const json_message = try std.json.Stringify.valueAlloc(self.allocator, request, default_stringify_opts);
         log.trace(@This(), "> raw request: {s}\n", .{json_message});
-        const rpc_message = try std.fmt.allocPrint(self.allocator, "Content-Length: {}\r\n\r\n{s}", .{ json_message.len, json_message });
-        defer self.allocator.free(rpc_message);
-        try self.child.stdin.?.writeAll(rpc_message);
+        try self.stdin_writer.interface.print("Content-Length: {}\r\n\r\n{s}", .{ json_message.len, json_message });
+        try self.stdin_writer.interface.flush();
 
         try self.messages_unreplied.put(request.id.number, .{ .method = method, .message = json_message });
     }
@@ -404,9 +407,8 @@ pub const LspConnection = struct {
         const json_message = try std.json.Stringify.valueAlloc(self.allocator, request, default_stringify_opts);
         defer self.allocator.free(json_message);
         log.trace(@This(), "> raw notification: {s}\n", .{json_message});
-        const rpc_message = try std.fmt.allocPrint(self.allocator, "Content-Length: {}\r\n\r\n{s}", .{ json_message.len, json_message });
-        defer self.allocator.free(rpc_message);
-        try self.child.stdin.?.writeAll(rpc_message);
+        try self.stdin_writer.interface.print("Content-Length: {}\r\n\r\n{s}", .{ json_message.len, json_message });
+        try self.stdin_writer.interface.flush();
     }
 
     fn sendResponse(
@@ -422,9 +424,8 @@ pub const LspConnection = struct {
         const json_message = try std.json.Stringify.valueAlloc(self.allocator, request, default_stringify_opts);
         defer self.allocator.free(json_message);
         log.trace(@This(), "> raw response: {s}\n", .{json_message});
-        const rpc_message = try std.fmt.allocPrint(self.allocator, "Content-Length: {}\r\n\r\n{s}", .{ json_message.len, json_message });
-        defer self.allocator.free(rpc_message);
-        try self.child.stdin.?.writeAll(rpc_message);
+        try self.stdin_writer.interface.print("Content-Length: {}\r\n\r\n{s}", .{ json_message.len, json_message });
+        try self.stdin_writer.interface.flush();
     }
 
     fn handleInitializeResponse(self: *LspConnection, arena: Allocator, resp: ?std.json.Value) !void {
