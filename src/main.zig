@@ -228,8 +228,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     std.posix.raise(sig.sig_handle.tstp.sig) catch {};
 
                     // normal or select mode
-                } else if (normal_or_select and eql(u8, key, "k")) {
-                } else if (normal_or_select and eql(u8, key, "j")) {
+                } else if (normal_or_select and eql(u8, key, "k")) {} else if (normal_or_select and eql(u8, key, "j")) {
                     buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = 1 * repeat_or_1 }));
                 } else if (normal_or_select and eql(u8, key, "h")) {
                     buffer.moveCursor(buffer.cursor.applyOffset(.{ .col = -1 * repeat_or_1 }));
@@ -417,6 +416,13 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
         } else if (editor.dirty.cursor) {
             editor.dirty.cursor = false;
             term.updateCursor() catch |e| log.err(@This(), "update cursor error: {}\n", .{e});
+
+            if (buffer.highlights.items.len > 0) {
+                buffer.highlights.clearRetainingCapacity();
+                // redraw next frame to clear invalid highlights
+                editor.dirty.draw = true;
+            }
+            buffer.highlight() catch |e| log.err(@This(), "highlight LSP error: {}", .{e});
         }
         perf.draw = timer.lap();
 
