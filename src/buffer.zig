@@ -835,7 +835,6 @@ pub const Buffer = struct {
         self.cursor = change.new_span.?.end;
 
         if (self.ts_state) |*ts_state| try ts_state.edit(change);
-        log.trace(@This(), "buf content after change: {any}\n", .{self.content.items});
     }
 
     /// Delete every character from cursor (including) to the end of line

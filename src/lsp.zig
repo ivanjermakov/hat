@@ -309,7 +309,17 @@ pub const LspConnection = struct {
         });
     }
 
+    pub fn exitCode(self: *LspConnection) ?u8 {
+        const term = std.posix.waitpid(self.child.id, std.posix.W.NOHANG);
+        if (self.child.id == term.pid) return std.posix.W.EXITSTATUS(term.status);
+        return null;
+    }
+
     fn poll(self: *LspConnection) !?[]const []const u8 {
+        if (self.exitCode()) |code| {
+            log.err(@This(), "lsp server terminated prematurely with code: {}\n", .{code});
+            self.status = .Closed;
+        }
         if (log.enabled(.@"error")) b: {
             var err_writer = std.io.Writer.Allocating.init(self.allocator);
             defer err_writer.deinit();
