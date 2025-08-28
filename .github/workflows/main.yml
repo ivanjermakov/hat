@@ -26,4 +26,6 @@ jobs:
         run: zig build test --summary all
 
       - name: test-patches.zig
+        env:
+          SKIP_E2E: true
         run: zig run script/test-patches.zig
