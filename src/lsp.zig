@@ -173,7 +173,8 @@ pub const LspConnection = struct {
 
                     const response_result = b: switch (resp.result_or_error) {
                         .@"error" => {
-                            log.debug(@This(), "Lsp error: {}\n", .{resp.result_or_error.@"error"});
+                            const e = resp.result_or_error.@"error";
+                            log.debug(@This(), "LSP error: {} {s}\n", .{ e.code, e.message });
                             return;
                         },
                         .result => |r| break :b r,
@@ -286,13 +287,12 @@ pub const LspConnection = struct {
             var changes = try std.array_list.Managed(types.TextDocumentContentChangeEvent)
                 .initCapacity(self.allocator, buffer.pending_changes.items.len);
             defer changes.deinit();
+
             for (buffer.pending_changes.items) |change| {
                 const event = try change.toLsp(self.allocator);
+                log.info(@This(), "change new text: {?any}\n", .{change.new_text});
                 try changes.append(event);
             }
-            defer for (changes.items) |event| {
-                self.allocator.free(event.literal_0.text);
-            };
             try self.sendNotification("textDocument/didChange", .{
                 .textDocument = .{ .uri = buffer.uri, .version = @intCast(buffer.version) },
                 .contentChanges = changes.items,
@@ -316,10 +316,14 @@ pub const LspConnection = struct {
     }
 
     fn poll(self: *LspConnection) !?[]const []const u8 {
-        if (self.exitCode()) |code| {
-            log.err(@This(), "lsp server terminated prematurely with code: {}\n", .{code});
-            self.status = .Closed;
+        if (self.status == .Created or self.status == .Initialized) {
+            if (self.exitCode()) |code| {
+                log.err(@This(), "lsp server terminated prematurely with code: {}\n", .{code});
+                self.status = .Closed;
+                return error.ServerCrash;
+            }
         }
+
         if (log.enabled(.@"error")) b: {
             var err_writer = std.io.Writer.Allocating.init(self.allocator);
             defer err_writer.deinit();
@@ -382,8 +386,9 @@ pub const LspConnection = struct {
         const json_message = try std.json.Stringify.valueAlloc(self.allocator, request, default_stringify_opts);
         log.trace(@This(), "> raw request: {s}\n", .{json_message});
         const rpc_message = try std.fmt.allocPrint(self.allocator, "Content-Length: {}\r\n\r\n{s}", .{ json_message.len, json_message });
-        _ = try self.child.stdin.?.write(rpc_message);
         defer self.allocator.free(rpc_message);
+        try self.child.stdin.?.writeAll(rpc_message);
+
         try self.messages_unreplied.put(request.id.number, .{ .method = method, .message = json_message });
     }
 
@@ -400,8 +405,8 @@ pub const LspConnection = struct {
         defer self.allocator.free(json_message);
         log.trace(@This(), "> raw notification: {s}\n", .{json_message});
         const rpc_message = try std.fmt.allocPrint(self.allocator, "Content-Length: {}\r\n\r\n{s}", .{ json_message.len, json_message });
-        _ = try self.child.stdin.?.write(rpc_message);
         defer self.allocator.free(rpc_message);
+        try self.child.stdin.?.writeAll(rpc_message);
     }
 
     fn sendResponse(
@@ -418,8 +423,8 @@ pub const LspConnection = struct {
         defer self.allocator.free(json_message);
         log.trace(@This(), "> raw response: {s}\n", .{json_message});
         const rpc_message = try std.fmt.allocPrint(self.allocator, "Content-Length: {}\r\n\r\n{s}", .{ json_message.len, json_message });
-        _ = try self.child.stdin.?.write(rpc_message);
         defer self.allocator.free(rpc_message);
+        try self.child.stdin.?.writeAll(rpc_message);
     }
 
     fn handleInitializeResponse(self: *LspConnection, arena: Allocator, resp: ?std.json.Value) !void {
