@@ -91,20 +91,16 @@ pub fn pickLspLocation(allocator: Allocator, locations: []const lsp.types.Locati
 }
 
 pub fn pickSymbol(allocator: Allocator, buffer: *const buf.Buffer, symbols: []const ByteSpan) !FindResult {
-    var lines = std.array_list.Managed(u8).init(allocator);
+    var lines: std.io.Writer.Allocating = .init(allocator);
+    defer lines.deinit();
     for (symbols) |symbol| {
         const pos = buffer.posToCursor(symbol.start);
         const symbol_name = buffer.content_raw.items[symbol.start..symbol.end];
-        const s = try std.fmt.allocPrint(
-            allocator,
+        try lines.writer.print(
             "{s}:{}:{}\n",
             .{ symbol_name, pos.row + 1, pos.col + 1 },
         );
-        defer allocator.free(s);
-        try lines.appendSlice(s);
     }
-    const bufs_str = try lines.toOwnedSlice();
-    defer allocator.free(bufs_str);
 
     const preview_cmd = try std.fmt.allocPrint(
         allocator,
@@ -114,7 +110,7 @@ pub fn pickSymbol(allocator: Allocator, buffer: *const buf.Buffer, symbols: []co
     defer allocator.free(preview_cmd);
 
     const cmd: []const []const u8 = fzf_command ++ .{ "--preview", preview_cmd, "--delimiter", ":" };
-    const out = try ext.runExternalWait(allocator, cmd, bufs_str, null);
+    const out = try ext.runExternalWait(allocator, cmd, lines.written(), null);
     defer allocator.free(out);
     if (out.len == 0) return error.EmptyOut;
     return .init(allocator, out);
