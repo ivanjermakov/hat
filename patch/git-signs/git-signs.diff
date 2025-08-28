@@ -1,5 +1,5 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index 7d382a0..9e10084 100644
+index ea5bb1c..889bf2c 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
 @@ -24,11 +24,14 @@ const main = @import("main.zig");
@@ -17,7 +17,7 @@ index 7d382a0..9e10084 100644
      file: ?std.fs.File,
      stat: ?std.fs.File.Stat = null,
      /// Incremented on every content change
-@@ -90,11 +93,17 @@ pub const Buffer = struct {
+@@ -81,11 +84,17 @@ pub const Buffer = struct {
          const abs_path = std.fs.realpathAlloc(allocator, buf_path) catch null;
          defer if (abs_path) |a| allocator.free(a);
          const uri = try std.fmt.allocPrint(allocator, "file://{s}", .{abs_path orelse buf_path});
@@ -33,9 +33,9 @@ index 7d382a0..9e10084 100644
 +            .git_root = git_root,
 +            .git_hunks = std.array_list.Managed(git.Hunk).init(allocator),
              .content = std.array_list.Managed(u21).init(allocator),
-             .content_raw = raw,
+             .content_raw = std.array_list.Managed(u8).fromOwnedSlice(allocator, try allocator.dupe(u8, content_raw)),
              .diagnostics = std.array_list.Managed(dia.Diagnostic).init(allocator),
-@@ -125,6 +134,7 @@ pub const Buffer = struct {
+@@ -116,6 +125,7 @@ pub const Buffer = struct {
          };
          if (self.ts_state) |*ts_state| try ts_state.reparse(self.content_raw.items);
          try self.updateLinePositions();
@@ -43,7 +43,7 @@ index 7d382a0..9e10084 100644
      }
  
      pub fn updateContent(self: *Buffer) FatalError!void {
-@@ -142,6 +152,8 @@ pub const Buffer = struct {
+@@ -130,6 +140,8 @@ pub const Buffer = struct {
          self.lsp_connections.deinit();
  
          self.allocator.free(self.uri);
@@ -52,7 +52,7 @@ index 7d382a0..9e10084 100644
          self.allocator.free(self.path);
  
          if (self.ts_state) |*ts_state| ts_state.deinit();
-@@ -346,7 +358,7 @@ pub const Buffer = struct {
+@@ -341,7 +353,7 @@ pub const Buffer = struct {
          try self.pending_changes.append(try change.clone(self.allocator));
      }
  
@@ -61,7 +61,7 @@ index 7d382a0..9e10084 100644
          if (self.uncommitted_changes.items.len == 0) {
              log.debug(@This(), "no changes to commit\n", .{});
              return;
-@@ -503,6 +515,31 @@ pub const Buffer = struct {
+@@ -494,6 +506,31 @@ pub const Buffer = struct {
          }
      }
  
@@ -94,7 +94,7 @@ index 7d382a0..9e10084 100644
          log.debug(@This(), "undo: {?}/{}\n", .{ self.history_index, self.history.items.len });
          if (self.history_index) |h_idx| {
 diff --git a/src/color.zig b/src/color.zig
-index 87e8d6c..cd9a0c9 100644
+index 4bbebcd..87b2779 100644
 --- a/src/color.zig
 +++ b/src/color.zig
 @@ -68,6 +68,7 @@ pub const Attr = union(enum) {
@@ -103,7 +103,7 @@ index 87e8d6c..cd9a0c9 100644
      curly_underline,
 +    bold,
  
-     pub fn write(self: Attr, writer: anytype) !void {
+     pub fn write(self: Attr, writer: *std.io.Writer) !void {
          switch (self) {
 @@ -75,6 +76,7 @@ pub const Attr = union(enum) {
              .bg => |c| try writer.print("\x1b[48;2;{};{};{}m", .{ c.r, c.g, c.b }),
@@ -121,10 +121,10 @@ index 87e8d6c..cd9a0c9 100644
 +    pub const git_modified = &[_]Attr{ .{ .fg = color.yellow }, .bold };
 +    pub const git_deleted = &[_]Attr{ .{ .fg = color.red }, .bold };
  
-     pub fn write(attrs: []const Attr, writer: anytype) !void {
+     pub fn write(attrs: []const Attr, writer: *std.io.Writer) !void {
          for (attrs) |attr| {
 diff --git a/src/editor.zig b/src/editor.zig
-index 4ee7d23..51f78fd 100644
+index 33b09f3..ac5a9af 100644
 --- a/src/editor.zig
 +++ b/src/editor.zig
 @@ -150,7 +150,7 @@ pub const Editor = struct {
@@ -285,7 +285,7 @@ index 0000000..0341ccf
 +    try std.testing.expectEqualDeep(hunks[1], Hunk{ .type = .delete, .line = 37, .len = 0 });
 +}
 diff --git a/src/main.zig b/src/main.zig
-index db87e87..85271df 100644
+index 34ec556..9bcbca5 100644
 --- a/src/main.zig
 +++ b/src/main.zig
 @@ -41,9 +41,9 @@ pub var std_err_writer = std_err.writer(&std_err_buf);
@@ -300,7 +300,7 @@ index db87e87..85271df 100644
  
  pub var main_loop_mutex: mut.Mutex = .{};
 diff --git a/src/terminal.zig b/src/terminal.zig
-index 464935f..35b1a46 100644
+index 431a217..1c9a09f 100644
 --- a/src/terminal.zig
 +++ b/src/terminal.zig
 @@ -152,6 +152,38 @@ pub const Terminal = struct {

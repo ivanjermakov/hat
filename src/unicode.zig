@@ -2,28 +2,23 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 
 pub fn unicodeFromBytes(allocator: Allocator, bytes: []const u8) ![]const u21 {
-    const b = try allocator.alloc(u21, bytes.len);
-    const len = try unicodeFromBytesBuf(b, bytes);
-    return b[0..len];
+    var a = std.array_list.Managed(u21).init(allocator);
+    try unicodeFromBytesArrayList(&a, bytes);
+    return a.toOwnedSlice();
 }
 
-pub fn unicodeFromBytesBuf(buf: []u21, bytes: []const u8) !usize {
+pub fn unicodeFromBytesArrayList(array: *std.array_list.Managed(u21), bytes: []const u8) !void {
     var iter = LooseUtf8Iterator{ .bytes = bytes };
-    var written: usize = 0;
-    while (iter.next()) |ch| {
-        buf[written] = ch;
-        written += 1;
-    }
-    return written;
+    while (iter.next()) |ch| try array.append(ch);
 }
 
 pub fn unicodeToBytes(allocator: Allocator, utf: []const u21) ![]const u8 {
-    var b = try std.array_list.Managed(u8).initCapacity(allocator, utf.len);
-    try unicodeToBytesWrite(b.writer(), utf);
-    return b.toOwnedSlice();
+    var writer = std.io.Writer.Allocating.init(allocator);
+    try unicodeToBytesWrite(&writer.writer, utf);
+    return writer.toOwnedSlice();
 }
 
-pub fn unicodeToBytesWrite(writer: anytype, utf: []const u21) !void {
+pub fn unicodeToBytesWrite(writer: *std.io.Writer, utf: []const u21) !void {
     var pos: usize = 0;
     var buf: [1024]u8 = undefined;
     for (utf) |ch| {

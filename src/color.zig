@@ -70,7 +70,7 @@ pub const Attr = union(enum) {
     curly_underline,
     bold,
 
-    pub fn write(self: Attr, writer: anytype) !void {
+    pub fn write(self: Attr, writer: *std.io.Writer) !void {
         switch (self) {
             .fg => |c| try writer.print("\x1b[38;2;{};{};{}m", .{ c.r, c.g, c.b }),
             .bg => |c| try writer.print("\x1b[48;2;{};{};{}m", .{ c.r, c.g, c.b }),
@@ -100,7 +100,7 @@ pub const attributes = enum {
     pub const git_modified = &[_]Attr{ .{ .fg = color.yellow }, .bold };
     pub const git_deleted = &[_]Attr{ .{ .fg = color.red }, .bold };
 
-    pub fn write(attrs: []const Attr, writer: anytype) !void {
+    pub fn write(attrs: []const Attr, writer: *std.io.Writer) !void {
         for (attrs) |attr| {
             try attr.write(writer);
         }

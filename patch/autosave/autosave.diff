@@ -1,8 +1,8 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index 7d382a0..668fd7d 100644
+index ea5bb1c..3a50471 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
-@@ -178,14 +178,6 @@ pub const Buffer = struct {
+@@ -167,14 +167,6 @@ pub const Buffer = struct {
          _ = try self.syncFs();
  
          self.file_history_index = self.history_index;
@@ -17,7 +17,7 @@ index 7d382a0..668fd7d 100644
      }
  
      pub fn moveCursor(self: *Buffer, new_cursor: Cursor) void {
-@@ -368,6 +360,11 @@ pub const Buffer = struct {
+@@ -363,6 +355,11 @@ pub const Buffer = struct {
          self.history_index = self.history.items.len - 1;
  
          main.editor.dotRepeatCommitReady();
@@ -29,7 +29,7 @@ index 7d382a0..668fd7d 100644
      }
  
      pub fn changeInsertText(self: *Buffer, text: []const u21) FatalError!void {
-@@ -503,7 +500,7 @@ pub const Buffer = struct {
+@@ -494,7 +491,7 @@ pub const Buffer = struct {
          }
      }
  
@@ -38,7 +38,7 @@ index 7d382a0..668fd7d 100644
          log.debug(@This(), "undo: {?}/{}\n", .{ self.history_index, self.history.items.len });
          if (self.history_index) |h_idx| {
              const hist_to_undo = self.history.items[h_idx].items;
-@@ -515,6 +512,11 @@ pub const Buffer = struct {
+@@ -506,6 +503,11 @@ pub const Buffer = struct {
                  self.moveCursor(inv_change.new_span.?.start);
              }
              self.history_index = if (h_idx > 0) h_idx - 1 else null;
@@ -50,7 +50,7 @@ index 7d382a0..668fd7d 100644
          }
      }
  
-@@ -530,6 +532,11 @@ pub const Buffer = struct {
+@@ -521,6 +523,11 @@ pub const Buffer = struct {
              self.moveCursor(change.new_span.?.start);
          }
          self.history_index = redo_idx;
@@ -63,7 +63,7 @@ index 7d382a0..668fd7d 100644
  
      pub fn textAt(self: *const Buffer, span: Span) []const u21 {
 diff --git a/src/editor.zig b/src/editor.zig
-index 4ee7d23..78b030d 100644
+index 33b09f3..3747f4f 100644
 --- a/src/editor.zig
 +++ b/src/editor.zig
 @@ -32,6 +32,7 @@ pub const DotRepeat = enum {

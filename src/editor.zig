@@ -254,7 +254,7 @@ pub const Editor = struct {
     }
 
     pub fn updateInput(self: *Editor) !void {
-        if (try ter.getCodes(self.allocator)) |codes| {
+        if (try ter.getCodes(self.allocator, main.tty_in)) |codes| {
             defer self.allocator.free(codes);
             main.editor.dirty.input = true;
             const new_keys = try ter.getKeys(self.allocator, codes);
@@ -274,10 +274,11 @@ pub const Editor = struct {
                         try conn.disconnect();
                     },
                     .Disconnecting => {
-                        const term = std.posix.waitpid(conn.child.id, std.posix.W.NOHANG);
-                        if (conn.child.id == term.pid) {
-                            log.info(@This(), "lsp server terminated with code: {}\n", .{std.posix.W.EXITSTATUS(term.status)});
+                        if (conn.exitCode()) |code| {
+                            log.info(@This(), "lsp server terminated with code: {}\n", .{code});
                             conn.status = .Closed;
+                        } else {
+                            log.trace(@This(), "waiting for lsp server termination: {s}\n", .{conn.config.name});
                         }
                     },
                     .Closed => {
