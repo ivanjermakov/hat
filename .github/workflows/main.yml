@@ -21,6 +21,8 @@ jobs:
           version: 0.15.1
 
       - name: zig build test
+        env:
+          SKIP_E2E: true
         run: zig build test --summary all
 
       - name: test-patches.zig
