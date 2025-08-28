@@ -152,6 +152,38 @@ pub const Terminal = struct {
                 );
             }
         }
+        if (buffer.git_hunks.items.len > 0) {
+            const hunks = buffer.git_hunks.items;
+            log.info(@This(), "hunks: {any}\n", .{hunks});
+            var hunk_idx: usize = 0;
+            for (@intCast(area.pos.row)..@as(usize, @intCast(area.pos.row)) + area.dims.height) |term_row| {
+                const buffer_row = @as(i32, @intCast(term_row)) + buffer.offset.row;
+                if (buffer_row < 0) continue;
+                if (buffer_row >= buffer.line_positions.items.len) break;
+                if (hunk_idx >= hunks.len) break;
+
+                const hunk = hunks[hunk_idx];
+                const single_line_match = hunk.len == 0 and buffer_row == hunk.line - 1;
+                if (single_line_match or (buffer_row >= hunk.line - 1 and buffer_row < hunk.line - 1 + hunk.len)) {
+                    try self.moveCursor(.{ .row = @intCast(term_row), .col = area.pos.col });
+                    switch (hunk.type) {
+                        .add => {
+                            try co.attributes.write(co.attributes.git_added, self.writer);
+                            try self.writer.writeAll("┃");
+                        },
+                        .delete => {
+                            try co.attributes.write(co.attributes.git_deleted, self.writer);
+                            try self.writer.writeAll("▁");
+                        },
+                        .modify => {
+                            try co.attributes.write(co.attributes.git_modified, self.writer);
+                            try self.writer.writeAll("┃");
+                        },
+                    }
+                }
+                if (buffer_row > hunk.line - 1 + hunk.len) hunk_idx += 1;
+            }
+        }
     }
 
     fn drawBuffer(self: *Terminal, buffer: *buf.Buffer, area: Area) !void {
@@ -410,7 +442,7 @@ pub fn terminalSize() !Dimensions {
 }
 
 pub fn computeLayout(term_dims: Dimensions) Layout {
-    const number_line_width = 5;
+    const number_line_width = 6;
 
     return .{
         .number_line = .{
