@@ -1,5 +1,5 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index 61fba44..fd817e9 100644
+index ea5bb1c..3d513cb 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
 @@ -23,8 +23,9 @@ const lsp = @import("lsp.zig");
@@ -41,7 +41,7 @@ index 61fba44..fd817e9 100644
          const cmd = &main.editor.command_line;
          const line = self.lineContent(@intCast(self.cursor.row));
 diff --git a/src/editor.zig b/src/editor.zig
-index cfc66aa..25bfa0c 100644
+index 33b09f3..cc7ecbe 100644
 --- a/src/editor.zig
 +++ b/src/editor.zig
 @@ -13,6 +13,7 @@ const main = @import("main.zig");
@@ -76,7 +76,7 @@ index cfc66aa..25bfa0c 100644
  
          for (self.key_queue.items) |key| key.deinit();
          self.key_queue.deinit();
-@@ -371,6 +375,15 @@ pub const Editor = struct {
+@@ -372,6 +376,15 @@ pub const Editor = struct {
          }
      }
  
@@ -93,7 +93,7 @@ index cfc66aa..25bfa0c 100644
          const keys = try ter.getKeys(self.allocator, str);
          defer self.allocator.free(keys);
 diff --git a/src/lsp.zig b/src/lsp.zig
-index d319506..11925e7 100644
+index 1ff7f63..eb7eedc 100644
 --- a/src/lsp.zig
 +++ b/src/lsp.zig
 @@ -9,11 +9,13 @@ const buf = @import("buffer.zig");
@@ -110,7 +110,7 @@ index d319506..11925e7 100644
  const uri = @import("uri.zig");
  
  const default_stringify_opts = std.json.Stringify.Options{ .emit_null_optional_fields = false };
-@@ -104,6 +106,7 @@ pub const LspConnection = struct {
+@@ -106,6 +108,7 @@ pub const LspConnection = struct {
                  .rename = .{
                      .prepareSupport = true,
                  },
@@ -118,7 +118,7 @@ index d319506..11925e7 100644
              },
              .workspace = .{
                  .workspaceFolders = true,
-@@ -195,6 +198,8 @@ pub const LspConnection = struct {
+@@ -200,6 +203,8 @@ pub const LspConnection = struct {
                          try self.handleHoverResponse(arena.allocator(), response_result);
                      } else if (std.mem.eql(u8, method, "textDocument/rename")) {
                          try self.handleRenameResponse(arena.allocator(), response_result);
@@ -127,7 +127,7 @@ index d319506..11925e7 100644
                      }
                  },
                  .notification => |notif| {
-@@ -246,6 +251,15 @@ pub const LspConnection = struct {
+@@ -251,6 +256,15 @@ pub const LspConnection = struct {
          });
      }
  
@@ -143,7 +143,7 @@ index d319506..11925e7 100644
      pub fn rename(self: *LspConnection, new_name: []const u8) !void {
          if ((self.server_init orelse return).value.capabilities.renameProvider == null) return;
          const buffer = main.editor.active_buffer;
-@@ -518,6 +532,18 @@ pub const LspConnection = struct {
+@@ -534,6 +548,18 @@ pub const LspConnection = struct {
          try main.editor.applyWorkspaceEdit(result.value);
      }
  
@@ -163,7 +163,7 @@ index d319506..11925e7 100644
          _ = self;
          log.trace(@This(), "notification: {s}\n", .{notif.method});
 diff --git a/src/main.zig b/src/main.zig
-index a6a4f49..3fc80d7 100644
+index d5e6c83..a1ff281 100644
 --- a/src/main.zig
 +++ b/src/main.zig
 @@ -161,6 +161,15 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
@@ -194,9 +194,9 @@ index a6a4f49..3fc80d7 100644
                  } else if (editor.mode == .insert and editor.key_queue.items[0].printable != null) {
                      var printable = std.array_list.Managed(u21).init(allocator);
 @@ -335,6 +348,8 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
-                         buffer.goToDefinition() catch |e| log.err(@This(), "go to def LSP error: {}", .{e});
+                         buffer.goToDefinition() catch |e| log.err(@This(), "go to def LSP error: {}\n", .{e});
                      } else if (editor.mode == .normal and eql(u8, multi_key, " r")) {
-                         buffer.findReferences() catch |e| log.err(@This(), "find references LSP error: {}", .{e});
+                         buffer.findReferences() catch |e| log.err(@This(), "find references LSP error: {}\n", .{e});
 +                    } else if (editor.mode == .normal and eql(u8, multi_key, " c")) {
 +                        buffer.codeAction() catch |e| log.err(@This(), "code action LSP error: {}\n", .{e});
                      } else if (editor.mode == .normal and eql(u8, multi_key, " n")) {

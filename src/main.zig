@@ -233,6 +233,12 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     try editor.enterMode(.normal);
                     editor.dismissMessage();
                     repeat_count = null;
+                } else if (normal_or_select and eql(u8, key, "<c-c>")) {
+                    editor.sendMessage("press q to close buffer") catch {};
+                } else if (normal_or_select and eql(u8, key, "<c-z>")) {
+                    // raise SIGTSTP to suspend hat. SIGCONT is handled by `sig.zig` once hat is fg'ed
+                    term.deinit();
+                    std.posix.raise(sig.sig_handle.tstp.sig) catch {};
 
                     // normal or select mode
                 } else if (normal_or_select and eql(u8, key, "k")) {
