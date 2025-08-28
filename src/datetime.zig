@@ -4,7 +4,6 @@
 // The full license is in the file LICENSE, distributed with this software.   //
 // -------------------------------------------------------------------------- //
 
-// Some of this is ported from cpython's datetime module
 const std = @import("std");
 const time = std.time;
 const math = std.math;
@@ -210,10 +209,6 @@ pub const Date = struct {
     pub fn formatIsoBuf(self: Date, buf: []u8) ![]u8 {
         return std.fmt.bufPrint(buf, ISO_DATE_FMT, .{ self.year, self.month, self.day });
     }
-
-    pub fn writeIso(self: Date, writer: anytype) !void {
-        try writer.print(ISO_DATE_FMT, .{ self.year, self.month, self.day });
-    }
 };
 
 pub const Time = struct {
@@ -315,39 +310,6 @@ pub const Time = struct {
         if (self.nanosecond > other.nanosecond) return .gt;
         if (self.nanosecond < other.nanosecond) return .lt;
         return .eq;
-    }
-
-    pub fn gt(self: Time, other: Time) bool {
-        return self.cmp(other) == .gt;
-    }
-
-    pub fn gte(self: Time, other: Time) bool {
-        const r = self.cmp(other);
-        return r == .eq or r == .gt;
-    }
-
-    pub fn lt(self: Time, other: Time) bool {
-        return self.cmp(other) == .lt;
-    }
-
-    pub fn lte(self: Time, other: Time) bool {
-        const r = self.cmp(other);
-        return r == .eq or r == .lt;
-    }
-
-    pub fn amOrPm(self: Time) []const u8 {
-        return if (self.hour > 12) return "PM" else "AM";
-    }
-
-    const ISO_HM_FORMAT = "T{d:0>2}:{d:0>2}";
-    const ISO_HMS_FORMAT = "T{d:0>2}:{d:0>2}:{d:0>2}";
-
-    pub fn writeIsoHM(self: Time, writer: anytype) !void {
-        try writer.print(ISO_HM_FORMAT, .{ self.hour, self.minute });
-    }
-
-    pub fn writeIsoHMS(self: Time, writer: anytype) !void {
-        try writer.print(ISO_HMS_FORMAT, .{ self.hour, self.minute, self.second });
     }
 };
 
@@ -658,21 +620,6 @@ test "date-format-iso-buf" {
     }
 }
 
-test "date-write-iso" {
-    const date_strs = [_][]const u8{
-        "0959-02-05",
-        "2018-12-15",
-    };
-
-    for (date_strs) |date_str| {
-        var buf: [32]u8 = undefined;
-        var stream = std.io.fixedBufferStream(buf[0..]);
-        var d = try Date.parseIso(date_str);
-        try d.writeIso(stream.writer());
-        try testing.expectEqualStrings(date_str, stream.getWritten());
-    }
-}
-
 test "time-create" {
     const t = Time.fromTimestamp(1574908586928);
     try testing.expect(t.hour == 2);
@@ -723,40 +670,6 @@ test "time-from-seconds" {
     try testing.expect(t.nanosecond == 120000000);
     try testing.expectEqual(t.totalSeconds(), 6 * 3600 + 315);
     //testing.expectAlmostEqual(t.toSeconds(), seconds-time.s_per_day);
-}
-
-test "time-compare" {
-    const t1 = try Time.create(8, 30, 0, 0);
-    const t2 = try Time.create(9, 30, 0, 0);
-    const t3 = try Time.create(8, 0, 0, 0);
-    const t4 = try Time.create(9, 30, 17, 0);
-
-    try testing.expect(t1.lt(t2));
-    try testing.expect(t1.gt(t3));
-    try testing.expect(t2.lt(t4));
-    try testing.expect(t3.lt(t4));
-}
-
-test "time-write-iso-hm" {
-    const t = Time.fromTimestamp(1574908586928);
-
-    var buf: [6]u8 = undefined;
-    var fbs = std.io.fixedBufferStream(buf[0..]);
-
-    try t.writeIsoHM(fbs.writer());
-
-    try testing.expectEqualSlices(u8, "T02:36", fbs.getWritten());
-}
-
-test "time-write-iso-hms" {
-    const t = Time.fromTimestamp(1574908586928);
-
-    var buf: [9]u8 = undefined;
-    var fbs = std.io.fixedBufferStream(buf[0..]);
-
-    try t.writeIsoHMS(fbs.writer());
-
-    try testing.expectEqualSlices(u8, "T02:36:26", fbs.getWritten());
 }
 
 test "Datetime.fromSeconds" {
