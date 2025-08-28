@@ -35,6 +35,11 @@ pub const Config = struct {
     /// Char to denote terminal lines after end of buffer
     /// See vim's :h fillchars -> eob
     end_of_buffer_char: ?u8 = null,
+    /// Imaginary width of a buffer that should be aligned (padded on the left).
+    /// `null` means "no centering".
+    /// If >`term_width`, padding is 0,
+    /// If <`term_width`, left padding is `(term_width-centering_width)/2`
+    centering_width: ?usize = null,
 };
 
 pub const Editor = struct {
