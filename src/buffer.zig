@@ -31,7 +31,7 @@ pub const Buffer = struct {
     path: []const u8,
     uri: []const u8,
     git_root: ?[]const u8,
-    git_hunks: std.array_list.Managed(git.Hunk),
+    git_hunks: std.array_list.Aligned(git.Hunk, null) = .empty,
     file: ?std.fs.File,
     stat: ?std.fs.File.Stat = null,
     /// Incremented on every content change
@@ -94,16 +94,6 @@ pub const Buffer = struct {
             .file_type = file_type,
             .uri = uri,
             .git_root = git_root,
-            .content = std.array_list.Managed(u21).init(allocator),
-            .content_raw = std.array_list.Managed(u8).fromOwnedSlice(allocator, try allocator.dupe(u8, content_raw)),
-            .diagnostics = std.array_list.Managed(dia.Diagnostic).init(allocator),
-            .line_positions = std.array_list.Managed(usize).init(allocator),
-            .line_byte_positions = std.array_list.Managed(usize).init(allocator),
-            .indents = std.array_list.Managed(usize).init(allocator),
-            .history = std.array_list.Managed(std.array_list.Managed(cha.Change)).init(allocator),
-            .pending_changes = std.array_list.Managed(cha.Change).init(allocator),
-            .uncommitted_changes = std.array_list.Managed(cha.Change).init(allocator),
-            .lsp_connections = std.array_list.Managed(*lsp.LspConnection).init(allocator),
             .scratch = scratch,
             .allocator = allocator,
         };
@@ -140,7 +130,7 @@ pub const Buffer = struct {
 
         self.allocator.free(self.uri);
         if (self.git_root) |gr| self.allocator.free(gr);
-        self.git_hunks.deinit();
+        self.git_hunks.deinit(self.allocator);
         self.allocator.free(self.path);
 
         if (self.ts_state) |*ts_state| ts_state.deinit();
@@ -525,7 +515,7 @@ pub const Buffer = struct {
             if (git.diffHunks(self.allocator, staged_path, current_path) catch return) |hunks| {
                 defer self.allocator.free(hunks);
                 log.debug(@This(), "git hunks: {any}\n", .{hunks});
-                try self.git_hunks.appendSlice(hunks);
+                try self.git_hunks.appendSlice(self.allocator, hunks);
             }
         }
     }
