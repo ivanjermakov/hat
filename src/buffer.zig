@@ -873,7 +873,6 @@ pub const Buffer = struct {
         try uni.unicodeToBytesWrite(&writer.writer, self.content.items);
         self.content_raw.clearRetainingCapacity();
         try self.content_raw.appendSlice(writer.written());
-        log.info(@This(), "updated raw: {s}\n", .{self.content_raw.items});
     }
 
     fn scrollForCursor(self: *Buffer, new_buf_cursor: Cursor) void {
