@@ -1,3 +1,23 @@
+diff --git a/src/buffer.zig b/src/buffer.zig
+index ea5bb1c..61fba44 100644
+--- a/src/buffer.zig
++++ b/src/buffer.zig
+@@ -835,6 +835,7 @@ pub const Buffer = struct {
+         self.cursor = change.new_span.?.end;
+ 
+         if (self.ts_state) |*ts_state| try ts_state.edit(change);
++        log.trace(@This(), "buf content after change: {any}\n", .{self.content.items});
+     }
+ 
+     /// Delete every character from cursor (including) to the end of line
+@@ -872,6 +873,7 @@ pub const Buffer = struct {
+         try uni.unicodeToBytesWrite(&writer.writer, self.content.items);
+         self.content_raw.clearRetainingCapacity();
+         try self.content_raw.appendSlice(writer.written());
++        log.info(@This(), "updated raw: {s}\n", .{self.content_raw.items});
+     }
+ 
+     fn scrollForCursor(self: *Buffer, new_buf_cursor: Cursor) void {
 diff --git a/src/core.zig b/src/core.zig
 index 880684d..aa148d2 100644
 --- a/src/core.zig
@@ -11,7 +31,7 @@ index 880684d..aa148d2 100644
      buffer: Area,
  };
 diff --git a/src/editor.zig b/src/editor.zig
-index cfc66aa..aa407b3 100644
+index 33b09f3..aa407b3 100644
 --- a/src/editor.zig
 +++ b/src/editor.zig
 @@ -35,6 +35,11 @@ pub const Config = struct {
@@ -26,6 +46,257 @@ index cfc66aa..aa407b3 100644
  };
  
  pub const Editor = struct {
+@@ -258,11 +263,10 @@ pub const Editor = struct {
+                         try conn.disconnect();
+                     },
+                     .Disconnecting => {
+-                        if (conn.exitCode()) |code| {
+-                            log.info(@This(), "lsp server terminated with code: {}\n", .{code});
++                        const term = std.posix.waitpid(conn.child.id, std.posix.W.NOHANG);
++                        if (conn.child.id == term.pid) {
++                            log.info(@This(), "lsp server terminated with code: {}\n", .{std.posix.W.EXITSTATUS(term.status)});
+                             conn.status = .Closed;
+-                        } else {
+-                            log.trace(@This(), "waiting for lsp server termination: {s}\n", .{conn.config.name});
+                         }
+                     },
+                     .Closed => {
+diff --git a/src/lsp.zig b/src/lsp.zig
+index 1ff7f63..d319506 100644
+--- a/src/lsp.zig
++++ b/src/lsp.zig
+@@ -73,8 +73,6 @@ pub const LspConnection = struct {
+     thread: std.Thread,
+     client_capabilities: types.ClientCapabilities,
+     server_init: ?std.json.Parsed(types.InitializeResult) = null,
+-    stdin_buf: [2 << 12]u8 = undefined,
+-    stdin_writer: std.fs.File.Writer,
+     allocator: Allocator,
+ 
+     pub fn connect(allocator: Allocator, config: LspConfig) !LspConnection {
+@@ -122,10 +120,8 @@ pub const LspConnection = struct {
+             .buffers = std.array_list.Managed(*buf.Buffer).init(allocator),
+             .thread = undefined,
+             .client_capabilities = client_capabilities,
+-            .stdin_writer = undefined,
+             .allocator = allocator,
+         };
+-        self.stdin_writer = child.stdin.?.writer(&self.stdin_buf);
+ 
+         const cwd = try std.fs.cwd().realpathAlloc(allocator, ".");
+         defer allocator.free(cwd);
+@@ -177,8 +173,7 @@ pub const LspConnection = struct {
+ 
+                     const response_result = b: switch (resp.result_or_error) {
+                         .@"error" => {
+-                            const e = resp.result_or_error.@"error";
+-                            log.debug(@This(), "LSP error: {} {s}\n", .{ e.code, e.message });
++                            log.debug(@This(), "Lsp error: {}\n", .{resp.result_or_error.@"error"});
+                             return;
+                         },
+                         .result => |r| break :b r,
+@@ -291,12 +286,13 @@ pub const LspConnection = struct {
+             var changes = try std.array_list.Managed(types.TextDocumentContentChangeEvent)
+                 .initCapacity(self.allocator, buffer.pending_changes.items.len);
+             defer changes.deinit();
+-
+             for (buffer.pending_changes.items) |change| {
+                 const event = try change.toLsp(self.allocator);
+-                log.info(@This(), "change new text: {?any}\n", .{change.new_text});
+                 try changes.append(event);
+             }
++            defer for (changes.items) |event| {
++                self.allocator.free(event.literal_0.text);
++            };
+             try self.sendNotification("textDocument/didChange", .{
+                 .textDocument = .{ .uri = buffer.uri, .version = @intCast(buffer.version) },
+                 .contentChanges = changes.items,
+@@ -313,21 +309,7 @@ pub const LspConnection = struct {
+         });
+     }
+ 
+-    pub fn exitCode(self: *LspConnection) ?u8 {
+-        const term = std.posix.waitpid(self.child.id, std.posix.W.NOHANG);
+-        if (self.child.id == term.pid) return std.posix.W.EXITSTATUS(term.status);
+-        return null;
+-    }
+-
+     fn poll(self: *LspConnection) !?[]const []const u8 {
+-        if (self.status == .Created or self.status == .Initialized) {
+-            if (self.exitCode()) |code| {
+-                log.err(@This(), "lsp server terminated prematurely with code: {}\n", .{code});
+-                self.status = .Closed;
+-                return error.ServerCrash;
+-            }
+-        }
+-
+         if (log.enabled(.@"error")) b: {
+             var err_writer = std.io.Writer.Allocating.init(self.allocator);
+             defer err_writer.deinit();
+@@ -389,9 +371,9 @@ pub const LspConnection = struct {
+         };
+         const json_message = try std.json.Stringify.valueAlloc(self.allocator, request, default_stringify_opts);
+         log.trace(@This(), "> raw request: {s}\n", .{json_message});
+-        try self.stdin_writer.interface.print("Content-Length: {}\r\n\r\n{s}", .{ json_message.len, json_message });
+-        try self.stdin_writer.interface.flush();
+-
++        const rpc_message = try std.fmt.allocPrint(self.allocator, "Content-Length: {}\r\n\r\n{s}", .{ json_message.len, json_message });
++        _ = try self.child.stdin.?.write(rpc_message);
++        defer self.allocator.free(rpc_message);
+         try self.messages_unreplied.put(request.id.number, .{ .method = method, .message = json_message });
+     }
+ 
+@@ -407,8 +389,9 @@ pub const LspConnection = struct {
+         const json_message = try std.json.Stringify.valueAlloc(self.allocator, request, default_stringify_opts);
+         defer self.allocator.free(json_message);
+         log.trace(@This(), "> raw notification: {s}\n", .{json_message});
+-        try self.stdin_writer.interface.print("Content-Length: {}\r\n\r\n{s}", .{ json_message.len, json_message });
+-        try self.stdin_writer.interface.flush();
++        const rpc_message = try std.fmt.allocPrint(self.allocator, "Content-Length: {}\r\n\r\n{s}", .{ json_message.len, json_message });
++        _ = try self.child.stdin.?.write(rpc_message);
++        defer self.allocator.free(rpc_message);
+     }
+ 
+     fn sendResponse(
+@@ -424,8 +407,9 @@ pub const LspConnection = struct {
+         const json_message = try std.json.Stringify.valueAlloc(self.allocator, request, default_stringify_opts);
+         defer self.allocator.free(json_message);
+         log.trace(@This(), "> raw response: {s}\n", .{json_message});
+-        try self.stdin_writer.interface.print("Content-Length: {}\r\n\r\n{s}", .{ json_message.len, json_message });
+-        try self.stdin_writer.interface.flush();
++        const rpc_message = try std.fmt.allocPrint(self.allocator, "Content-Length: {}\r\n\r\n{s}", .{ json_message.len, json_message });
++        _ = try self.child.stdin.?.write(rpc_message);
++        defer self.allocator.free(rpc_message);
+     }
+ 
+     fn handleInitializeResponse(self: *LspConnection, arena: Allocator, resp: ?std.json.Value) !void {
+diff --git a/src/main.zig b/src/main.zig
+index d5e6c83..a6a4f49 100644
+--- a/src/main.zig
++++ b/src/main.zig
+@@ -165,7 +165,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+                 // command line menu
+                 if (cmd_active) {
+                     if (eql(u8, key, "\n")) {
+-                        editor.handleCmd() catch |e| log.err(@This(), "handle cmd error: {}\n", .{e});
++                        editor.handleCmd() catch |e| log.err(@This(), "handle cmd error: {}", .{e});
+                     } else if (cmd_active and eql(u8, key, "<escape>")) {
+                         editor.command_line.close();
+                     } else if (cmd_active and eql(u8, key, "<left>")) {
+@@ -258,9 +258,9 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+                     try buffer.changeAlignIndent();
+                     try editor.enterMode(.normal);
+                 } else if (normal_or_select and eql(u8, key, "y")) {
+-                    buffer.copySelectionToClipboard() catch |e| log.err(@This(), "copy to clipboard error: {}\n", .{e});
++                    buffer.copySelectionToClipboard() catch |e| log.err(@This(), "copy to clipboard error: {}", .{e});
+                 } else if (normal_or_select and eql(u8, key, "p")) {
+-                    buffer.changeInsertFromClipboard() catch |e| log.err(@This(), "paste from clipboard error: {}\n", .{e});
++                    buffer.changeInsertFromClipboard() catch |e| log.err(@This(), "paste from clipboard error: {}", .{e});
+                 } else if (normal_or_select and eql(u8, key, "z")) {
+                     buffer.centerCursor();
+                 } else if (normal_or_select and eql(u8, key, ":")) {
+@@ -269,7 +269,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+                     // normal mode
+                 } else if (normal_or_select and (eql(u8, key, "q") or eql(u8, key, "Q"))) {
+                     const force = eql(u8, key, "Q");
+-                    editor.closeBuffer(force) catch |e| log.err(@This(), "close buffer error: {}\n", .{e});
++                    editor.closeBuffer(force) catch |e| log.err(@This(), "close buffer error: {}", .{e});
+                     if (editor.buffers.items.len == 0) break :main_loop;
+                 } else if (editor.mode == .normal and eql(u8, key, "v")) {
+                     try editor.enterMode(.select);
+@@ -288,7 +288,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+                 } else if (editor.mode == .normal and eql(u8, key, "<tab>")) {
+                     if (editor.buffers.items.len > 1) {
+                         const path = editor.buffers.items[1].path;
+-                        editor.openBuffer(path) catch |e| log.err(@This(), "open buffer {s} error: {}\n", .{ path, e });
++                        editor.openBuffer(path) catch |e| log.err(@This(), "open buffer {s} error: {}", .{ path, e });
+                     }
+                 } else if (editor.mode == .normal and eql(u8, key, ".")) {
+                     try editor.dotRepeat();
+@@ -305,16 +305,16 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+                 } else if (editor.mode == .normal and eql(u8, key, "r") and editor.recording_macro != null) {
+                     try editor.recordMacro();
+                 } else if (editor.mode == .normal and eql(u8, key, "<c-n>")) {
+-                    editor.pickFile() catch |e| log.err(@This(), "pick file error: {}\n", .{e});
++                    editor.pickFile() catch |e| log.err(@This(), "pick file error: {}", .{e});
+                 } else if (editor.mode == .normal and eql(u8, key, "<c-f>")) {
+-                    editor.findInFiles() catch |e| log.err(@This(), "find in files error: {}\n", .{e});
++                    editor.findInFiles() catch |e| log.err(@This(), "find in files error: {}", .{e});
+                 } else if (editor.mode == .normal and eql(u8, key, "<c-e>")) {
+-                    editor.pickBuffer() catch |e| log.err(@This(), "pick buffer error: {}\n", .{e});
++                    editor.pickBuffer() catch |e| log.err(@This(), "pick buffer error: {}", .{e});
+                 } else if (editor.mode == .normal and eql(u8, key, "<K>")) {
+                     if (editor.hover_contents) |hover| {
+-                        editor.openScratch(hover) catch |e| log.err(@This(), "open scratch error: {}\n", .{e});
++                        editor.openScratch(hover) catch |e| log.err(@This(), "open scratch error: {}", .{e});
+                     } else {
+-                        buffer.showHover() catch |e| log.err(@This(), "show hover LSP error: {}\n", .{e});
++                        buffer.showHover() catch |e| log.err(@This(), "show hover LSP error: {}", .{e});
+                     }
+ 
+                     // insert mode
+@@ -330,11 +330,11 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+                     defer allocator.free(multi_key);
+ 
+                     if (editor.mode == .normal and eql(u8, multi_key, " w")) {
+-                        buffer.write() catch |e| log.err(@This(), "write buffer error: {}\n", .{e});
++                        buffer.write() catch |e| log.err(@This(), "write buffer error: {}", .{e});
+                     } else if (editor.mode == .normal and eql(u8, multi_key, " d")) {
+-                        buffer.goToDefinition() catch |e| log.err(@This(), "go to def LSP error: {}\n", .{e});
++                        buffer.goToDefinition() catch |e| log.err(@This(), "go to def LSP error: {}", .{e});
+                     } else if (editor.mode == .normal and eql(u8, multi_key, " r")) {
+-                        buffer.findReferences() catch |e| log.err(@This(), "find references LSP error: {}\n", .{e});
++                        buffer.findReferences() catch |e| log.err(@This(), "find references LSP error: {}", .{e});
+                     } else if (editor.mode == .normal and eql(u8, multi_key, " n")) {
+                         try buffer.renamePrompt();
+                     } else if (editor.mode == .normal and eql(u8, key, "r") and editor.key_queue.items[1].printable != null) {
+@@ -392,9 +392,10 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+             buffer.version += 1;
+             buffer.clearDiagnostics();
+             try buffer.reparse();
++            log.trace(@This(), "buf raw content after reparse:\n{s}\n", .{buffer.content_raw.items});
+             perf.parse = timer.lap();
+             for (buffer.lsp_connections.items) |conn| {
+-                conn.didChange(editor.active_buffer) catch |e| log.err(@This(), "did change LSP error: {}\n", .{e});
++                conn.didChange(editor.active_buffer) catch |e| log.err(@This(), "did change LSP error: {}", .{e});
+             }
+             for (buffer.pending_changes.items) |*change| change.deinit();
+             buffer.pending_changes.clearRetainingCapacity();
+@@ -406,17 +407,17 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+ 
+         if (editor.dirty.draw) {
+             editor.dirty.draw = false;
+-            term.draw() catch |e| log.err(@This(), "draw error: {}\n", .{e});
++            term.draw() catch |e| log.err(@This(), "draw error: {}", .{e});
+         } else if (editor.dirty.cursor) {
+             editor.dirty.cursor = false;
+-            term.updateCursor() catch |e| log.err(@This(), "update cursor error: {}\n", .{e});
++            term.updateCursor() catch |e| log.err(@This(), "update cursor error: {}", .{e});
+         }
+         perf.draw = timer.lap();
+ 
+         if (editor.dirty.completion) {
+             editor.dirty.completion = false;
+             for (buffer.lsp_connections.items) |conn| {
+-                conn.sendCompletionRequest() catch |e| log.err(@This(), "cmp request LSP error: {}\n", .{e});
++                conn.sendCompletionRequest() catch |e| log.err(@This(), "cmp request LSP error: {}", .{e});
+             }
+         }
+         if (editor.dot_repeat_state == .commit_ready) {
+@@ -425,11 +426,11 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+         perf.commit = timer.lap();
+ 
+         if (buffer.syncFs() catch |e| b: {
+-            log.err(@This(), "sync fs error: {}\n", .{e});
++            log.err(@This(), "sync fs error: {}", .{e});
+             break :b false;
+         }) {
+             try editor.sendMessage("external buffer modification");
+-            buffer.changeFsExternal() catch |e| log.err(@This(), "external change fs error: {}\n", .{e});
++            buffer.changeFsExternal() catch |e| log.err(@This(), "external change fs error: {}", .{e});
+         }
+         perf.sync = timer.lap();
+ 
 diff --git a/src/terminal.zig b/src/terminal.zig
 index 4aae290..2cbf920 100644
 --- a/src/terminal.zig
@@ -66,3 +337,18 @@ index 4aae290..2cbf920 100644
              },
          },
      };
+diff --git a/src/unicode.zig b/src/unicode.zig
+index 6e7e6d5..1824b30 100644
+--- a/src/unicode.zig
++++ b/src/unicode.zig
+@@ -14,8 +14,9 @@ pub fn unicodeFromBytesArrayList(array: *std.array_list.Managed(u21), bytes: []c
+ 
+ pub fn unicodeToBytes(allocator: Allocator, utf: []const u21) ![]const u8 {
+     var writer = std.io.Writer.Allocating.init(allocator);
++    defer writer.deinit();
+     try unicodeToBytesWrite(&writer.writer, utf);
+-    return writer.toOwnedSlice();
++    return writer.written();
+ }
+ 
+ pub fn unicodeToBytesWrite(writer: *std.io.Writer, utf: []const u21) !void {
