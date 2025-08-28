@@ -13,12 +13,13 @@ pub fn unicodeFromBytesArrayList(array: *std.array_list.Managed(u21), bytes: []c
 }
 
 pub fn unicodeToBytes(allocator: Allocator, utf: []const u21) ![]const u8 {
-    var b = try std.array_list.Managed(u8).initCapacity(allocator, utf.len);
-    try unicodeToBytesWrite(b.writer(), utf);
-    return b.toOwnedSlice();
+    var writer = std.io.Writer.Allocating.init(allocator);
+    defer writer.deinit();
+    try unicodeToBytesWrite(&writer.writer, utf);
+    return writer.written();
 }
 
-pub fn unicodeToBytesWrite(writer: anytype, utf: []const u21) !void {
+pub fn unicodeToBytesWrite(writer: *std.io.Writer, utf: []const u21) !void {
     var pos: usize = 0;
     var buf: [1024]u8 = undefined;
     for (utf) |ch| {
@@ -26,6 +27,7 @@ pub fn unicodeToBytesWrite(writer: anytype, utf: []const u21) !void {
         try writer.writeAll(buf[0..len]);
         pos += len;
     }
+    try writer.flush();
 }
 
 pub fn unicodeByteLen(utf: []const u21) !usize {

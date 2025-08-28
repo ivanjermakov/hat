@@ -868,8 +868,12 @@ pub const Buffer = struct {
     }
 
     fn updateRaw(self: *Buffer) !void {
+        var writer = std.io.Writer.Allocating.init(self.allocator);
+        defer writer.deinit();
+        try uni.unicodeToBytesWrite(&writer.writer, self.content.items);
         self.content_raw.clearRetainingCapacity();
-        try uni.unicodeToBytesWrite(self.content_raw.writer(), self.content.items);
+        try self.content_raw.appendSlice(writer.written());
+        log.info(@This(), "updated raw: {s}\n", .{self.content_raw.items});
     }
 
     fn scrollForCursor(self: *Buffer, new_buf_cursor: Cursor) void {
