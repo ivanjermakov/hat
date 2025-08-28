@@ -1,5 +1,5 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index 7d382a0..ff0303a 100644
+index 61fba44..7582886 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
 @@ -66,6 +66,7 @@ pub const Buffer = struct {
@@ -10,7 +10,7 @@ index 7d382a0..ff0303a 100644
      allocator: Allocator,
  
      pub fn init(allocator: Allocator, path: ?[]const u8, content_raw: []const u8) !Buffer {
-@@ -106,6 +107,7 @@ pub const Buffer = struct {
+@@ -97,6 +98,7 @@ pub const Buffer = struct {
              .uncommitted_changes = std.array_list.Managed(cha.Change).init(allocator),
              .lsp_connections = std.array_list.Managed(*lsp.LspConnection).init(allocator),
              .scratch = scratch,
@@ -18,7 +18,7 @@ index 7d382a0..ff0303a 100644
              .allocator = allocator,
          };
          _ = try self.syncFs();
-@@ -155,6 +157,7 @@ pub const Buffer = struct {
+@@ -143,6 +145,7 @@ pub const Buffer = struct {
          self.line_positions.deinit();
          self.line_byte_positions.deinit();
          self.indents.deinit();
@@ -26,7 +26,7 @@ index 7d382a0..ff0303a 100644
  
          for (self.history.items) |*i| {
              for (i.items) |*c| c.deinit();
-@@ -346,7 +349,7 @@ pub const Buffer = struct {
+@@ -341,7 +344,7 @@ pub const Buffer = struct {
          try self.pending_changes.append(try change.clone(self.allocator));
      }
  
@@ -35,7 +35,7 @@ index 7d382a0..ff0303a 100644
          if (self.uncommitted_changes.items.len == 0) {
              log.debug(@This(), "no changes to commit\n", .{});
              return;
-@@ -606,6 +609,12 @@ pub const Buffer = struct {
+@@ -597,6 +600,12 @@ pub const Buffer = struct {
          }
      }
  
@@ -127,10 +127,10 @@ index d319506..13e3f59 100644
          _ = self;
          log.trace(@This(), "notification: {s}\n", .{notif.method});
 diff --git a/src/main.zig b/src/main.zig
-index db87e87..6b091af 100644
+index a6a4f49..dbd69c8 100644
 --- a/src/main.zig
 +++ b/src/main.zig
-@@ -410,6 +410,13 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+@@ -411,6 +411,13 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
          } else if (editor.dirty.cursor) {
              editor.dirty.cursor = false;
              term.updateCursor() catch |e| log.err(@This(), "update cursor error: {}", .{e});
@@ -145,7 +145,7 @@ index db87e87..6b091af 100644
          perf.draw = timer.lap();
  
 diff --git a/src/terminal.zig b/src/terminal.zig
-index 464935f..3afe461 100644
+index 4aae290..7919bdb 100644
 --- a/src/terminal.zig
 +++ b/src/terminal.zig
 @@ -211,6 +211,14 @@ pub const Terminal = struct {
