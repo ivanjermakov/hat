@@ -23,7 +23,7 @@ pub const HighlightConfig = struct {
 
 pub fn printBuffer(buffer: *buf.Buffer, writer: *std.io.Writer, highlight: ?HighlightConfig) !void {
     var attrs_buf = std.mem.zeroes([128]u8);
-    var attrs_stream = std.io.fixedBufferStream(&attrs_buf);
+    var attrs_writer = std.io.Writer.fixed(&attrs_buf);
     var attrs: []const u8 = undefined;
     var last_attrs_buf = std.mem.zeroes([128]u8);
     var last_attrs: ?[]const u8 = null;
@@ -51,7 +51,7 @@ pub fn printBuffer(buffer: *buf.Buffer, writer: *std.io.Writer, highlight: ?High
         var byte: usize = buffer.lineStart(@intCast(row));
 
         for (line) |ch| {
-            attrs_stream.reset();
+            _ = attrs_writer.consumeAll();
             if (buffer.ts_state) |ts_state| {
                 const highlight_spans = ts_state.highlight.spans.items;
                 const ch_attrs: []const co.Attr = b: while (span_index < highlight_spans.len) {
@@ -64,19 +64,19 @@ pub fn printBuffer(buffer: *buf.Buffer, writer: *std.io.Writer, highlight: ?High
                 } else {
                     break :b co.attributes.text;
                 };
-                try co.attributes.write(ch_attrs, attrs_stream.writer());
+                try co.attributes.write(ch_attrs, &attrs_writer);
             }
 
             if (highlight != null and row == highlight.?.highlight_line) {
-                try co.attributes.write(co.attributes.selection, attrs_stream.writer());
+                try co.attributes.write(co.attributes.selection, &attrs_writer);
             }
 
-            attrs = attrs_stream.getWritten();
+            attrs = attrs_writer.buffered();
             if (last_attrs == null or !std.mem.eql(u8, attrs, last_attrs.?)) {
                 _ = try writer.write("\x1b[0m");
                 _ = try writer.write(attrs);
                 @memcpy(&last_attrs_buf, &attrs_buf);
-                last_attrs = last_attrs_buf[0..try attrs_stream.getPos()];
+                last_attrs = last_attrs_buf[0..attrs.len];
             }
 
             try uni.unicodeToBytesWrite(writer, &.{ch});
