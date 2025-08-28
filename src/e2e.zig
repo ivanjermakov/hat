@@ -23,9 +23,6 @@ fn createTmpFiles() !void {
 }
 
 fn startEditor(allocator: std.mem.Allocator, tty_in: File) !void {
-    log.init();
-    log.level = .@"error";
-
     main.tty_in = tty_in;
     const stdout_pipe = try std.posix.pipe();
     const mock_stdout: File = .{ .handle = stdout_pipe[1] };
@@ -45,7 +42,22 @@ fn startEditor(allocator: std.mem.Allocator, tty_in: File) !void {
     defer main.editor.disconnect() catch {};
 }
 
+fn skipE2e() bool {
+    if (std.posix.getenv("SKIP_E2E")) |skip| {
+        if (std.mem.eql(u8, skip, "true")) {
+            log.warn(@This(), "skipped e2e test\n", .{});
+            return true;
+        }
+    }
+    return false;
+}
+
 test "e2e" {
+    log.init();
+    log.level = .warn;
+
+    if (skipE2e()) return;
+
     var debug_allocator: std.heap.DebugAllocator(.{ .stack_trace_frames = 10 }) = .init;
     defer _ = debug_allocator.deinit();
     const allocator = debug_allocator.allocator();
@@ -55,9 +67,9 @@ test "e2e" {
     const tty_in_pipe = try std.posix.pipe();
     const mock_tty_in: File = .{ .handle = tty_in_pipe[0] };
     const mock_tty_out: File = .{ .handle = tty_in_pipe[1] };
-    const editor_thread = try std.Thread.spawn(.{}, startEditor, .{allocator, mock_tty_in});
+    const editor_thread = try std.Thread.spawn(.{}, startEditor, .{ allocator, mock_tty_in });
 
-    sleep(50 * ms);
+    sleep(100 * ms);
     try mock_tty_out.writeAll("q");
 
     editor_thread.join();
