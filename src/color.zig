@@ -69,7 +69,7 @@ pub const Attr = union(enum) {
     underline: RgbColor,
     curly_underline,
 
-    pub fn write(self: Attr, writer: anytype) !void {
+    pub fn write(self: Attr, writer: *std.io.Writer) !void {
         switch (self) {
             .fg => |c| try writer.print("\x1b[38;2;{};{};{}m", .{ c.r, c.g, c.b }),
             .bg => |c| try writer.print("\x1b[48;2;{};{};{}m", .{ c.r, c.g, c.b }),
@@ -95,7 +95,7 @@ pub const attributes = enum {
     pub const command_line = &[_]Attr{.{ .bg = color.gray2 }};
     pub const number_line = &[_]Attr{.{ .fg = color.gray4 }};
 
-    pub fn write(attrs: []const Attr, writer: anytype) !void {
+    pub fn write(attrs: []const Attr, writer: *std.io.Writer) !void {
         for (attrs) |attr| {
             try attr.write(writer);
         }
