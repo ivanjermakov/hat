@@ -163,7 +163,7 @@ index 1ff7f63..eb7eedc 100644
          _ = self;
          log.trace(@This(), "notification: {s}\n", .{notif.method});
 diff --git a/src/main.zig b/src/main.zig
-index d5e6c83..a1ff281 100644
+index 34ec556..7de8f84 100644
 --- a/src/main.zig
 +++ b/src/main.zig
 @@ -161,6 +161,15 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
@@ -193,7 +193,7 @@ index d5e6c83..a1ff281 100644
                      // text insertion
                  } else if (editor.mode == .insert and editor.key_queue.items[0].printable != null) {
                      var printable = std.array_list.Managed(u21).init(allocator);
-@@ -335,6 +348,8 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+@@ -341,6 +354,8 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                          buffer.goToDefinition() catch |e| log.err(@This(), "go to def LSP error: {}\n", .{e});
                      } else if (editor.mode == .normal and eql(u8, multi_key, " r")) {
                          buffer.findReferences() catch |e| log.err(@This(), "find references LSP error: {}\n", .{e});
@@ -202,7 +202,7 @@ index d5e6c83..a1ff281 100644
                      } else if (editor.mode == .normal and eql(u8, multi_key, " n")) {
                          try buffer.renamePrompt();
                      } else if (editor.mode == .normal and eql(u8, key, "r") and editor.key_queue.items[1].printable != null) {
-@@ -343,6 +358,9 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+@@ -349,6 +364,9 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                      } else if (editor.mode == .normal and eql(u8, key, "@") and editor.key_queue.items[1].printable != null) {
                          const macro_name: u8 = @intCast(key2.printable.?[0]);
                          try editor.replayMacro(macro_name);
@@ -213,7 +213,7 @@ index d5e6c83..a1ff281 100644
                          buffer.moveCursor(.{ .col = buffer.cursor.col });
                          buffer.centerCursor();
 diff --git a/src/terminal.zig b/src/terminal.zig
-index 4aae290..d80731b 100644
+index 431a217..fee7eb9 100644
 --- a/src/terminal.zig
 +++ b/src/terminal.zig
 @@ -15,6 +15,7 @@ const log = @import("log.zig");
