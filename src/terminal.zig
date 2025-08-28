@@ -63,8 +63,8 @@ pub const Terminal = struct {
 
     pub fn deinit(self: *Terminal) void {
         self.clear() catch {};
-        self.switchBuf(false) catch {};
         self.wrapAround(true) catch {};
+        self.switchBuf(false) catch {};
         self.writer.writeAll(cursor_type.steady_block) catch {};
         self.writer.flush() catch {};
     }
@@ -436,7 +436,7 @@ pub fn parseAnsi(allocator: Allocator, input: *std.array_list.Managed(u8)) !inp.
     var key: inp.Key = .{ .allocator = allocator };
     const code = input.orderedRemove(0);
     switch (code) {
-        0x00...0x03, 0x05...0x08, 0x0e, 0x10...0x19 => {
+        0x00...0x03, 0x05...0x08, 0x0e, 0x10...0x1a => {
             // offset 96 converts \x1 to 'a', \x2 to 'b', and so on
             key.printable = try uni.unicodeFromBytes(allocator, &.{code + 96});
             key.modifiers = @intFromEnum(inp.Modifier.control);
@@ -623,6 +623,7 @@ test "parseAnsi" {
     try expectEqlKey("\x1b\x4d\x1b", "<m-M>", 1);
     try expectEqlKey("ф", "ф", 0);
     try expectEqlKey("🚧", "🚧", 0);
+    try expectEqlKey("\x1a", "<c-z>", 0);
 }
 
 fn expectEqlKey(input: []const u8, expected: []const u8, remaining: usize) !void {
