@@ -42,7 +42,7 @@ pub fn runExternalWait(
 }
 
 pub fn toArgv(allocator: Allocator, cmd: []const u8) ![]const []const u8 {
-    var parts = std.array_list.Managed([]const u8).init(allocator);
+    var parts: std.array_list.Aligned([]const u8, null) = .empty;
 
     var start: usize = 0;
     var quoted: bool = false;
@@ -50,7 +50,7 @@ pub fn toArgv(allocator: Allocator, cmd: []const u8) ![]const []const u8 {
     for (cmd, 0..) |c, i| {
         if (c == '"') {
             if (quoted) {
-                try parts.append(cmd[start..i]);
+                try parts.append(allocator, cmd[start..i]);
                 start = i + 1;
             } else {
                 start = i + 1;
@@ -59,15 +59,15 @@ pub fn toArgv(allocator: Allocator, cmd: []const u8) ![]const []const u8 {
             continue;
         }
         if (c == ' ' and !quoted) {
-            try parts.append(cmd[start..i]);
+            try parts.append(allocator, cmd[start..i]);
             start = i + 1;
         }
     }
     if (start < cmd.len) {
-        try parts.append(cmd[start..]);
+        try parts.append(allocator, cmd[start..]);
     }
 
-    return parts.toOwnedSlice();
+    return parts.toOwnedSlice(allocator);
 }
 
 test "toArgv" {

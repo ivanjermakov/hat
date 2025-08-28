@@ -41,39 +41,34 @@ pub const Editor = struct {
     config: Config = .{},
     /// List of buffers
     /// Must be always sorted recent-first
-    buffers: std.array_list.Managed(*buf.Buffer),
+    buffers: std.array_list.Aligned(*buf.Buffer, null) = .empty,
     active_buffer: *buf.Buffer = undefined,
     mode: Mode,
     dirty: Dirty,
     completion_menu: cmp.CompletionMenu,
     command_line: cmd.CommandLine,
     lsp_connections: std.StringHashMap(lsp.LspConnection),
-    messages: std.array_list.Managed([]const u8),
+    messages: std.array_list.Aligned([]const u8, null) = .empty,
     message_read_idx: usize = 0,
     hover_contents: ?[]const u8 = null,
-    key_queue: std.array_list.Managed(inp.Key),
-    dot_repeat_input: std.array_list.Managed(inp.Key),
-    dot_repeat_input_uncommitted: std.array_list.Managed(inp.Key),
+    key_queue: std.array_list.Aligned(inp.Key, null) = .empty,
+    dot_repeat_input: std.array_list.Aligned(inp.Key, null) = .empty,
+    dot_repeat_input_uncommitted: std.array_list.Aligned(inp.Key, null) = .empty,
     dot_repeat_state: DotRepeat = .outside,
     find_query: ?[]const u21 = null,
     recording_macro: ?u8 = null,
-    macros: std.AutoHashMap(u8, std.array_list.Managed(inp.Key)),
+    macros: std.AutoHashMap(u8, std.array_list.Aligned(inp.Key, null)),
     allocator: Allocator,
 
     pub fn init(allocator: Allocator, config: Config) !Editor {
         const editor = Editor{
             .config = config,
-            .buffers = std.array_list.Managed(*buf.Buffer).init(allocator),
             .mode = .normal,
             .dirty = .{},
             .completion_menu = cmp.CompletionMenu.init(allocator),
             .command_line = cmd.CommandLine.init(allocator),
             .lsp_connections = std.StringHashMap(lsp.LspConnection).init(allocator),
-            .messages = std.array_list.Managed([]const u8).init(allocator),
-            .key_queue = std.array_list.Managed(inp.Key).init(allocator),
-            .dot_repeat_input = std.array_list.Managed(inp.Key).init(allocator),
-            .dot_repeat_input_uncommitted = std.array_list.Managed(inp.Key).init(allocator),
-            .macros = std.AutoHashMap(u8, std.array_list.Managed(inp.Key)).init(allocator),
+            .macros = std.AutoHashMap(u8, std.array_list.Aligned(inp.Key, null)).init(allocator),
             .allocator = allocator,
         };
         return editor;
@@ -87,7 +82,7 @@ pub const Editor = struct {
             // reinsert to maintain recent-first order
             const existing_idx = std.mem.indexOfScalar(*buf.Buffer, self.buffers.items, existing).?;
             _ = self.buffers.orderedRemove(existing_idx);
-            try self.buffers.insert(0, existing);
+            try self.buffers.insert(self.allocator, 0, existing);
             self.active_buffer = existing;
             main.editor.dirty.draw = true;
             return;
@@ -99,7 +94,7 @@ pub const Editor = struct {
         var buffer = try self.allocator.create(buf.Buffer);
         buffer.* = try buf.Buffer.init(self.allocator, path, file_content);
 
-        try self.buffers.insert(0, buffer);
+        try self.buffers.insert(self.allocator, 0, buffer);
         self.active_buffer = buffer;
         main.editor.dirty.draw = true;
 
@@ -114,8 +109,8 @@ pub const Editor = struct {
             const conn = self.lsp_connections.getPtr(ftype).?;
             conn.thread = try std.Thread.spawn(.{}, lsp.LspConnection.lspLoop, .{conn});
 
-            try buffer.lsp_connections.append(conn);
-            try conn.buffers.append(buffer);
+            try buffer.lsp_connections.append(self.allocator, conn);
+            try conn.buffers.append(self.allocator, buffer);
             log.debug(@This(), "attached buffer {s} to lsp {s}\n", .{ path, conn.config.name });
             if (conn.status == .Initialized) try conn.didOpen(buffer);
         }
@@ -145,7 +140,7 @@ pub const Editor = struct {
         buffer.* = try buf.Buffer.init(self.allocator, null, content orelse "");
         log.debug(@This(), "opening scratch {s}\n", .{buffer.path});
 
-        try self.buffers.insert(0, buffer);
+        try self.buffers.insert(self.allocator, 0, buffer);
         self.active_buffer = buffer;
         main.editor.dirty.draw = true;
     }
@@ -176,7 +171,7 @@ pub const Editor = struct {
             buffer.deinit();
             self.allocator.destroy(buffer);
         }
-        self.buffers.deinit();
+        self.buffers.deinit(self.allocator);
 
         self.completion_menu.deinit();
         self.command_line.deinit();
@@ -190,18 +185,18 @@ pub const Editor = struct {
         for (self.messages.items) |message| {
             self.allocator.free(message);
         }
-        self.messages.deinit();
+        self.messages.deinit(self.allocator);
 
         self.resetHover();
 
         for (self.key_queue.items) |key| key.deinit();
-        self.key_queue.deinit();
+        self.key_queue.deinit(self.allocator);
 
         for (self.dot_repeat_input.items) |key| key.deinit();
-        self.dot_repeat_input.deinit();
+        self.dot_repeat_input.deinit(self.allocator);
 
         for (self.dot_repeat_input_uncommitted.items) |key| key.deinit();
-        self.dot_repeat_input_uncommitted.deinit();
+        self.dot_repeat_input_uncommitted.deinit(self.allocator);
 
         if (self.find_query) |fq| self.allocator.free(fq);
 
@@ -209,7 +204,7 @@ pub const Editor = struct {
             var iter = self.macros.valueIterator();
             while (iter.next()) |keys| {
                 for (keys.items) |key| key.deinit();
-                keys.deinit();
+                keys.deinit(self.allocator);
             }
             self.macros.deinit();
         }
@@ -243,7 +238,7 @@ pub const Editor = struct {
             main.editor.dirty.input = true;
             const new_keys = try ter.getKeys(self.allocator, codes);
             defer self.allocator.free(new_keys);
-            try main.editor.key_queue.appendSlice(new_keys);
+            try main.editor.key_queue.appendSlice(self.allocator, new_keys);
         }
     }
 
@@ -294,12 +289,12 @@ pub const Editor = struct {
             }
             try self.sendMessageFmt("recorded @{c}", .{name});
             if (log.enabled(.debug)) {
-                var keys_str = std.array_list.Managed(u8).init(self.allocator);
+                var keys_str: std.io.Writer.Allocating = .init(self.allocator);
                 defer keys_str.deinit();
                 for (macro.items) |key| {
-                    try keys_str.writer().print("{f}", .{key});
+                    try keys_str.writer.print("{f}", .{key});
                 }
-                log.debug(@This(), "@{c}: \"{s}\"\n", .{ name, keys_str.items });
+                log.debug(@This(), "@{c}: \"{s}\"\n", .{ name, keys_str.written() });
             }
             self.recording_macro = null;
         }
@@ -308,8 +303,8 @@ pub const Editor = struct {
     pub fn recordMacroKey(self: *Editor, key: inp.Key) !void {
         if (self.recording_macro) |name| {
             const gop = try self.macros.getOrPut(name);
-            if (!gop.found_existing) gop.value_ptr.* = std.array_list.Managed(inp.Key).init(self.allocator);
-            try gop.value_ptr.append(try key.clone(self.allocator));
+            if (!gop.found_existing) gop.value_ptr.* = .empty;
+            try gop.value_ptr.append(self.allocator, try key.clone(self.allocator));
         }
     }
 
@@ -322,7 +317,7 @@ pub const Editor = struct {
         if (self.macros.get(name)) |macro| {
             log.debug(@This(), "replaying macro @{c}\n", .{name});
             for (macro.items) |key| {
-                try self.key_queue.append(try key.clone(self.allocator));
+                try self.key_queue.append(self.allocator, try key.clone(self.allocator));
             }
         } else {
             try self.sendMessageFmt("no macro @{c}", .{name});
@@ -338,7 +333,7 @@ pub const Editor = struct {
     pub fn sendMessage(self: *Editor, msg: []const u8) FatalError!void {
         log.debug(@This(), "message: {s}\n", .{msg});
         main.editor.dismissMessage();
-        try self.messages.append(try self.allocator.dupe(u8, msg));
+        try self.messages.append(self.allocator, try self.allocator.dupe(u8, msg));
         self.dirty.draw = true;
     }
 
@@ -416,7 +411,7 @@ pub const Editor = struct {
         for (self.dot_repeat_input.items) |key| key.deinit();
         self.dot_repeat_input.clearRetainingCapacity();
 
-        try self.dot_repeat_input.appendSlice(self.dot_repeat_input_uncommitted.items);
+        try self.dot_repeat_input.appendSlice(self.allocator, self.dot_repeat_input_uncommitted.items);
         self.dot_repeat_input_uncommitted.clearRetainingCapacity();
         self.dot_repeat_state = .outside;
     }
@@ -425,7 +420,7 @@ pub const Editor = struct {
         if (self.dot_repeat_input.items.len > 0) {
             log.debug(@This(), "dot repeat of {any}\n", .{self.dot_repeat_input.items});
             for (self.dot_repeat_input.items) |key| {
-                try self.key_queue.append(try key.clone(self.allocator));
+                try self.key_queue.append(self.allocator, try key.clone(self.allocator));
             }
             self.dot_repeat_state = .executing;
         }

@@ -182,21 +182,20 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
 
                     // text insertion
                 } else if (editor.mode == .insert and editor.key_queue.items[0].printable != null) {
-                    var printable = std.array_list.Managed(u21).init(allocator);
+                    var printable: std.array_list.Aligned(u21, null) = .empty;
+                    defer printable.deinit(allocator);
                     keys_consumed = 0;
                     // read all cosecutive printable keys in case this is a paste command
                     while (true) {
                         const next_key = if (keys_consumed < editor.key_queue.items.len) editor.key_queue.items[keys_consumed] else null;
                         if (next_key != null and next_key.?.printable != null) {
-                            try printable.appendSlice(next_key.?.printable.?);
+                            try printable.appendSlice(allocator, next_key.?.printable.?);
                             keys_consumed += 1;
                         } else {
                             break;
                         }
                     }
-                    const insert_text = try printable.toOwnedSlice();
-                    defer allocator.free(insert_text);
-                    try buffer.changeInsertText(insert_text);
+                    try buffer.changeInsertText(printable.items);
                     editor.dirty.completion = true;
 
                     // cmp_menu
@@ -309,7 +308,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                 } else if (editor.mode == .normal and eql(u8, key, "X")) {
                     try buffer.findNextDiagnostic(false);
                 } else if (editor.mode == .normal and eql(u8, key, "r") and editor.recording_macro != null) {
-                    try editor.recordMacro();
+                    editor.recordMacro() catch |e| log.err(@This(), "record macro error: {}\n", .{e});
                 } else if (editor.mode == .normal and eql(u8, key, "<c-n>")) {
                     editor.pickFile() catch |e| log.err(@This(), "pick file error: {}\n", .{e});
                 } else if (editor.mode == .normal and eql(u8, key, "<c-f>")) {
@@ -377,6 +376,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                 for (0..keys_consumed) |_| {
                     switch (editor.dot_repeat_state) {
                         .inside, .commit_ready => try editor.dot_repeat_input_uncommitted.append(
+                            allocator,
                             try editor.key_queue.items[0].clone(editor.allocator),
                         ),
                         else => {},

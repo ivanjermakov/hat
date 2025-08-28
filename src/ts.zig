@@ -21,7 +21,7 @@ pub fn ParseResult(comptime SpanType: type) type {
         const Self = @This();
 
         query: ?*ts.TSQuery = null,
-        spans: std.array_list.Managed(SpanType),
+        spans: std.array_list.Aligned(SpanType, null) = .empty,
         allocator: Allocator,
 
         pub fn init(allocator: Allocator, language: *ts.struct_TSLanguage, query_str: []const u8) !ParseResult(SpanType) {
@@ -31,14 +31,13 @@ pub fn ParseResult(comptime SpanType: type) type {
 
             return .{
                 .query = query,
-                .spans = std.array_list.Managed(SpanType).init(allocator),
                 .allocator = allocator,
             };
         }
 
         pub fn deinit(self: *Self) void {
             if (self.query) |query| ts.ts_query_delete(query);
-            self.spans.deinit();
+            self.spans.deinit(self.allocator);
         }
 
         pub fn makeSpans(self: *Self, tree: *ts.TSTree) !void {
@@ -60,7 +59,7 @@ pub fn ParseResult(comptime SpanType: type) type {
                         .end = ts.ts_node_end_byte(capture.node),
                     };
                     const tuple = SpanType.init(span, node_type);
-                    if (tuple) |t| try self.spans.append(t);
+                    if (tuple) |t| try self.spans.append(self.allocator, t);
                 }
             }
         }

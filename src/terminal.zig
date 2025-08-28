@@ -296,13 +296,13 @@ pub const Terminal = struct {
         {
             const cmp_item = cmp_menu.activeItem();
             if (cmp_item.detail == null and cmp_item.documentation == null) return;
-            var doc_lines = std.array_list.Managed([]const u8).init(self.allocator);
-            defer doc_lines.deinit();
-            if (cmp_item.detail) |detail| try doc_lines.append(detail);
+            var doc_lines: std.array_list.Aligned([]const u8, null) = .empty;
+            defer doc_lines.deinit(self.allocator);
+            if (cmp_item.detail) |detail| try doc_lines.append(self.allocator, detail);
             if (cmp_item.documentation) |documentation| {
                 var doc_iter = std.mem.splitScalar(u8, documentation, '\n');
                 while (doc_iter.next()) |line| {
-                    try doc_lines.append(line);
+                    try doc_lines.append(self.allocator, line);
                 }
             }
 
@@ -312,11 +312,11 @@ pub const Terminal = struct {
     }
 
     fn drawHover(self: *Terminal, text: []const u8, area: Area) !void {
-        var doc_lines = std.array_list.Managed([]const u8).init(self.allocator);
-        defer doc_lines.deinit();
+        var doc_lines: std.array_list.Aligned([]const u8, null) = .empty;
+        defer doc_lines.deinit(self.allocator);
         var doc_iter = std.mem.splitScalar(u8, text, '\n');
         while (doc_iter.next()) |line| {
-            try doc_lines.append(line);
+            try doc_lines.append(self.allocator, line);
         }
         const buffer = main.editor.active_buffer;
         const max_doc_width = 90;
@@ -430,7 +430,7 @@ pub fn computeLayout(term_dims: Dimensions) Layout {
     };
 }
 
-pub fn parseAnsi(allocator: Allocator, input: *std.array_list.Managed(u8)) !inp.Key {
+pub fn parseAnsi(allocator: Allocator, input: *std.array_list.Aligned(u8, null)) !inp.Key {
     if (input.items.len == 0) return error.NoInput;
     log.debug(@This(), "codes: {any}\n", .{input.items});
     var key: inp.Key = .{ .allocator = allocator };
@@ -521,15 +521,15 @@ pub fn parseAnsi(allocator: Allocator, input: *std.array_list.Managed(u8)) !inp.
             if (isPrintableAscii(code)) {
                 key.printable = try uni.unicodeFromBytes(allocator, &.{code});
             } else {
-                var printable = std.array_list.Managed(u8).init(allocator);
-                defer printable.deinit();
+                var printable: std.array_list.Aligned(u8, null) = .empty;
+                defer printable.deinit(allocator);
 
-                try printable.append(code);
+                try printable.append(allocator, code);
                 while (input.items.len > 0) {
                     // TODO: this is incorrect way to check for unicode codepoint end
                     if (isPrintableAscii(input.items[0])) break;
                     const code2 = input.orderedRemove(0);
-                    try printable.append(code2);
+                    try printable.append(allocator, code2);
                 }
                 key.printable = try uni.unicodeFromBytes(allocator, printable.items);
             }
@@ -538,28 +538,29 @@ pub fn parseAnsi(allocator: Allocator, input: *std.array_list.Managed(u8)) !inp.
     return key;
 }
 
+// TODO: non-allocating with std.io.Writer
 pub fn getCodes(allocator: Allocator, tty_file: std.fs.File) !?[]const u8 {
     if (!fs.poll(tty_file)) return null;
-    var in_buf = std.array_list.Managed(u8).init(allocator);
+    var in_buf: std.array_list.Aligned(u8, null) = .empty;
     while (true) {
         if (!fs.poll(tty_file)) break;
         var b: [1]u8 = undefined;
         const bytes_read = std.posix.read(tty_file.handle, &b) catch break;
         if (bytes_read == 0) break;
-        try in_buf.appendSlice(b[0..]);
+        try in_buf.appendSlice(allocator, b[0..]);
         // 1ns seems to be enough wait time for /dev/tty to fill up with the next code
         std.Thread.sleep(1);
     }
     if (in_buf.items.len == 0) return null;
-    return try in_buf.toOwnedSlice();
+    return try in_buf.toOwnedSlice(allocator);
 }
 
 pub fn getKeys(allocator: Allocator, codes: []const u8) ![]inp.Key {
-    var keys = std.array_list.Managed(inp.Key).init(allocator);
+    var keys: std.array_list.Aligned(inp.Key, null) = .empty;
 
-    var cs = std.array_list.Managed(u8).init(allocator);
-    defer cs.deinit();
-    try cs.appendSlice(codes);
+    var cs: std.array_list.Aligned(u8, null) = .empty;
+    defer cs.deinit(allocator);
+    try cs.appendSlice(allocator, codes);
 
     while (cs.items.len > 0) {
         const key = parseAnsi(allocator, &cs) catch |e| {
@@ -567,9 +568,9 @@ pub fn getKeys(allocator: Allocator, codes: []const u8) ![]inp.Key {
             continue;
         };
         log.debug(@This(), "key: \"{f}\"\n", .{key});
-        try keys.append(key);
+        try keys.append(allocator, key);
     }
-    return try keys.toOwnedSlice();
+    return try keys.toOwnedSlice(allocator);
 }
 
 /// Display with in term columns of a written codepoint
@@ -628,9 +629,9 @@ test "parseAnsi" {
 
 fn expectEqlKey(input: []const u8, expected: []const u8, remaining: usize) !void {
     const a = std.testing.allocator;
-    var input_list = std.array_list.Managed(u8).init(a);
-    defer input_list.deinit();
-    try input_list.appendSlice(input);
+    var input_list: std.array_list.Aligned(u8, null) = .empty;
+    defer input_list.deinit(a);
+    try input_list.appendSlice(a, input);
     const key = try parseAnsi(a, &input_list);
     defer key.deinit();
     const actual = try std.fmt.allocPrint(a, "{f}", .{key});

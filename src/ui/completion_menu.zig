@@ -50,22 +50,16 @@ pub const CompletionItem = struct {
 };
 
 pub const CompletionMenu = struct {
-    completion_items: std.array_list.Managed(CompletionItem),
+    completion_items: std.array_list.Aligned(CompletionItem, null) = .empty,
     /// List of `completion_items` indices
     /// Empty means completion menu is not visible
-    display_items: std.array_list.Managed(usize),
-    replace_range: ?lsp.types.Range,
-    active_item: usize,
+    display_items: std.array_list.Aligned(usize, null) = .empty,
+    replace_range: ?lsp.types.Range = null,
+    active_item: usize = 0,
     allocator: Allocator,
 
     pub fn init(allocator: Allocator) CompletionMenu {
-        return .{
-            .completion_items = std.array_list.Managed(CompletionItem).init(allocator),
-            .display_items = std.array_list.Managed(usize).init(allocator),
-            .replace_range = null,
-            .active_item = 0,
-            .allocator = allocator,
-        };
+        return .{ .allocator = allocator };
     }
 
     pub fn updateItems(self: *CompletionMenu, lsp_items: []const lsp.types.CompletionItem) !void {
@@ -84,7 +78,7 @@ pub const CompletionMenu = struct {
             self.reset();
             for (lsp_items) |lsp_item| {
                 const item = try CompletionItem.fromLsp(self.allocator, lsp_item);
-                try self.completion_items.append(item);
+                try self.completion_items.append(self.allocator, item);
             }
         }
 
@@ -95,7 +89,7 @@ pub const CompletionMenu = struct {
         for (0..self.completion_items.items.len) |i| {
             const cmp_item = self.completion_items.items[i];
             if (std.ascii.startsWithIgnoreCase(cmp_item.filter_text, prompt)) {
-                try self.display_items.append(i);
+                try self.display_items.append(self.allocator, i);
                 if (self.display_items.items.len >= max_entries) break;
             }
         }
@@ -127,8 +121,8 @@ pub const CompletionMenu = struct {
 
     pub fn deinit(self: *CompletionMenu) void {
         self.reset();
-        self.completion_items.deinit();
-        self.display_items.deinit();
+        self.completion_items.deinit(self.allocator);
+        self.display_items.deinit(self.allocator);
     }
 
     pub fn nextItem(self: *CompletionMenu) void {

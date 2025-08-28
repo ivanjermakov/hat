@@ -23,20 +23,17 @@ pub const Command = enum {
 };
 
 pub const CommandLine = struct {
-    content: std.array_list.Managed(u21),
+    content: std.array_list.Aligned(u21, null) = .empty,
     command: ?Command = null,
     cursor: usize = 0,
     allocator: Allocator,
 
     pub fn init(allocator: Allocator) CommandLine {
-        return .{
-            .content = std.array_list.Managed(u21).init(allocator),
-            .allocator = allocator,
-        };
+        return .{ .allocator = allocator };
     }
 
     pub fn deinit(self: *CommandLine) void {
-        self.content.deinit();
+        self.content.deinit(self.allocator);
     }
 
     pub fn activate(self: *CommandLine, command: Command) void {
@@ -55,7 +52,7 @@ pub const CommandLine = struct {
 
     pub fn insert(self: *CommandLine, text: []const u21) !void {
         std.debug.assert(self.command != null);
-        try self.content.replaceRange(self.cursor, 0, text);
+        try self.content.replaceRange(self.allocator, self.cursor, 0, text);
         self.cursor += text.len;
         main.editor.dirty.draw = true;
     }

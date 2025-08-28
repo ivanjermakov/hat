@@ -2,14 +2,14 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 
 pub fn unicodeFromBytes(allocator: Allocator, bytes: []const u8) ![]const u21 {
-    var a = std.array_list.Managed(u21).init(allocator);
-    try unicodeFromBytesArrayList(&a, bytes);
-    return a.toOwnedSlice();
+    var a: std.array_list.Aligned(u21, null) = .empty;
+    try unicodeFromBytesArrayList(allocator, &a, bytes);
+    return a.toOwnedSlice(allocator);
 }
 
-pub fn unicodeFromBytesArrayList(array: *std.array_list.Managed(u21), bytes: []const u8) !void {
+pub fn unicodeFromBytesArrayList(allocator: Allocator, array: *std.array_list.Aligned(u21, null), bytes: []const u8) !void {
     var iter = LooseUtf8Iterator{ .bytes = bytes };
-    while (iter.next()) |ch| try array.append(ch);
+    while (iter.next()) |ch| try array.append(allocator, ch);
 }
 
 pub fn unicodeToBytes(allocator: Allocator, utf: []const u21) ![]const u8 {

@@ -34,11 +34,11 @@ pub const Buffer = struct {
     /// Incremented on every content change
     version: usize = 0,
     file_type: ft.FileTypeConfig,
-    content: std.array_list.Managed(u21),
-    content_raw: std.array_list.Managed(u8),
+    content: std.array_list.Aligned(u21, null) = .empty,
+    content_raw: std.array_list.Aligned(u8, null) = .empty,
     ts_state: ?ts.State = null,
     selection: ?Span = null,
-    diagnostics: std.array_list.Managed(dia.Diagnostic),
+    diagnostics: std.array_list.Aligned(dia.Diagnostic, null) = .empty,
     /// Cursor position in local buffer character space
     cursor: Cursor = .{},
     /// Cursor's preferred col
@@ -49,22 +49,22 @@ pub const Buffer = struct {
     offset: Cursor = .{},
     /// Array list of character start position of next line
     /// Length equals number of lines, last item means total buffer character size
-    line_positions: std.array_list.Managed(usize),
+    line_positions: std.array_list.Aligned(usize, null) = .empty,
     /// Array list of byte start position of next line
     /// Length equals number of lines, last item means total buffer byte size
-    line_byte_positions: std.array_list.Managed(usize),
+    line_byte_positions: std.array_list.Aligned(usize, null) = .empty,
     /// Indent depth for each line
-    indents: std.array_list.Managed(usize),
-    history: std.array_list.Managed(std.array_list.Managed(cha.Change)),
+    indents: std.array_list.Aligned(usize, null) = .empty,
+    history: std.array_list.Aligned(std.array_list.Aligned(cha.Change, null), null) = .empty,
     history_index: ?usize = null,
     /// History index of the last file save
     /// Used to decide whether buffer has unsaved changes
     file_history_index: ?usize = null,
     /// Changes needed to be sent to LSP clients
-    pending_changes: std.array_list.Managed(cha.Change),
+    pending_changes: std.array_list.Aligned(cha.Change, null) = .empty,
     /// Changes yet to become a part of Buffer.history
-    uncommitted_changes: std.array_list.Managed(cha.Change),
-    lsp_connections: std.array_list.Managed(*lsp.LspConnection),
+    uncommitted_changes: std.array_list.Aligned(cha.Change, null) = .empty,
+    lsp_connections: std.array_list.Aligned(*lsp.LspConnection, null) = .empty,
     scratch: bool = false,
     allocator: Allocator,
 
@@ -86,19 +86,10 @@ pub const Buffer = struct {
             .file = file,
             .file_type = file_type,
             .uri = uri,
-            .content = std.array_list.Managed(u21).init(allocator),
-            .content_raw = std.array_list.Managed(u8).fromOwnedSlice(allocator, try allocator.dupe(u8, content_raw)),
-            .diagnostics = std.array_list.Managed(dia.Diagnostic).init(allocator),
-            .line_positions = std.array_list.Managed(usize).init(allocator),
-            .line_byte_positions = std.array_list.Managed(usize).init(allocator),
-            .indents = std.array_list.Managed(usize).init(allocator),
-            .history = std.array_list.Managed(std.array_list.Managed(cha.Change)).init(allocator),
-            .pending_changes = std.array_list.Managed(cha.Change).init(allocator),
-            .uncommitted_changes = std.array_list.Managed(cha.Change).init(allocator),
-            .lsp_connections = std.array_list.Managed(*lsp.LspConnection).init(allocator),
             .scratch = scratch,
             .allocator = allocator,
         };
+        try self.content_raw.appendSlice(allocator, content_raw);
         _ = try self.syncFs();
         try self.updateContent();
         try self.updateLinePositions();
@@ -120,40 +111,40 @@ pub const Buffer = struct {
 
     pub fn updateContent(self: *Buffer) FatalError!void {
         self.content.clearRetainingCapacity();
-        try uni.unicodeFromBytesArrayList(&self.content, self.content_raw.items);
+        try uni.unicodeFromBytesArrayList(self.allocator, &self.content, self.content_raw.items);
     }
 
     pub fn deinit(self: *Buffer) void {
         for (self.lsp_connections.items) |conn| {
             conn.didClose(self) catch {};
         }
-        self.lsp_connections.deinit();
+        self.lsp_connections.deinit(self.allocator);
 
         self.allocator.free(self.uri);
         self.allocator.free(self.path);
 
         if (self.ts_state) |*ts_state| ts_state.deinit();
 
-        self.content.deinit();
-        self.content_raw.deinit();
+        self.content.deinit(self.allocator);
+        self.content_raw.deinit(self.allocator);
 
         self.clearDiagnostics();
-        self.diagnostics.deinit();
+        self.diagnostics.deinit(self.allocator);
 
-        self.line_positions.deinit();
-        self.line_byte_positions.deinit();
-        self.indents.deinit();
+        self.line_positions.deinit(self.allocator);
+        self.line_byte_positions.deinit(self.allocator);
+        self.indents.deinit(self.allocator);
 
         for (self.history.items) |*i| {
             for (i.items) |*c| c.deinit();
-            i.deinit();
+            i.deinit(self.allocator);
         }
-        self.history.deinit();
+        self.history.deinit(self.allocator);
 
         for (self.pending_changes.items) |*c| c.deinit();
-        self.pending_changes.deinit();
+        self.pending_changes.deinit(self.allocator);
         for (self.uncommitted_changes.items) |*c| c.deinit();
-        self.uncommitted_changes.deinit();
+        self.uncommitted_changes.deinit(self.allocator);
 
         if (self.file) |f| f.close();
     }
@@ -337,8 +328,8 @@ pub const Buffer = struct {
 
     pub fn appendChange(self: *Buffer, change: *cha.Change) FatalError!void {
         try self.applyChange(change);
-        try self.uncommitted_changes.append(change.*);
-        try self.pending_changes.append(try change.clone(self.allocator));
+        try self.uncommitted_changes.append(self.allocator, change.*);
+        try self.pending_changes.append(self.allocator, try change.clone(self.allocator));
     }
 
     pub fn commitChanges(self: *Buffer) FatalError!void {
@@ -352,14 +343,14 @@ pub const Buffer = struct {
             const i = if (self.history_index) |i| i + 1 else 0;
             for (self.history.items[i..]) |*chs| {
                 for (chs.items) |*ch| ch.deinit();
-                chs.deinit();
+                chs.deinit(self.allocator);
             }
-            try self.history.replaceRange(i, self.history.items.len - i, &.{});
+            try self.history.replaceRange(self.allocator, i, self.history.items.len - i, &.{});
         }
-        var new_hist = try std.array_list.Managed(cha.Change).initCapacity(self.allocator, 1);
-        try new_hist.appendSlice(self.uncommitted_changes.items);
+        var new_hist = try std.array_list.Aligned(cha.Change, null).initCapacity(self.allocator, 1);
+        try new_hist.appendSlice(self.allocator, self.uncommitted_changes.items);
         self.uncommitted_changes.clearRetainingCapacity();
-        try self.history.append(new_hist);
+        try self.history.append(self.allocator, new_hist);
         self.history_index = self.history.items.len - 1;
 
         main.editor.dotRepeatCommitReady();
@@ -449,8 +440,8 @@ pub const Buffer = struct {
             // new line
             byte += 1;
             char += line.len + 1;
-            try self.line_positions.append(char);
-            try self.line_byte_positions.append(byte);
+            try self.line_positions.append(self.allocator, char);
+            try self.line_byte_positions.append(self.allocator, byte);
         }
         log.trace(@This(), "line positions: {any}\n", .{self.line_positions.items});
         log.trace(@This(), "line byte positions: {any}\n", .{self.line_positions.items});
@@ -490,7 +481,7 @@ pub const Buffer = struct {
                 },
                 else => {},
             }
-            try self.indents.append(indent);
+            try self.indents.append(self.allocator, indent);
         }
     }
 
@@ -502,7 +493,7 @@ pub const Buffer = struct {
             while (change_iter.next()) |change_to_undo| {
                 var inv_change = try change_to_undo.invert();
                 try self.applyChange(&inv_change);
-                try self.pending_changes.append(inv_change);
+                try self.pending_changes.append(self.allocator, inv_change);
                 self.moveCursor(inv_change.new_span.?.start);
             }
             self.history_index = if (h_idx > 0) h_idx - 1 else null;
@@ -517,7 +508,7 @@ pub const Buffer = struct {
         for (redo_hist) |change| {
             var redo_change = try change.clone(self.allocator);
             try self.applyChange(&redo_change);
-            try self.pending_changes.append(redo_change);
+            try self.pending_changes.append(self.allocator, redo_change);
             self.moveCursor(change.new_span.?.start);
         }
         self.history_index = redo_idx;
@@ -602,7 +593,7 @@ pub const Buffer = struct {
         const line = self.lineContent(@intCast(self.cursor.row));
         const name_span = tokenSpan(line, @intCast(self.cursor.col)) orelse return;
         cmd.activate(.rename);
-        try cmd.content.appendSlice(line[name_span.start..name_span.end]);
+        try cmd.content.appendSlice(self.allocator, line[name_span.start..name_span.end]);
         cmd.cursor = cmd.content.items.len;
     }
 
@@ -795,7 +786,7 @@ pub const Buffer = struct {
     }
 
     fn find(self: *Buffer, query: []const u8) ![]const ByteSpan {
-        var spans = std.array_list.Managed(ByteSpan).init(self.allocator);
+        var spans: std.array_list.Aligned(ByteSpan, null) = .empty;
         var re = try reg.Regex.from(query, false, self.allocator);
         defer re.deinit();
 
@@ -803,9 +794,9 @@ pub const Buffer = struct {
         defer re.deinitMatchList(&matches);
         for (0..matches.items.len) |i| {
             const match = matches.items[i];
-            try spans.append(ByteSpan.fromRegex(match));
+            try spans.append(self.allocator, ByteSpan.fromRegex(match));
         }
-        return spans.toOwnedSlice();
+        return spans.toOwnedSlice(self.allocator);
     }
 
     fn fullSpan(self: *Buffer) Span {
@@ -824,7 +815,7 @@ pub const Buffer = struct {
         self.moveCursor(span.start);
         const delete_start = self.cursorToPos(span.start);
         const delete_end = self.cursorToPos(span.end);
-        try self.content.replaceRange(delete_start, delete_end - delete_start, change.new_text orelse &.{});
+        try self.content.replaceRange(self.allocator, delete_start, delete_end - delete_start, change.new_text orelse &.{});
         try self.updateLinePositions();
         change.new_span = .{
             .start = span.start,
@@ -871,7 +862,7 @@ pub const Buffer = struct {
         defer writer.deinit();
         try uni.unicodeToBytesWrite(&writer.writer, self.content.items);
         self.content_raw.clearRetainingCapacity();
-        try self.content_raw.appendSlice(writer.written());
+        try self.content_raw.appendSlice(self.allocator, writer.written());
     }
 
     fn scrollForCursor(self: *Buffer, new_buf_cursor: Cursor) void {
