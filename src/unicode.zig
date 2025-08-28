@@ -14,9 +14,8 @@ pub fn unicodeFromBytesArrayList(array: *std.array_list.Managed(u21), bytes: []c
 
 pub fn unicodeToBytes(allocator: Allocator, utf: []const u21) ![]const u8 {
     var writer = std.io.Writer.Allocating.init(allocator);
-    defer writer.deinit();
     try unicodeToBytesWrite(&writer.writer, utf);
-    return writer.written();
+    return writer.toOwnedSlice();
 }
 
 pub fn unicodeToBytesWrite(writer: *std.io.Writer, utf: []const u21) !void {
