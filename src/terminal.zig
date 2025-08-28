@@ -238,6 +238,12 @@ pub const Terminal = struct {
                     }
                 }
                 if (buffer_row > hunk.line - 1 + hunk.len) hunk_idx += 1;
+                try self.writer.printInt(
+                    @as(usize, @intCast(buffer_row + 1)),
+                    10,
+                    .lower,
+                    .{ .width = area.dims.width - 1, .alignment = .right },
+                );
             }
         }
     }
