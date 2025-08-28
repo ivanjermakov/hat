@@ -66,6 +66,7 @@ pub const Buffer = struct {
     uncommitted_changes: std.array_list.Aligned(cha.Change, null) = .empty,
     lsp_connections: std.array_list.Aligned(*lsp.LspConnection, null) = .empty,
     scratch: bool = false,
+    highlights: std.array_list.Managed(Span),
     allocator: Allocator,
 
     pub fn init(allocator: Allocator, path: ?[]const u8, content_raw: []const u8) !Buffer {
@@ -87,6 +88,7 @@ pub const Buffer = struct {
             .file_type = file_type,
             .uri = uri,
             .scratch = scratch,
+            .highlights = std.array_list.Managed(Span).init(allocator),
             .allocator = allocator,
         };
         try self.content_raw.appendSlice(allocator, content_raw);
@@ -134,6 +136,7 @@ pub const Buffer = struct {
         self.line_positions.deinit(self.allocator);
         self.line_byte_positions.deinit(self.allocator);
         self.indents.deinit(self.allocator);
+        self.highlights.deinit(self.allocator);
 
         for (self.history.items) |*i| {
             for (i.items) |*c| c.deinit();
@@ -332,7 +335,7 @@ pub const Buffer = struct {
         try self.pending_changes.append(self.allocator, try change.clone(self.allocator));
     }
 
-    pub fn commitChanges(self: *Buffer) FatalError!void {
+    pub fn commitChanges(self: *Buffer) !void {
         if (self.uncommitted_changes.items.len == 0) {
             log.debug(@This(), "no changes to commit\n", .{});
             return;
@@ -585,6 +588,12 @@ pub const Buffer = struct {
     pub fn showHover(self: *Buffer) !void {
         for (self.lsp_connections.items) |conn| {
             try conn.hover();
+        }
+    }
+
+    pub fn highlight(self: *Buffer) !void {
+        for (self.lsp_connections.items) |conn| {
+            try conn.highlight();
         }
     }
 
