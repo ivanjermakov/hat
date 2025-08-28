@@ -448,7 +448,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                 // redraw next frame to clear invalid highlights
                 editor.dirty.draw = true;
             }
-            buffer.highlight() catch |e| log.err(@This(), "highlight LSP error: {}", .{e});
+            buffer.highlight() catch |e| log.err(@This(), "highlight LSP error: {}\n", .{e});
             term.updateCursor() catch |e| log.err(@This(), "update cursor error: {}\n", .{e});
 
             if (buffer.highlights.items.len > 0) {
@@ -456,7 +456,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                 // redraw next frame to clear invalid highlights
                 editor.dirty.draw = true;
             }
-            buffer.highlight() catch |e| log.err(@This(), "highlight LSP error: {}", .{e});
+            buffer.highlight() catch |e| log.err(@This(), "highlight LSP error: {}\n", .{e});
         }
         perf.draw = timer.lap();
 
@@ -482,7 +482,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
 
         perf.total = timer_total.lap();
         if (perf.total > per.report_perf_threshold_ns) {
-            log.debug(@This(), "frame perf: \n{f}", .{perf});
+            log.debug(@This(), "frame perf: \n{f}\n", .{perf});
         }
     }
 }
