@@ -63,8 +63,8 @@ pub const Terminal = struct {
 
     pub fn deinit(self: *Terminal) void {
         self.clear() catch {};
-        self.switchBuf(false) catch {};
         self.wrapAround(true) catch {};
+        self.switchBuf(false) catch {};
         self.writer.writeAll(cursor_type.steady_block) catch {};
         self.writer.flush() catch {};
     }
@@ -156,7 +156,7 @@ pub const Terminal = struct {
 
     fn drawBuffer(self: *Terminal, buffer: *buf.Buffer, area: Area) !void {
         var attrs_buf = std.mem.zeroes([128]u8);
-        var attrs_stream = std.io.fixedBufferStream(&attrs_buf);
+        var attrs_writer = std.io.Writer.fixed(&attrs_buf);
         var attrs: []const u8 = undefined;
         var last_attrs_buf = std.mem.zeroes([128]u8);
         var last_attrs: ?[]const u8 = null;
@@ -186,7 +186,7 @@ pub const Terminal = struct {
 
             for (0..line.len + 1) |i| {
                 const ch = if (i == line.len) ' ' else line[i];
-                attrs_stream.reset();
+                _ = attrs_writer.consumeAll();
                 const buffer_col = @as(i32, @intCast(area_col)) + buffer.offset.col;
 
                 if (area_col >= @as(i32, @intCast(area.dims.width))) break;
@@ -202,12 +202,12 @@ pub const Terminal = struct {
                     } else {
                         break :b co.attributes.text;
                     };
-                    try co.attributes.write(ch_attrs, attrs_stream.writer());
+                    try co.attributes.write(ch_attrs, &attrs_writer);
                 }
 
                 if (buffer.selection) |selection| {
                     if (selection.inRange(.{ .row = buffer_row, .col = buffer_col })) {
-                        try co.attributes.write(co.attributes.selection, attrs_stream.writer());
+                        try co.attributes.write(co.attributes.selection, &attrs_writer);
                     }
                 }
 
@@ -217,18 +217,18 @@ pub const Terminal = struct {
                         const in_range = (buffer_row > span.start.row and buffer_row < span.end.col) or
                             (buffer_row == span.start.row and buffer_col >= span.start.col and buffer_col < span.end.col);
                         if (in_range) {
-                            try co.attributes.write(co.attributes.diagnostic_error, attrs_stream.writer());
+                            try co.attributes.write(co.attributes.diagnostic_error, &attrs_writer);
                             break;
                         }
                     }
                 }
 
-                attrs = attrs_stream.getWritten();
+                attrs = attrs_writer.buffered();
                 if (last_attrs == null or !std.mem.eql(u8, attrs, last_attrs.?)) {
                     self.resetAttributes() catch {};
                     try self.writer.writeAll(attrs);
                     @memcpy(&last_attrs_buf, &attrs_buf);
-                    last_attrs = last_attrs_buf[0..try attrs_stream.getPos()];
+                    last_attrs = last_attrs_buf[0..attrs.len];
                 }
 
                 try self.writeChar(ch);
@@ -448,7 +448,7 @@ pub fn parseAnsi(allocator: Allocator, input: *std.array_list.Managed(u8)) !inp.
     var key: inp.Key = .{ .allocator = allocator };
     const code = input.orderedRemove(0);
     switch (code) {
-        0x00...0x03, 0x05...0x08, 0x0e, 0x10...0x19 => {
+        0x00...0x03, 0x05...0x08, 0x0e, 0x10...0x1a => {
             // offset 96 converts \x1 to 'a', \x2 to 'b', and so on
             key.printable = try uni.unicodeFromBytes(allocator, &.{code + 96});
             key.modifiers = @intFromEnum(inp.Modifier.control);
@@ -635,6 +635,7 @@ test "parseAnsi" {
     try expectEqlKey("\x1b\x4d\x1b", "<m-M>", 1);
     try expectEqlKey("ф", "ф", 0);
     try expectEqlKey("🚧", "🚧", 0);
+    try expectEqlKey("\x1a", "<c-z>", 0);
 }
 
 fn expectEqlKey(input: []const u8, expected: []const u8, remaining: usize) !void {
