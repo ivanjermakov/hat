@@ -849,7 +849,6 @@ pub const Buffer = struct {
         self.cursor = change.new_span.?.end;
 
         if (self.ts_state) |*ts_state| try ts_state.edit(change);
-        log.trace(@This(), "buf content after change: {any}\n", .{self.content.items});
     }
 
     /// Delete every character from cursor (including) to the end of line
@@ -887,7 +886,6 @@ pub const Buffer = struct {
         try uni.unicodeToBytesWrite(&writer.writer, self.content.items);
         self.content_raw.clearRetainingCapacity();
         try self.content_raw.appendSlice(writer.written());
-        log.info(@This(), "updated raw: {s}\n", .{self.content_raw.items});
     }
 
     fn scrollForCursor(self: *Buffer, new_buf_cursor: Cursor) void {

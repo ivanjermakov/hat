@@ -1,5 +1,5 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index 7d382a0..c8acf6d 100644
+index 61fba44..59b968b 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
 @@ -23,8 +23,9 @@ const lsp = @import("lsp.zig");
@@ -13,7 +13,7 @@ index 7d382a0..c8acf6d 100644
  
  pub const Buffer = struct {
      path: []const u8,
-@@ -346,7 +347,7 @@ pub const Buffer = struct {
+@@ -341,7 +342,7 @@ pub const Buffer = struct {
          try self.pending_changes.append(try change.clone(self.allocator));
      }
  
@@ -22,7 +22,7 @@ index 7d382a0..c8acf6d 100644
          if (self.uncommitted_changes.items.len == 0) {
              log.debug(@This(), "no changes to commit\n", .{});
              return;
-@@ -600,6 +601,27 @@ pub const Buffer = struct {
+@@ -591,6 +592,27 @@ pub const Buffer = struct {
          }
      }
  
@@ -67,7 +67,7 @@ index 880684d..5bfe4da 100644
          return .{
              .start = buffer.cursorToBytePos(span.start),
 diff --git a/src/editor.zig b/src/editor.zig
-index 4ee7d23..51f78fd 100644
+index cfc66aa..b0df7b4 100644
 --- a/src/editor.zig
 +++ b/src/editor.zig
 @@ -150,7 +150,7 @@ pub const Editor = struct {
@@ -130,10 +130,10 @@ index f166cf9..14329fd 100644
      } },
      .{ ".zig", FileTypeConfig{
 diff --git a/src/main.zig b/src/main.zig
-index db87e87..d5a9aff 100644
+index a6a4f49..7f65796 100644
 --- a/src/main.zig
 +++ b/src/main.zig
-@@ -223,7 +223,6 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+@@ -223,7 +223,6 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
  
                      // normal or select mode
                  } else if (normal_or_select and eql(u8, key, "k")) {
@@ -141,7 +141,7 @@ index db87e87..d5a9aff 100644
                  } else if (normal_or_select and eql(u8, key, "j")) {
                      buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = 1 * repeat_or_1 }));
                  } else if (normal_or_select and eql(u8, key, "h")) {
-@@ -337,6 +336,8 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+@@ -337,6 +336,8 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                          buffer.findReferences() catch |e| log.err(@This(), "find references LSP error: {}", .{e});
                      } else if (editor.mode == .normal and eql(u8, multi_key, " n")) {
                          try buffer.renamePrompt();

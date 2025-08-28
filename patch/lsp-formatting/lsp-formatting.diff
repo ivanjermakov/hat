@@ -1,8 +1,8 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index 7d382a0..d0f2f3f 100644
+index 61fba44..2fc4008 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
-@@ -668,6 +668,12 @@ pub const Buffer = struct {
+@@ -659,6 +659,12 @@ pub const Buffer = struct {
          try self.commitChanges();
      }
  
@@ -16,7 +16,7 @@ index 7d382a0..d0f2f3f 100644
          if (self.selection) |selection| {
              try clp.write(self.allocator, self.rawTextAt(selection));
 diff --git a/src/editor.zig b/src/editor.zig
-index 4ee7d23..51f78fd 100644
+index cfc66aa..b0df7b4 100644
 --- a/src/editor.zig
 +++ b/src/editor.zig
 @@ -150,7 +150,7 @@ pub const Editor = struct {
@@ -90,10 +90,10 @@ index d319506..d67df08 100644
          _ = self;
          log.trace(@This(), "notification: {s}\n", .{notif.method});
 diff --git a/src/main.zig b/src/main.zig
-index db87e87..0f68a64 100644
+index a6a4f49..c3f6ee4 100644
 --- a/src/main.zig
 +++ b/src/main.zig
-@@ -337,6 +337,8 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+@@ -337,6 +337,8 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                          buffer.findReferences() catch |e| log.err(@This(), "find references LSP error: {}", .{e});
                      } else if (editor.mode == .normal and eql(u8, multi_key, " n")) {
                          try buffer.renamePrompt();

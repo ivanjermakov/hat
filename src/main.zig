@@ -174,7 +174,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                 // command line menu
                 if (cmd_active) {
                     if (eql(u8, key, "\n")) {
-                        editor.handleCmd() catch |e| log.err(@This(), "handle cmd error: {}", .{e});
+                        editor.handleCmd() catch |e| log.err(@This(), "handle cmd error: {}\n", .{e});
                     } else if (cmd_active and eql(u8, key, "<escape>")) {
                         editor.command_line.close();
                     } else if (cmd_active and eql(u8, key, "<left>")) {
@@ -271,9 +271,9 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     try buffer.changeAlignIndent();
                     try editor.enterMode(.normal);
                 } else if (normal_or_select and eql(u8, key, "y")) {
-                    buffer.copySelectionToClipboard() catch |e| log.err(@This(), "copy to clipboard error: {}", .{e});
+                    buffer.copySelectionToClipboard() catch |e| log.err(@This(), "copy to clipboard error: {}\n", .{e});
                 } else if (normal_or_select and eql(u8, key, "p")) {
-                    buffer.changeInsertFromClipboard() catch |e| log.err(@This(), "paste from clipboard error: {}", .{e});
+                    buffer.changeInsertFromClipboard() catch |e| log.err(@This(), "paste from clipboard error: {}\n", .{e});
                 } else if (normal_or_select and eql(u8, key, "z")) {
                     buffer.centerCursor();
                 } else if (normal_or_select and eql(u8, key, ":")) {
@@ -282,7 +282,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     // normal mode
                 } else if (normal_or_select and (eql(u8, key, "q") or eql(u8, key, "Q"))) {
                     const force = eql(u8, key, "Q");
-                    editor.closeBuffer(force) catch |e| log.err(@This(), "close buffer error: {}", .{e});
+                    editor.closeBuffer(force) catch |e| log.err(@This(), "close buffer error: {}\n", .{e});
                     if (editor.buffers.items.len == 0) break :main_loop;
                 } else if (editor.mode == .normal and eql(u8, key, "v")) {
                     try editor.enterMode(.select);
@@ -301,7 +301,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                 } else if (editor.mode == .normal and eql(u8, key, "<tab>")) {
                     if (editor.buffers.items.len > 1) {
                         const path = editor.buffers.items[1].path;
-                        editor.openBuffer(path) catch |e| log.err(@This(), "open buffer {s} error: {}", .{ path, e });
+                        editor.openBuffer(path) catch |e| log.err(@This(), "open buffer {s} error: {}\n", .{ path, e });
                     }
                 } else if (editor.mode == .normal and eql(u8, key, ".")) {
                     try editor.dotRepeat();
@@ -318,16 +318,16 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                 } else if (editor.mode == .normal and eql(u8, key, "r") and editor.recording_macro != null) {
                     try editor.recordMacro();
                 } else if (editor.mode == .normal and eql(u8, key, "<c-n>")) {
-                    editor.pickFile() catch |e| log.err(@This(), "pick file error: {}", .{e});
+                    editor.pickFile() catch |e| log.err(@This(), "pick file error: {}\n", .{e});
                 } else if (editor.mode == .normal and eql(u8, key, "<c-f>")) {
-                    editor.findInFiles() catch |e| log.err(@This(), "find in files error: {}", .{e});
+                    editor.findInFiles() catch |e| log.err(@This(), "find in files error: {}\n", .{e});
                 } else if (editor.mode == .normal and eql(u8, key, "<c-e>")) {
-                    editor.pickBuffer() catch |e| log.err(@This(), "pick buffer error: {}", .{e});
+                    editor.pickBuffer() catch |e| log.err(@This(), "pick buffer error: {}\n", .{e});
                 } else if (editor.mode == .normal and eql(u8, key, "<K>")) {
                     if (editor.hover_contents) |hover| {
-                        editor.openScratch(hover) catch |e| log.err(@This(), "open scratch error: {}", .{e});
+                        editor.openScratch(hover) catch |e| log.err(@This(), "open scratch error: {}\n", .{e});
                     } else {
-                        buffer.showHover() catch |e| log.err(@This(), "show hover LSP error: {}", .{e});
+                        buffer.showHover() catch |e| log.err(@This(), "show hover LSP error: {}\n", .{e});
                     }
 
                     // insert mode
@@ -343,11 +343,11 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     defer allocator.free(multi_key);
 
                     if (editor.mode == .normal and eql(u8, multi_key, " w")) {
-                        buffer.write() catch |e| log.err(@This(), "write buffer error: {}", .{e});
+                        buffer.write() catch |e| log.err(@This(), "write buffer error: {}\n", .{e});
                     } else if (editor.mode == .normal and eql(u8, multi_key, " d")) {
-                        buffer.goToDefinition() catch |e| log.err(@This(), "go to def LSP error: {}", .{e});
+                        buffer.goToDefinition() catch |e| log.err(@This(), "go to def LSP error: {}\n", .{e});
                     } else if (editor.mode == .normal and eql(u8, multi_key, " r")) {
-                        buffer.findReferences() catch |e| log.err(@This(), "find references LSP error: {}", .{e});
+                        buffer.findReferences() catch |e| log.err(@This(), "find references LSP error: {}\n", .{e});
                     } else if (editor.mode == .normal and eql(u8, multi_key, " c")) {
                         buffer.codeAction() catch |e| log.err(@This(), "code action LSP error: {}\n", .{e});
                     } else if (editor.mode == .normal and eql(u8, multi_key, " n")) {
@@ -410,10 +410,9 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
             buffer.version += 1;
             buffer.clearDiagnostics();
             try buffer.reparse();
-            log.trace(@This(), "buf raw content after reparse:\n{s}\n", .{buffer.content_raw.items});
             perf.parse = timer.lap();
             for (buffer.lsp_connections.items) |conn| {
-                conn.didChange(editor.active_buffer) catch |e| log.err(@This(), "did change LSP error: {}", .{e});
+                conn.didChange(editor.active_buffer) catch |e| log.err(@This(), "did change LSP error: {}\n", .{e});
             }
             for (buffer.pending_changes.items) |*change| change.deinit();
             buffer.pending_changes.clearRetainingCapacity();
@@ -425,17 +424,17 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
 
         if (editor.dirty.draw) {
             editor.dirty.draw = false;
-            term.draw() catch |e| log.err(@This(), "draw error: {}", .{e});
+            term.draw() catch |e| log.err(@This(), "draw error: {}\n", .{e});
         } else if (editor.dirty.cursor) {
             editor.dirty.cursor = false;
-            term.updateCursor() catch |e| log.err(@This(), "update cursor error: {}", .{e});
+            term.updateCursor() catch |e| log.err(@This(), "update cursor error: {}\n", .{e});
         }
         perf.draw = timer.lap();
 
         if (editor.dirty.completion) {
             editor.dirty.completion = false;
             for (buffer.lsp_connections.items) |conn| {
-                conn.sendCompletionRequest() catch |e| log.err(@This(), "cmp request LSP error: {}", .{e});
+                conn.sendCompletionRequest() catch |e| log.err(@This(), "cmp request LSP error: {}\n", .{e});
             }
         }
         if (editor.dot_repeat_state == .commit_ready) {
@@ -444,11 +443,11 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
         perf.commit = timer.lap();
 
         if (buffer.syncFs() catch |e| b: {
-            log.err(@This(), "sync fs error: {}", .{e});
+            log.err(@This(), "sync fs error: {}\n", .{e});
             break :b false;
         }) {
             try editor.sendMessage("external buffer modification");
-            buffer.changeFsExternal() catch |e| log.err(@This(), "external change fs error: {}", .{e});
+            buffer.changeFsExternal() catch |e| log.err(@This(), "external change fs error: {}\n", .{e});
         }
         perf.sync = timer.lap();
 
