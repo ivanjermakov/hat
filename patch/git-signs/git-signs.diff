@@ -1,5 +1,5 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index e3674ac..883ed06 100644
+index 7d382a0..9e10084 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
 @@ -24,11 +24,14 @@ const main = @import("main.zig");
@@ -13,7 +13,7 @@ index e3674ac..883ed06 100644
      path: []const u8,
      uri: []const u8,
 +    git_root: ?[]const u8,
-+    git_hunks: std.ArrayList(git.Hunk),
++    git_hunks: std.array_list.Managed(git.Hunk),
      file: ?std.fs.File,
      stat: ?std.fs.File.Stat = null,
      /// Incremented on every content change
@@ -31,10 +31,10 @@ index e3674ac..883ed06 100644
              .file_type = file_type,
              .uri = uri,
 +            .git_root = git_root,
-+            .git_hunks = std.ArrayList(git.Hunk).init(allocator),
-             .content = std.ArrayList(u21).init(allocator),
++            .git_hunks = std.array_list.Managed(git.Hunk).init(allocator),
+             .content = std.array_list.Managed(u21).init(allocator),
              .content_raw = raw,
-             .diagnostics = std.ArrayList(dia.Diagnostic).init(allocator),
+             .diagnostics = std.array_list.Managed(dia.Diagnostic).init(allocator),
 @@ -125,6 +134,7 @@ pub const Buffer = struct {
          };
          if (self.ts_state) |*ts_state| try ts_state.reparse(self.content_raw.items);
@@ -94,10 +94,10 @@ index e3674ac..883ed06 100644
          log.debug(@This(), "undo: {?}/{}\n", .{ self.history_index, self.history.items.len });
          if (self.history_index) |h_idx| {
 diff --git a/src/color.zig b/src/color.zig
-index 1335218..5a225ea 100644
+index 87e8d6c..cd9a0c9 100644
 --- a/src/color.zig
 +++ b/src/color.zig
-@@ -76,6 +76,7 @@ pub const Attr = union(enum) {
+@@ -68,6 +68,7 @@ pub const Attr = union(enum) {
      bg: RgbColor,
      underline: RgbColor,
      curly_underline,
@@ -105,15 +105,15 @@ index 1335218..5a225ea 100644
  
      pub fn write(self: Attr, writer: anytype) !void {
          switch (self) {
-@@ -83,6 +84,7 @@ pub const Attr = union(enum) {
-             .bg => |c| try std.fmt.format(writer, "\x1b[48;2;{};{};{}m", .{ c.r, c.g, c.b }),
-             .underline => |c| try std.fmt.format(writer, "\x1b[58;2;{};{};{}m", .{ c.r, c.g, c.b }),
+@@ -75,6 +76,7 @@ pub const Attr = union(enum) {
+             .bg => |c| try writer.print("\x1b[48;2;{};{};{}m", .{ c.r, c.g, c.b }),
+             .underline => |c| try writer.print("\x1b[58;2;{};{};{}m", .{ c.r, c.g, c.b }),
              .curly_underline => _ = try writer.write("\x1b[4:3m"),
 +            .bold => _ = try writer.write("\x1b[1m"),
          }
      }
  };
-@@ -101,6 +103,9 @@ pub const attributes = enum {
+@@ -93,6 +95,9 @@ pub const attributes = enum {
      pub const message = &[_]Attr{.{ .bg = color.gray2 }};
      pub const command_line = &[_]Attr{.{ .bg = color.gray2 }};
      pub const number_line = &[_]Attr{.{ .fg = color.gray4 }};
@@ -124,7 +124,7 @@ index 1335218..5a225ea 100644
      pub fn write(attrs: []const Attr, writer: anytype) !void {
          for (attrs) |attr| {
 diff --git a/src/editor.zig b/src/editor.zig
-index 2230f75..38823a1 100644
+index 4ee7d23..51f78fd 100644
 --- a/src/editor.zig
 +++ b/src/editor.zig
 @@ -150,7 +150,7 @@ pub const Editor = struct {
@@ -138,7 +138,7 @@ index 2230f75..38823a1 100644
          if (self.mode == mode) return;
 diff --git a/src/git.zig b/src/git.zig
 new file mode 100644
-index 0000000..47cc91c
+index 0000000..0341ccf
 --- /dev/null
 +++ b/src/git.zig
 @@ -0,0 +1,142 @@
@@ -168,7 +168,7 @@ index 0000000..47cc91c
 +}
 +
 +pub fn show(allocator: Allocator, file_path: []const u8) !?[]const u8 {
-+    var path_arg = std.ArrayList(u8).init(allocator);
++    var path_arg = std.array_list.Managed(u8).init(allocator);
 +    defer path_arg.deinit();
 +    try path_arg.appendSlice(":");
 +    try path_arg.appendSlice(file_path);
@@ -210,7 +210,7 @@ index 0000000..47cc91c
 +};
 +
 +pub fn parseDiff(allocator: Allocator, diff: []const u8) ![]const Hunk {
-+    var hunks = std.ArrayList(Hunk).init(allocator);
++    var hunks = std.array_list.Managed(Hunk).init(allocator);
 +    var hunk_iter = std.mem.splitSequence(u8, diff, "\n@@");
 +    // skip file info before first hunk
 +    _ = hunk_iter.next();
@@ -285,11 +285,11 @@ index 0000000..47cc91c
 +    try std.testing.expectEqualDeep(hunks[1], Hunk{ .type = .delete, .line = 37, .len = 0 });
 +}
 diff --git a/src/main.zig b/src/main.zig
-index 314bfd8..71efc04 100644
+index db87e87..85271df 100644
 --- a/src/main.zig
 +++ b/src/main.zig
-@@ -35,9 +35,9 @@ pub const std_out = std.io.getStdOut();
- pub const std_err = std.io.getStdErr();
+@@ -41,9 +41,9 @@ pub var std_err_writer = std_err.writer(&std_err_buf);
+ 
  pub var tty_in: std.fs.File = undefined;
  
 +
@@ -300,10 +300,10 @@ index 314bfd8..71efc04 100644
  
  pub var main_loop_mutex: mut.Mutex = .{};
 diff --git a/src/terminal.zig b/src/terminal.zig
-index 9e49057..7073798 100644
+index 464935f..35b1a46 100644
 --- a/src/terminal.zig
 +++ b/src/terminal.zig
-@@ -165,6 +165,38 @@ pub const Terminal = struct {
+@@ -152,6 +152,38 @@ pub const Terminal = struct {
                  );
              }
          }
@@ -323,16 +323,16 @@ index 9e49057..7073798 100644
 +                    try self.moveCursor(.{ .row = @intCast(term_row), .col = area.pos.col });
 +                    switch (hunk.type) {
 +                        .add => {
-+                            try co.attributes.write(co.attributes.git_added, self.writer.writer());
-+                            _ = try self.write("┃");
++                            try co.attributes.write(co.attributes.git_added, self.writer);
++                            try self.writer.writeAll("┃");
 +                        },
 +                        .delete => {
-+                            try co.attributes.write(co.attributes.git_deleted, self.writer.writer());
-+                            _ = try self.write("▁");
++                            try co.attributes.write(co.attributes.git_deleted, self.writer);
++                            try self.writer.writeAll("▁");
 +                        },
 +                        .modify => {
-+                            try co.attributes.write(co.attributes.git_modified, self.writer.writer());
-+                            _ = try self.write("┃");
++                            try co.attributes.write(co.attributes.git_modified, self.writer);
++                            try self.writer.writeAll("┃");
 +                        },
 +                    }
 +                }
@@ -342,7 +342,7 @@ index 9e49057..7073798 100644
      }
  
      fn drawBuffer(self: *Terminal, buffer: *buf.Buffer, area: Area) !void {
-@@ -423,7 +455,7 @@ pub fn terminalSize() !Dimensions {
+@@ -410,7 +442,7 @@ pub fn terminalSize() !Dimensions {
  }
  
  pub fn computeLayout(term_dims: Dimensions) Layout {
