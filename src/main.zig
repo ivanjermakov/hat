@@ -441,7 +441,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
             term.draw() catch |e| log.err(@This(), "draw error: {}\n", .{e});
         } else if (editor.dirty.cursor) {
             editor.dirty.cursor = false;
-            term.updateCursor() catch |e| log.err(@This(), "update cursor error: {}", .{e});
+            term.updateCursor() catch |e| log.err(@This(), "update cursor error: {}\n", .{e});
 
             if (buffer.highlights.items.len > 0) {
                 buffer.highlights.clearRetainingCapacity();

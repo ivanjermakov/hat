@@ -24,8 +24,8 @@ const main = @import("main.zig");
 const ter = @import("terminal.zig");
 const ts = @import("ts.zig");
 const git = @import("git.zig");
-const uni = @import("unicode.zig");
 const dia = @import("ui/diagnostic.zig");
+const uni = @import("unicode.zig");
 const act = @import("ui/code_action.zig");
 const fzf = @import("ui/fzf.zig");
 
