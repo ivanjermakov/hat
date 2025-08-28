@@ -109,8 +109,8 @@ pub const LspConnection = struct {
                     .prepareSupport = true,
                 },
                 .codeAction = .{},
-                .formatting = .{},
                 .documentHighlight = .{},
+                .formatting = .{},
             },
             .workspace = .{
                 .workspaceFolders = true,
