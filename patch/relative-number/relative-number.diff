@@ -1,5 +1,5 @@
 diff --git a/src/editor.zig b/src/editor.zig
-index 33b09f3..b5e3bbb 100644
+index 8fded32..ee31733 100644
 --- a/src/editor.zig
 +++ b/src/editor.zig
 @@ -35,6 +35,12 @@ pub const Config = struct {
@@ -16,7 +16,7 @@ index 33b09f3..b5e3bbb 100644
  
  pub const Editor = struct {
 diff --git a/src/terminal.zig b/src/terminal.zig
-index 431a217..a46e98f 100644
+index 6b87009..96fd0da 100644
 --- a/src/terminal.zig
 +++ b/src/terminal.zig
 @@ -138,18 +138,40 @@ pub const Terminal = struct {
