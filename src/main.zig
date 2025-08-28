@@ -108,7 +108,7 @@ pub fn main() !void {
     defer editor.disconnect() catch {};
 }
 
-fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
     var timer = std.time.Timer.start() catch unreachable;
     var timer_total = std.time.Timer.start() catch unreachable;
     var perf = std.mem.zeroes(per.PerfInfo);
@@ -443,6 +443,7 @@ fn startEditor(allocator: std.mem.Allocator) FatalError!void {
 
 comptime {
     std.testing.refAllDecls(@This());
+    std.testing.refAllDecls(@import("e2e.zig"));
 }
 
 pub fn testSetup() !void {
