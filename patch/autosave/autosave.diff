@@ -1,5 +1,5 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index e3674ac..70701d5 100644
+index 7d382a0..668fd7d 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
 @@ -178,14 +178,6 @@ pub const Buffer = struct {
@@ -63,7 +63,7 @@ index e3674ac..70701d5 100644
  
      pub fn textAt(self: *const Buffer, span: Span) []const u21 {
 diff --git a/src/editor.zig b/src/editor.zig
-index 2230f75..0027861 100644
+index 4ee7d23..78b030d 100644
 --- a/src/editor.zig
 +++ b/src/editor.zig
 @@ -32,6 +32,7 @@ pub const DotRepeat = enum {

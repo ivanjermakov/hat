@@ -758,3 +758,14 @@ test "time-write-iso-hms" {
 
     try testing.expectEqualSlices(u8, "T02:36:26", fbs.getWritten());
 }
+
+test "Datetime.fromSeconds" {
+    const dt = Datetime.fromSeconds(52 * 30 * std.time.s_per_week + 2 * std.time.s_per_hour);
+    const d = dt.date;
+    const t = dt.time;
+    try testing.expectEqual(1999, d.year);
+    try testing.expectEqual(2, t.hour);
+    try testing.expectEqual(0, t.minute);
+    try testing.expectEqual(0, t.second);
+    try testing.expectEqual(0, t.nanosecond);
+}

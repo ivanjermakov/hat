@@ -81,6 +81,7 @@ pub fn init() void {
         }
     }
     info(@This(), "logging enabled, level: {f}\n", .{level});
+    info(@This(), "pid: {}\n", .{std.c.getpid()});
 }
 
 fn log(comptime caller: type, comptime lvl: Level, comptime fmt: []const u8, args: anytype) void {
