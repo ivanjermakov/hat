@@ -66,7 +66,7 @@ pub const Buffer = struct {
     uncommitted_changes: std.array_list.Aligned(cha.Change, null) = .empty,
     lsp_connections: std.array_list.Aligned(*lsp.LspConnection, null) = .empty,
     scratch: bool = false,
-    highlights: std.array_list.Managed(Span),
+    highlights: std.array_list.Aligned(Span, null) = .empty,
     allocator: Allocator,
 
     pub fn init(allocator: Allocator, path: ?[]const u8, content_raw: []const u8) !Buffer {
@@ -88,7 +88,6 @@ pub const Buffer = struct {
             .file_type = file_type,
             .uri = uri,
             .scratch = scratch,
-            .highlights = std.array_list.Managed(Span).init(allocator),
             .allocator = allocator,
         };
         try self.content_raw.appendSlice(allocator, content_raw);
