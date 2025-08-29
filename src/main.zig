@@ -179,6 +179,14 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                         try editor.command_line.insert(&.{raw_key.printable.?});
                     }
 
+                    // cmp_menu
+                } else if (cmp_menu_active and eql(u8, key, "<up>")) {
+                    editor.completion_menu.prevItem();
+                } else if (cmp_menu_active and eql(u8, key, "<down>")) {
+                    editor.completion_menu.nextItem();
+                } else if (cmp_menu_active and eql(u8, key, "\n")) {
+                    editor.completion_menu.accept() catch |e| log.err(@This(), "cmp accept error: {}\n", .{e});
+
                     // text insertion
                 } else if (editor.mode == .insert and editor.key_queue.items[0].printable != null) {
                     var printable: std.array_list.Aligned(u21, null) = .empty;
@@ -196,14 +204,6 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     }
                     try buffer.changeInsertText(printable.items);
                     editor.dirty.completion = true;
-
-                    // cmp_menu
-                } else if (cmp_menu_active and eql(u8, key, "<up>")) {
-                    editor.completion_menu.prevItem();
-                } else if (cmp_menu_active and eql(u8, key, "<down>")) {
-                    editor.completion_menu.nextItem();
-                } else if (cmp_menu_active and eql(u8, key, "\n")) {
-                    editor.completion_menu.accept() catch |e| log.err(@This(), "cmp accept error: {}\n", .{e});
 
                     // global
                 } else if (eql(u8, key, "<up>")) {
