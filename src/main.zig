@@ -163,8 +163,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                 const code_action = if (editor.code_actions) |code_actions| b: {
                     if (raw_key.printable) |printable| {
                         for (code_actions) |action| {
-                            if (action.hint == printable[0])
-                                break :b action;
+                            if (action.hint == printable) break :b action;
                         }
                     }
                     break :b null;
@@ -188,7 +187,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                         try editor.command_line.insert(&.{raw_key.printable.?});
                     }
 
-                // code action menu
+                    // code action menu
                 } else if (code_action) |action| {
                     buffer.codeActionExecute(action) catch |e| log.err(@This(), "code action exec error: {}\n", .{e});
 
