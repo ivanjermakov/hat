@@ -278,18 +278,25 @@ pub const Buffer = struct {
         const old_cursor = self.cursor;
         const line = self.lineContent(@intCast(self.cursor.row));
 
-        var col: usize = 0;
-        while (col < self.cursor.col) {
-            if (nextWordStart(line, col)) |word_start| {
-                if (word_start >= self.cursor.col) break;
-                col = word_start;
+        var col: i32 = self.cursor.col;
+        if (col == 0) return;
+        while (true) {
+            if (col == 0) break;
+            if (col != self.cursor.col) {
+                if (boundary(line[@intCast(col)], line[@intCast(col - 1)])) |b| {
+                    if (b == .wordEnd) break;
+                }
             }
+            col -= 1;
         } else {
             return;
         }
         self.moveCursor(.{ .row = self.cursor.row, .col = @intCast(col) });
         if (self.selection == null) {
-            self.selection = .{ .start = old_cursor, .end = self.posToCursor(self.cursorToBytePos(self.cursor) + 1) };
+            self.selection = .{
+                .start = self.cursor,
+                .end = self.posToCursor(self.cursorToBytePos(old_cursor) + 1),
+            };
             main.editor.dirty.draw = true;
         }
         main.editor.dotRepeatInside();
@@ -1064,16 +1071,28 @@ test "moveCursor" {
     try testing.expectEqual(Cursor{ .row = 2, .col = 2 }, buffer.cursor);
 }
 
-test "moveToNextWord plain words" {
+test "moveToNextWord" {
     var buffer = try testSetupScratch(
         \\one two three
     );
     defer main.editor.deinit();
 
-    buffer.cursor = .{ .row = 0, .col = 0 };
     buffer.moveToNextWord();
-    try testing.expectEqual(
-        Span{ .start = .{}, .end = .{ .col = 5 } },
+    try testing.expectEqual(Span{ .start = .{}, .end = .{ .col = 5 } }, buffer.selection);
+}
+
+test "moveToPrevWord" {
+    var buffer = try testSetupScratch(
+        \\one two three
+    );
+    defer main.editor.deinit();
+
+    buffer.moveCursor(.{ .row = 0, .col = 10 });
+
+    buffer.moveToPrevWord();
+    try testing.expectEqual(Cursor{ .row = 0, .col = 8 }, buffer.cursor);
+    try testing.expectEqualDeep(
+        Span{ .start = .{ .row = 0, .col = 8 }, .end = .{ .row = 0, .col = 11 } },
         buffer.selection,
     );
 }
@@ -1094,7 +1113,7 @@ test "changeSelectionDelete same line" {
     try testing.expectEqualStrings("ac\n", buffer.content_raw.items);
 }
 
-test "changeSelectionDelete line to end" {
+test "delete selection line to end" {
     var buffer = try testSetupScratch(
         \\abc
         \\def
@@ -1111,7 +1130,30 @@ test "changeSelectionDelete line to end" {
     try testing.expectEqualStrings("adef", buffer.content_raw.items);
 }
 
-test "changeSelectionDelete multiple lines" {
+test "delete selection multiple lines" {
+    var buffer = try testSetupScratch(
+        \\abc
+        \\def
+        \\ghijk
+    );
+    defer main.editor.deinit();
+
+    buffer.moveCursor(.{ .row = 0, .col = 1 });
+    try main.editor.enterMode(.select_line);
+    buffer.moveCursor(Cursor{ .row = 1, .col = 2 });
+
+    try testing.expectEqualDeep(
+        Span{ .start = .{ .row = 0, .col = 0 }, .end = .{ .row = 2, .col = 0 } },
+        buffer.selection.?,
+    );
+    try buffer.changeSelectionDelete();
+
+    try buffer.commitChanges();
+    try buffer.updateRaw();
+    try testing.expectEqualStrings("ghijk", buffer.content_raw.items);
+}
+
+test "line delete selection" {
     var buffer = try testSetupScratch(
         \\abc
         \\def
