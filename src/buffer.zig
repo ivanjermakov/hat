@@ -913,7 +913,7 @@ fn nextWordStart(line: []const u21, pos: usize) ?usize {
 }
 
 fn wordEnd(line: []const u21, pos: usize) ?usize {
-    if (line.len == 0) return null;
+    if (line.len == 0 or pos == line.len - 1) return null;
     var col = pos;
     while (col < line.len - 1) {
         const ch = line[col];
@@ -923,11 +923,11 @@ fn wordEnd(line: []const u21, pos: usize) ?usize {
             if (b == .wordEnd) return col - 1;
         }
     }
-    return null;
+    return line.len - 1;
 }
 
 fn tokenEnd(line: []const u21, pos: usize) ?usize {
-    if (line.len == 0) return null;
+    if (line.len == 0 or pos == line.len - 1) return null;
     var col = pos;
     while (col < line.len - 1) {
         const ch = line[col];
@@ -937,7 +937,7 @@ fn tokenEnd(line: []const u21, pos: usize) ?usize {
             return col - 1;
         }
     }
-    return null;
+    return line.len - 1;
 }
 
 /// Find token span that contains `pos`
@@ -1091,10 +1091,49 @@ test "moveToPrevWord" {
 
     buffer.moveToPrevWord();
     try testing.expectEqual(Cursor{ .row = 0, .col = 8 }, buffer.cursor);
-    try testing.expectEqualDeep(
-        Span{ .start = .{ .row = 0, .col = 8 }, .end = .{ .row = 0, .col = 11 } },
-        buffer.selection,
+    try testing.expectEqualDeep(Span{ .start = .{ .col = 8 }, .end = .{ .col = 11 } }, buffer.selection);
+
+    buffer.moveToPrevWord();
+    try testing.expectEqual(Cursor{ .row = 0, .col = 4 }, buffer.cursor);
+    try testing.expectEqualDeep(Span{ .start = .{ .col = 4 }, .end = .{ .col = 9 } }, buffer.selection);
+}
+
+test "moveToWordEnd" {
+    var buffer = try testSetupScratch(
+        \\one two three
     );
+    defer main.editor.deinit();
+
+    buffer.moveToWordEnd();
+    try testing.expectEqual(Cursor{ .row = 0, .col = 2 }, buffer.cursor);
+    try testing.expectEqualDeep(Span{ .start = .{ .col = 0 }, .end = .{ .col = 3 } }, buffer.selection);
+
+    buffer.moveToWordEnd();
+    try testing.expectEqual(Cursor{ .row = 0, .col = 6 }, buffer.cursor);
+    try testing.expectEqualDeep(Span{ .start = .{ .col = 2 }, .end = .{ .col = 7 } }, buffer.selection);
+
+    buffer.moveToWordEnd();
+    try testing.expectEqual(Cursor{ .row = 0, .col = 12 }, buffer.cursor);
+    try testing.expectEqualDeep(Span{ .start = .{ .col = 6 }, .end = .{ .col = 13 } }, buffer.selection);
+}
+
+test "moveToTokenEnd" {
+    var buffer = try testSetupScratch(
+        \\one two three
+    );
+    defer main.editor.deinit();
+
+    buffer.moveToTokenEnd();
+    try testing.expectEqual(Cursor{ .row = 0, .col = 2 }, buffer.cursor);
+    try testing.expectEqualDeep(Span{ .start = .{ .col = 0 }, .end = .{ .col = 3 } }, buffer.selection);
+
+    buffer.moveToTokenEnd();
+    try testing.expectEqual(Cursor{ .row = 0, .col = 6 }, buffer.cursor);
+    try testing.expectEqualDeep(Span{ .start = .{ .col = 2 }, .end = .{ .col = 7 } }, buffer.selection);
+
+    buffer.moveToTokenEnd();
+    try testing.expectEqual(Cursor{ .row = 0, .col = 12 }, buffer.cursor);
+    try testing.expectEqualDeep(Span{ .start = .{ .col = 6 }, .end = .{ .col = 13 } }, buffer.selection);
 }
 
 test "changeSelectionDelete same line" {
