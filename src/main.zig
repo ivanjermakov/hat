@@ -127,7 +127,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
         _ = timer.lap();
         _ = timer_total.lap();
 
-        try editor.updateInput();
+        editor.updateInput() catch |e| log.err(@This(), "update input error: {}\n", .{e});
         perf.input = timer.lap();
 
         const eql = std.mem.eql;

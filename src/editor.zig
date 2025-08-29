@@ -233,13 +233,16 @@ pub const Editor = struct {
     }
 
     pub fn updateInput(self: *Editor) !void {
-        if (try ter.getCodes(self.allocator, main.tty_in)) |codes| {
-            defer self.allocator.free(codes);
-            main.editor.dirty.input = true;
-            const new_keys = try ter.getKeys(self.allocator, codes);
-            defer self.allocator.free(new_keys);
-            try main.editor.key_queue.appendSlice(self.allocator, new_keys);
-        }
+        var codes_writer: std.io.Writer.Allocating = .init(self.allocator);
+        defer codes_writer.deinit();
+        try ter.getCodes(&codes_writer.writer, main.tty_in);
+        const codes = codes_writer.written();
+        if (codes.len == 0) return;
+
+        main.editor.dirty.input = true;
+        const new_keys = try ter.getKeys(self.allocator, codes);
+        defer self.allocator.free(new_keys);
+        try main.editor.key_queue.appendSlice(self.allocator, new_keys);
     }
 
     pub fn disconnect(self: *Editor) !void {

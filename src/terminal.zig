@@ -538,21 +538,17 @@ pub fn parseAnsi(allocator: Allocator, input: *std.array_list.Aligned(u8, null))
     return key;
 }
 
-// TODO: non-allocating with std.io.Writer
-pub fn getCodes(allocator: Allocator, tty_file: std.fs.File) !?[]const u8 {
-    if (!fs.poll(tty_file)) return null;
-    var in_buf: std.array_list.Aligned(u8, null) = .empty;
+pub fn getCodes(writer: *std.io.Writer, tty_file: std.fs.File) !void {
+    if (!fs.poll(tty_file)) return;
     while (true) {
         if (!fs.poll(tty_file)) break;
         var b: [1]u8 = undefined;
         const bytes_read = std.posix.read(tty_file.handle, &b) catch break;
         if (bytes_read == 0) break;
-        try in_buf.appendSlice(allocator, b[0..]);
+        try writer.writeAll(b[0..]);
         // 1ns seems to be enough wait time for /dev/tty to fill up with the next code
         std.Thread.sleep(1);
     }
-    if (in_buf.items.len == 0) return null;
-    return try in_buf.toOwnedSlice(allocator);
 }
 
 pub fn getKeys(allocator: Allocator, codes: []const u8) ![]inp.Key {
