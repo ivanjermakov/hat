@@ -29,9 +29,9 @@ pub const CodeAction = struct {
 };
 
 pub fn fromLsp(allocator: Allocator, lsp_code_actions: []const lsp.types.CodeAction) ![]const CodeAction {
-    var bag = std.array_list.Managed(u8).init(allocator);
-    try bag.appendSlice(hint_bag);
-    defer bag.deinit();
+    var bag: std.array_list.Aligned(u8, null) = .empty;
+    try bag.appendSlice(allocator, hint_bag);
+    defer bag.deinit(allocator);
     var code_actions = std.array_list.Managed(CodeAction).init(allocator);
     for (lsp_code_actions) |lsp_code_action| {
         var action = try CodeAction.init(allocator, lsp_code_action);
