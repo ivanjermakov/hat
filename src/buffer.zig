@@ -1213,6 +1213,34 @@ test "line delete selection" {
     try testing.expectEqualStrings("ajk", buffer.content_raw.items);
 }
 
+test "insert line below" {
+    var buffer = try testSetupScratch(
+        \\abc
+        \\def
+    );
+    defer main.editor.deinit();
+
+    try buffer.changeInsertLineBelow(0);
+
+    try buffer.commitChanges();
+    try buffer.updateRaw();
+    try testing.expectEqualStrings("abc\n\ndef", buffer.content_raw.items);
+}
+
+test "insert line above" {
+    var buffer = try testSetupScratch(
+        \\abc
+        \\def
+    );
+    defer main.editor.deinit();
+
+    try buffer.changeInsertLineAbove(0);
+
+    try buffer.commitChanges();
+    try buffer.updateRaw();
+    try testing.expectEqualStrings("\nabc\ndef", buffer.content_raw.items);
+}
+
 test "textAt full line" {
     var buffer = try testSetupScratch(
         \\abc
