@@ -32,12 +32,12 @@ pub const sleep_ns: u64 = 16 * std.time.ns_per_ms;
 pub const sleep_lsp_ns: u64 = sleep_ns;
 
 pub var std_out_buf: [2 << 14]u8 = undefined;
-pub const std_out = std.fs.File.stdout();
-pub var std_out_writer = std_out.writer(&std_out_buf);
+pub var std_out = std.fs.File.stdout();
+pub var std_out_writer: std.fs.File.Writer = undefined;
 
 pub var std_err_buf: [2 << 14]u8 = undefined;
-pub const std_err = std.fs.File.stderr();
-pub var std_err_writer = std_err.writer(&std_err_buf);
+pub var std_err = std.fs.File.stderr();
+pub var std_err_writer: std.fs.File.Writer = undefined;
 
 pub var tty_in: std.fs.File = undefined;
 
@@ -49,13 +49,15 @@ pub var args: Args = .{};
 pub var main_loop_mutex: mut.Mutex = .{};
 
 pub fn main() !void {
-    log.init();
-
     var debug_allocator: std.heap.DebugAllocator(.{ .stack_trace_frames = 10 }) = .init;
     defer _ = debug_allocator.deinit();
     const allocator = if (builtin.mode == .Debug) debug_allocator.allocator() else std.heap.c_allocator;
 
+    std_out_writer = std_out.writer(&std_out_buf);
+    std_err_writer = std_err.writer(&std_err_buf);
     tty_in = try std.fs.cwd().openFile("/dev/tty", .{});
+
+    log.init();
 
     sig.registerAll();
 

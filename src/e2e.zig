@@ -1,4 +1,5 @@
 const std = @import("std");
+const allocator = std.testing.allocator;
 const ms = std.time.ns_per_ms;
 const sleep = std.Thread.sleep;
 const File = std.fs.File;
@@ -22,12 +23,29 @@ fn createTmpFiles() !void {
     );
 }
 
-fn startEditor(allocator: std.mem.Allocator, tty_in: File) !void {
-    main.tty_in = tty_in;
+const Setup = struct {
+    handle: std.Thread,
+    tty_in: std.fs.File,
+    stdout: std.fs.File,
+};
+
+fn setupEditor() !Setup {
+    const tty_in_pipe = try std.posix.pipe();
+    const mock_tty_in_read: File = .{ .handle = tty_in_pipe[0] };
+    const mock_tty_in_write: File = .{ .handle = tty_in_pipe[1] };
+
+    main.tty_in = mock_tty_in_read;
     const stdout_pipe = try std.posix.pipe();
     const mock_stdout: File = .{ .handle = stdout_pipe[1] };
+    main.std_out = mock_stdout;
     main.std_out_writer = mock_stdout.writer(&main.std_out_buf);
+    main.std_err_writer = main.std_out.writer(&main.std_err_buf);
 
+    const editor_thread = try std.Thread.spawn(.{}, startEditor, .{});
+    return .{ .handle = editor_thread, .tty_in = mock_tty_in_write, .stdout = main.std_out };
+}
+
+fn startEditor() !void {
     const term_size = Dimensions{ .width = 40, .height = 40 };
 
     main.term = try ter.Terminal.init(allocator, &main.std_out_writer.interface, term_size);
@@ -55,22 +73,12 @@ fn skipE2e() bool {
 test "e2e" {
     log.init();
     log.level = .warn;
-
     if (skipE2e()) return;
-
-    var debug_allocator: std.heap.DebugAllocator(.{ .stack_trace_frames = 10 }) = .init;
-    defer _ = debug_allocator.deinit();
-    const allocator = debug_allocator.allocator();
-
     try createTmpFiles();
 
-    const tty_in_pipe = try std.posix.pipe();
-    const mock_tty_in: File = .{ .handle = tty_in_pipe[0] };
-    const mock_tty_out: File = .{ .handle = tty_in_pipe[1] };
-    const editor_thread = try std.Thread.spawn(.{}, startEditor, .{ allocator, mock_tty_in });
-
+    const setup = try setupEditor();
     sleep(100 * ms);
-    try mock_tty_out.writeAll("q");
+    try setup.tty_in.writeAll("q");
 
-    editor_thread.join();
+    setup.handle.join();
 }
