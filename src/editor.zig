@@ -189,23 +189,15 @@ pub const Editor = struct {
 
         self.resetHover();
 
-        for (self.key_queue.items) |key| key.deinit();
         self.key_queue.deinit(self.allocator);
-
-        for (self.dot_repeat_input.items) |key| key.deinit();
         self.dot_repeat_input.deinit(self.allocator);
-
-        for (self.dot_repeat_input_uncommitted.items) |key| key.deinit();
         self.dot_repeat_input_uncommitted.deinit(self.allocator);
 
         if (self.find_query) |fq| self.allocator.free(fq);
 
         {
             var iter = self.macros.valueIterator();
-            while (iter.next()) |keys| {
-                for (keys.items) |key| key.deinit();
-                keys.deinit(self.allocator);
-            }
+            while (iter.next()) |keys| keys.deinit(self.allocator);
             self.macros.deinit();
         }
     }
@@ -286,10 +278,7 @@ pub const Editor = struct {
         if (self.recording_macro) |name| {
             var macro = self.macros.getPtr(name).?;
             // drop first two keys since these mean "start recording"
-            for (0..2) |_| {
-                const rm = macro.orderedRemove(0);
-                rm.deinit();
-            }
+            for (0..2) |_| _ = macro.orderedRemove(0);
             try self.sendMessageFmt("recorded @{c}", .{name});
             if (log.enabled(.debug)) {
                 var keys_str: std.io.Writer.Allocating = .init(self.allocator);
@@ -307,7 +296,7 @@ pub const Editor = struct {
         if (self.recording_macro) |name| {
             const gop = try self.macros.getOrPut(name);
             if (!gop.found_existing) gop.value_ptr.* = .empty;
-            try gop.value_ptr.append(self.allocator, try key.clone(self.allocator));
+            try gop.value_ptr.append(self.allocator, key);
         }
     }
 
@@ -320,7 +309,7 @@ pub const Editor = struct {
         if (self.macros.get(name)) |macro| {
             log.debug(@This(), "replaying macro @{c}\n", .{name});
             for (macro.items) |key| {
-                try self.key_queue.append(self.allocator, try key.clone(self.allocator));
+                try self.key_queue.append(self.allocator, key);
             }
         } else {
             try self.sendMessageFmt("no macro @{c}", .{name});
@@ -411,9 +400,7 @@ pub const Editor = struct {
     pub fn dotRepeatCommit(self: *Editor) FatalError!void {
         std.debug.assert(self.dot_repeat_state == .commit_ready);
 
-        for (self.dot_repeat_input.items) |key| key.deinit();
         self.dot_repeat_input.clearRetainingCapacity();
-
         try self.dot_repeat_input.appendSlice(self.allocator, self.dot_repeat_input_uncommitted.items);
         self.dot_repeat_input_uncommitted.clearRetainingCapacity();
         self.dot_repeat_state = .outside;
@@ -423,7 +410,7 @@ pub const Editor = struct {
         if (self.dot_repeat_input.items.len > 0) {
             log.debug(@This(), "dot repeat of {any}\n", .{self.dot_repeat_input.items});
             for (self.dot_repeat_input.items) |key| {
-                try self.key_queue.append(self.allocator, try key.clone(self.allocator));
+                try self.key_queue.append(self.allocator, key);
             }
             self.dot_repeat_state = .executing;
         }

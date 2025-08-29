@@ -147,7 +147,6 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     repeat_count = (if (repeat_count) |rc| rc * 10 else 0) + d;
                     const removed = editor.key_queue.orderedRemove(0);
                     try editor.recordMacroKey(removed);
-                    removed.deinit();
                 }
 
                 var keys_consumed: usize = 1;
@@ -177,7 +176,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     } else if (cmd_active and eql(u8, key, "<delete>")) {
                         editor.command_line.delete();
                     } else if (cmd_active and raw_key.printable != null) {
-                        try editor.command_line.insert(raw_key.printable.?);
+                        try editor.command_line.insert(&.{raw_key.printable.?});
                     }
 
                     // text insertion
@@ -189,7 +188,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     while (true) {
                         const next_key = if (keys_consumed < editor.key_queue.items.len) editor.key_queue.items[keys_consumed] else null;
                         if (next_key != null and next_key.?.printable != null) {
-                            try printable.appendSlice(allocator, next_key.?.printable.?);
+                            try printable.append(allocator, next_key.?.printable.?);
                             keys_consumed += 1;
                         } else {
                             break;
@@ -342,11 +341,11 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                         buffer.findReferences() catch |e| log.err(@This(), "find references LSP error: {}\n", .{e});
                     } else if (editor.mode == .normal and eql(u8, multi_key, " n")) {
                         try buffer.renamePrompt();
-                    } else if (editor.mode == .normal and eql(u8, key, "r") and editor.key_queue.items[1].printable != null) {
-                        const macro_name: u8 = @intCast(key2.printable.?[0]);
+                    } else if (editor.mode == .normal and eql(u8, key, "r") and key2.printable != null) {
+                        const macro_name: u8 = @intCast(key2.printable.?);
                         try editor.startMacro(macro_name);
-                    } else if (editor.mode == .normal and eql(u8, key, "@") and editor.key_queue.items[1].printable != null) {
-                        const macro_name: u8 = @intCast(key2.printable.?[0]);
+                    } else if (editor.mode == .normal and eql(u8, key, "@") and key2.printable != null) {
+                        const macro_name: u8 = @intCast(key2.printable.?);
                         try editor.replayMacro(macro_name);
                     } else if (normal_or_select and eql(u8, multi_key, "gk")) {
                         buffer.moveCursor(.{ .col = buffer.cursor.col });
@@ -375,15 +374,13 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                 }
                 for (0..keys_consumed) |_| {
                     switch (editor.dot_repeat_state) {
-                        .inside, .commit_ready => try editor.dot_repeat_input_uncommitted.append(
-                            allocator,
-                            try editor.key_queue.items[0].clone(editor.allocator),
-                        ),
+                        .inside, .commit_ready => {
+                            try editor.dot_repeat_input_uncommitted.append(allocator, editor.key_queue.items[0]);
+                        },
                         else => {},
                     }
                     const removed = editor.key_queue.orderedRemove(0);
                     try editor.recordMacroKey(removed);
-                    removed.deinit();
                     repeat_count = null;
                 }
                 log.trace(@This(), "uncommitted: {any}\n", .{editor.dot_repeat_input_uncommitted.items});
