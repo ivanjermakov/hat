@@ -279,18 +279,25 @@ pub const Buffer = struct {
         const old_cursor = self.cursor;
         const line = self.lineContent(@intCast(self.cursor.row));
 
-        var col: usize = 0;
-        while (col < self.cursor.col) {
-            if (nextWordStart(line, col)) |word_start| {
-                if (word_start >= self.cursor.col) break;
-                col = word_start;
+        var col: i32 = self.cursor.col;
+        if (col == 0) return;
+        while (true) {
+            if (col == 0) break;
+            if (col != self.cursor.col) {
+                if (boundary(line[@intCast(col)], line[@intCast(col - 1)])) |b| {
+                    if (b == .wordEnd) break;
+                }
             }
+            col -= 1;
         } else {
             return;
         }
         self.moveCursor(.{ .row = self.cursor.row, .col = @intCast(col) });
         if (self.selection == null) {
-            self.selection = .{ .start = old_cursor, .end = self.posToCursor(self.cursorToBytePos(self.cursor) + 1) };
+            self.selection = .{
+                .start = self.cursor,
+                .end = self.posToCursor(self.cursorToBytePos(old_cursor) + 1),
+            };
             main.editor.dirty.draw = true;
         }
         main.editor.dotRepeatInside();
@@ -928,7 +935,7 @@ fn nextWordStart(line: []const u21, pos: usize) ?usize {
 }
 
 fn wordEnd(line: []const u21, pos: usize) ?usize {
-    if (line.len == 0) return null;
+    if (line.len == 0 or pos == line.len - 1) return null;
     var col = pos;
     while (col < line.len - 1) {
         const ch = line[col];
@@ -938,11 +945,11 @@ fn wordEnd(line: []const u21, pos: usize) ?usize {
             if (b == .wordEnd) return col - 1;
         }
     }
-    return null;
+    return line.len - 1;
 }
 
 fn tokenEnd(line: []const u21, pos: usize) ?usize {
-    if (line.len == 0) return null;
+    if (line.len == 0 or pos == line.len - 1) return null;
     var col = pos;
     while (col < line.len - 1) {
         const ch = line[col];
@@ -952,7 +959,7 @@ fn tokenEnd(line: []const u21, pos: usize) ?usize {
             return col - 1;
         }
     }
-    return null;
+    return line.len - 1;
 }
 
 /// Find token span that contains `pos`
@@ -1086,18 +1093,69 @@ test "moveCursor" {
     try testing.expectEqual(Cursor{ .row = 2, .col = 2 }, buffer.cursor);
 }
 
-test "moveToNextWord plain words" {
+test "moveToNextWord" {
     var buffer = try testSetupScratch(
         \\one two three
     );
     defer main.editor.deinit();
 
-    buffer.cursor = .{ .row = 0, .col = 0 };
     buffer.moveToNextWord();
-    try testing.expectEqual(
-        Span{ .start = .{}, .end = .{ .col = 5 } },
-        buffer.selection,
+    try testing.expectEqual(Span{ .start = .{}, .end = .{ .col = 5 } }, buffer.selection);
+}
+
+test "moveToPrevWord" {
+    var buffer = try testSetupScratch(
+        \\one two three
     );
+    defer main.editor.deinit();
+
+    buffer.moveCursor(.{ .row = 0, .col = 10 });
+
+    buffer.moveToPrevWord();
+    try testing.expectEqual(Cursor{ .row = 0, .col = 8 }, buffer.cursor);
+    try testing.expectEqualDeep(Span{ .start = .{ .col = 8 }, .end = .{ .col = 11 } }, buffer.selection);
+
+    buffer.moveToPrevWord();
+    try testing.expectEqual(Cursor{ .row = 0, .col = 4 }, buffer.cursor);
+    try testing.expectEqualDeep(Span{ .start = .{ .col = 4 }, .end = .{ .col = 9 } }, buffer.selection);
+}
+
+test "moveToWordEnd" {
+    var buffer = try testSetupScratch(
+        \\one two three
+    );
+    defer main.editor.deinit();
+
+    buffer.moveToWordEnd();
+    try testing.expectEqual(Cursor{ .row = 0, .col = 2 }, buffer.cursor);
+    try testing.expectEqualDeep(Span{ .start = .{ .col = 0 }, .end = .{ .col = 3 } }, buffer.selection);
+
+    buffer.moveToWordEnd();
+    try testing.expectEqual(Cursor{ .row = 0, .col = 6 }, buffer.cursor);
+    try testing.expectEqualDeep(Span{ .start = .{ .col = 2 }, .end = .{ .col = 7 } }, buffer.selection);
+
+    buffer.moveToWordEnd();
+    try testing.expectEqual(Cursor{ .row = 0, .col = 12 }, buffer.cursor);
+    try testing.expectEqualDeep(Span{ .start = .{ .col = 6 }, .end = .{ .col = 13 } }, buffer.selection);
+}
+
+test "moveToTokenEnd" {
+    var buffer = try testSetupScratch(
+        \\one two three
+    );
+    defer main.editor.deinit();
+
+    buffer.moveToTokenEnd();
+    try testing.expectEqual(Cursor{ .row = 0, .col = 2 }, buffer.cursor);
+    try testing.expectEqualDeep(Span{ .start = .{ .col = 0 }, .end = .{ .col = 3 } }, buffer.selection);
+
+    buffer.moveToTokenEnd();
+    try testing.expectEqual(Cursor{ .row = 0, .col = 6 }, buffer.cursor);
+    try testing.expectEqualDeep(Span{ .start = .{ .col = 2 }, .end = .{ .col = 7 } }, buffer.selection);
+
+    buffer.moveToTokenEnd();
+    try testing.expectEqual(Cursor{ .row = 0, .col = 12 }, buffer.cursor);
+    try testing.expectEqualDeep(Span{ .start = .{ .col = 6 }, .end = .{ .col = 13 } }, buffer.selection);
 }
 
 test "changeSelectionDelete same line" {
@@ -1116,7 +1174,7 @@ test "changeSelectionDelete same line" {
     try testing.expectEqualStrings("ac\n", buffer.content_raw.items);
 }
 
-test "changeSelectionDelete line to end" {
+test "delete selection line to end" {
     var buffer = try testSetupScratch(
         \\abc
         \\def
@@ -1133,7 +1191,30 @@ test "changeSelectionDelete line to end" {
     try testing.expectEqualStrings("adef", buffer.content_raw.items);
 }
 
-test "changeSelectionDelete multiple lines" {
+test "delete selection multiple lines" {
+    var buffer = try testSetupScratch(
+        \\abc
+        \\def
+        \\ghijk
+    );
+    defer main.editor.deinit();
+
+    buffer.moveCursor(.{ .row = 0, .col = 1 });
+    try main.editor.enterMode(.select_line);
+    buffer.moveCursor(Cursor{ .row = 1, .col = 2 });
+
+    try testing.expectEqualDeep(
+        Span{ .start = .{ .row = 0, .col = 0 }, .end = .{ .row = 2, .col = 0 } },
+        buffer.selection.?,
+    );
+    try buffer.changeSelectionDelete();
+
+    try buffer.commitChanges();
+    try buffer.updateRaw();
+    try testing.expectEqualStrings("ghijk", buffer.content_raw.items);
+}
+
+test "line delete selection" {
     var buffer = try testSetupScratch(
         \\abc
         \\def
@@ -1152,6 +1233,34 @@ test "changeSelectionDelete multiple lines" {
     try buffer.commitChanges();
     try buffer.updateRaw();
     try testing.expectEqualStrings("ajk", buffer.content_raw.items);
+}
+
+test "insert line below" {
+    var buffer = try testSetupScratch(
+        \\abc
+        \\def
+    );
+    defer main.editor.deinit();
+
+    try buffer.changeInsertLineBelow(0);
+
+    try buffer.commitChanges();
+    try buffer.updateRaw();
+    try testing.expectEqualStrings("abc\n\ndef", buffer.content_raw.items);
+}
+
+test "insert line above" {
+    var buffer = try testSetupScratch(
+        \\abc
+        \\def
+    );
+    defer main.editor.deinit();
+
+    try buffer.changeInsertLineAbove(0);
+
+    try buffer.commitChanges();
+    try buffer.updateRaw();
+    try testing.expectEqualStrings("\nabc\ndef", buffer.content_raw.items);
 }
 
 test "textAt full line" {

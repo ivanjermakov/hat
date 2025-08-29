@@ -288,7 +288,10 @@ pub const LspConnection = struct {
         } else {
             var changes = try std.array_list.Aligned(types.TextDocumentContentChangeEvent, null)
                 .initCapacity(self.allocator, buffer.pending_changes.items.len);
-            defer changes.deinit(self.allocator);
+            defer {
+                for (changes.items) |change| self.allocator.free(change.literal_0.text);
+                changes.deinit(self.allocator);
+            }
 
             for (buffer.pending_changes.items) |change| {
                 const event = try change.toLsp(self.allocator);
