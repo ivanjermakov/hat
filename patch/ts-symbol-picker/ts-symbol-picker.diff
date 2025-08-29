@@ -1,5 +1,5 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index d08f12d..e3f92e4 100644
+index 4ba7445..30fd8e0 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
 @@ -23,8 +23,9 @@ const lsp = @import("lsp.zig");
@@ -13,7 +13,7 @@ index d08f12d..e3f92e4 100644
  
  pub const Buffer = struct {
      path: []const u8,
-@@ -332,7 +333,7 @@ pub const Buffer = struct {
+@@ -339,7 +340,7 @@ pub const Buffer = struct {
          try self.pending_changes.append(self.allocator, try change.clone(self.allocator));
      }
  
@@ -22,7 +22,7 @@ index d08f12d..e3f92e4 100644
          if (self.uncommitted_changes.items.len == 0) {
              log.debug(@This(), "no changes to commit\n", .{});
              return;
-@@ -582,6 +583,27 @@ pub const Buffer = struct {
+@@ -589,6 +590,27 @@ pub const Buffer = struct {
          }
      }
  
@@ -117,18 +117,20 @@ index f166cf9..14329fd 100644
      } },
      .{ ".zig", FileTypeConfig{
 diff --git a/src/main.zig b/src/main.zig
-index 1e17568..81e03a9 100644
+index e1f2fab..403dd1f 100644
 --- a/src/main.zig
 +++ b/src/main.zig
-@@ -342,6 +342,8 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+@@ -341,7 +341,9 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                          buffer.findReferences() catch |e| log.err(@This(), "find references LSP error: {}\n", .{e});
                      } else if (editor.mode == .normal and eql(u8, multi_key, " n")) {
                          try buffer.renamePrompt();
+-                    } else if (editor.mode == .normal and eql(u8, key, "r") and key2.printable != null) {
 +                    } else if (editor.mode == .normal and eql(u8, multi_key, " f")) {
 +                        try buffer.findSymbols();
-                     } else if (editor.mode == .normal and eql(u8, key, "r") and editor.key_queue.items[1].printable != null) {
-                         const macro_name: u8 = @intCast(key2.printable.?[0]);
++                    } else if (editor.mode == .normal and eql(u8, key, "r") and editor.key_queue.items[1].printable != null) {
+                         const macro_name: u8 = @intCast(key2.printable.?);
                          try editor.startMacro(macro_name);
+                     } else if (editor.mode == .normal and eql(u8, key, "@") and key2.printable != null) {
 diff --git a/src/ts.zig b/src/ts.zig
 index 994aa04..42eef83 100644
 --- a/src/ts.zig
