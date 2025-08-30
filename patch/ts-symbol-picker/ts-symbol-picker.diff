@@ -36,7 +36,7 @@ index 4ba7445..30fd8e0 100644
 +                }
 +                const pick_result = fzf.pickSymbol(self.allocator, self, parse_result.spans.items) catch |e| {
 +                    log.err(@This(), "{}\n", .{e});
-+                    if (@errorReturnTrace()) |trace| std.debug.dumpStackTrace(trace.*);
++                    if (@errorReturnTrace()) |trace| log.errPrint("{f}\n", .{trace.*});
 +                    return;
 +                };
 +                defer self.allocator.free(pick_result.path);

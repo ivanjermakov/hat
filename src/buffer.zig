@@ -126,7 +126,7 @@ pub const Buffer = struct {
     pub fn reparse(self: *Buffer) FatalError!void {
         self.updateRaw() catch |e| {
             log.err(@This(), "{}\n", .{e});
-            if (@errorReturnTrace()) |trace| std.debug.dumpStackTrace(trace.*);
+            if (@errorReturnTrace()) |trace| log.errPrint("{f}\n", .{trace.*});
         };
         if (self.ts_state) |*ts_state| try ts_state.reparse(self.content_raw.items);
         try self.updateLinePositions();
@@ -658,7 +658,7 @@ pub const Buffer = struct {
         var exit_code: u8 = undefined;
         const out_b = ext.runExternalWait(self.allocator, &.{ "sh", "-c", command_b }, in_b, &exit_code) catch |e| {
             log.err(@This(), "{}\n", .{e});
-            if (@errorReturnTrace()) |trace| std.debug.dumpStackTrace(trace.*);
+            if (@errorReturnTrace()) |trace| log.errPrint("{f}\n", .{trace.*});
             return;
         };
         defer self.allocator.free(out_b);
