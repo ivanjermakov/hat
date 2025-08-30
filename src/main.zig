@@ -6,6 +6,7 @@ const builtin = @import("builtin");
 const buf = @import("buffer.zig");
 const co = @import("color.zig");
 const core = @import("core.zig");
+const Cursor = core.Cursor;
 const FatalError = core.FatalError;
 const edi = @import("editor.zig");
 const env = @import("env.zig");
@@ -20,6 +21,7 @@ const fzf = @import("ui/fzf.zig");
 const uni = @import("unicode.zig");
 const mut = @import("mutex.zig");
 const per = @import("perf.zig");
+const cha = @import("change.zig");
 
 pub const Args = struct {
     path: ?[]const u8 = null,
@@ -286,12 +288,17 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     try editor.enterMode(.select);
                 } else if (editor.mode == .normal and eql(u8, key, "V")) {
                     try editor.enterMode(.select_line);
-                } else if (editor.mode == .normal and eql(u8, key, "o")) {
-                    try buffer.changeInsertLineBelow(buffer.cursor.row);
+                } else if (editor.mode == .normal and (eql(u8, key, "o") or eql(u8, key, "O"))) {
+                    const below = eql(u8, key, "o");
                     try editor.enterMode(.insert);
-                } else if (editor.mode == .normal and eql(u8, key, "O")) {
-                    try buffer.changeInsertLineAbove(buffer.cursor.row);
-                    try editor.enterMode(.insert);
+                    const row = buffer.cursor.row;
+                    const pos: Cursor = .{
+                        .row = row,
+                        .col = @intCast(if (below) buffer.lineLength(@intCast(row)) else 0),
+                    };
+                    var change = try cha.Change.initInsert(allocator, buffer, pos, &.{'\n'});
+                    try buffer.appendChange(&change);
+                    if (!below) buffer.moveCursor(.{ .row = row });
                 } else if (editor.mode == .normal and eql(u8, key, "u")) {
                     try buffer.undo();
                 } else if (editor.mode == .normal and eql(u8, key, "U")) {

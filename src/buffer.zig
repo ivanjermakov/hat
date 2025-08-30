@@ -417,21 +417,6 @@ pub const Buffer = struct {
         }
     }
 
-    pub fn changeInsertLineBelow(self: *Buffer, row: i32) !void {
-        const pos: Cursor = .{ .row = row, .col = @intCast(self.lineLength(@intCast(row))) };
-        var change = try cha.Change.initInsert(self.allocator, self, pos, &.{'\n'});
-        try self.appendChange(&change);
-        try self.commitChanges();
-    }
-
-    pub fn changeInsertLineAbove(self: *Buffer, row: i32) !void {
-        const pos: Cursor = .{ .row = row, .col = 0 };
-        var change = try cha.Change.initInsert(self.allocator, self, pos, &.{'\n'});
-        try self.appendChange(&change);
-        try self.commitChanges();
-        self.moveCursor(.{ .row = row });
-    }
-
     pub fn changeAlignIndent(self: *Buffer) !void {
         try self.updateIndents();
         if (self.selection) |selection| {
@@ -1235,34 +1220,6 @@ test "line delete selection" {
     try buffer.commitChanges();
     try buffer.updateRaw();
     try testing.expectEqualStrings("ajk", buffer.content_raw.items);
-}
-
-test "insert line below" {
-    var buffer = try testSetupScratch(
-        \\abc
-        \\def
-    );
-    defer main.editor.deinit();
-
-    try buffer.changeInsertLineBelow(0);
-
-    try buffer.commitChanges();
-    try buffer.updateRaw();
-    try testing.expectEqualStrings("abc\n\ndef", buffer.content_raw.items);
-}
-
-test "insert line above" {
-    var buffer = try testSetupScratch(
-        \\abc
-        \\def
-    );
-    defer main.editor.deinit();
-
-    try buffer.changeInsertLineAbove(0);
-
-    try buffer.commitChanges();
-    try buffer.updateRaw();
-    try testing.expectEqualStrings("\nabc\ndef", buffer.content_raw.items);
 }
 
 test "textAt full line" {
