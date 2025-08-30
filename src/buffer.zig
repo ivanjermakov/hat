@@ -25,6 +25,7 @@ const ter = @import("terminal.zig");
 const ts = @import("ts.zig");
 const dia = @import("ui/diagnostic.zig");
 const uni = @import("unicode.zig");
+const uri = @import("uri.zig");
 
 pub const Buffer = struct {
     path: []const u8,
@@ -68,29 +69,51 @@ pub const Buffer = struct {
     scratch: bool = false,
     allocator: Allocator,
 
-    pub fn init(allocator: Allocator, path: ?[]const u8, content_raw: []const u8) !Buffer {
-        const scratch = path == null;
-        const buf_path = if (path) |p|
-            try allocator.dupe(u8, p)
-        else
-            try std.fmt.allocPrint(allocator, "scratch{d:0>2}", .{nextScratchId()});
+    pub fn init(allocator: Allocator, path: []const u8) !Buffer {
+        const buf_path = try allocator.dupe(u8, path);
+        errdefer allocator.free(buf_path);
         const file_ext = std.fs.path.extension(buf_path);
         const file_type = ft.file_type.get(file_ext) orelse ft.plain;
-        const file = if (scratch) null else try std.fs.cwd().openFile(buf_path, .{});
-
+        const file = try std.fs.cwd().openFile(buf_path, .{});
         const abs_path = std.fs.realpathAlloc(allocator, buf_path) catch null;
         defer if (abs_path) |a| allocator.free(a);
-        const uri = try std.fmt.allocPrint(allocator, "file://{s}", .{abs_path orelse buf_path});
+        const buf_uri = try uri.fromPath(allocator, abs_path orelse buf_path);
+
         var self = Buffer{
             .path = buf_path,
             .file = file,
             .file_type = file_type,
-            .uri = uri,
-            .scratch = scratch,
+            .uri = buf_uri,
+            .allocator = allocator,
+        };
+
+        const content_raw = try file.readToEndAlloc(self.allocator, std.math.maxInt(usize));
+        defer self.allocator.free(content_raw);
+        try self.content_raw.appendSlice(allocator, content_raw);
+
+        _ = try self.syncFs();
+        try self.updateContent();
+        try self.updateLinePositions();
+        if (self.file_type.ts) |ts_conf| {
+            self.ts_state = try ts.State.init(allocator, ts_conf);
+        }
+        try self.reparse();
+        return self;
+    }
+
+    pub fn initScratch(allocator: Allocator, content_raw: []const u8) !Buffer {
+        const buf_path = try std.fmt.allocPrint(allocator, "scratch{d:0>2}", .{nextScratchId()});
+
+        var self = Buffer{
+            .path = buf_path,
+            .file = null,
+            .file_type = ft.plain,
+            .uri = try uri.fromPath(allocator, buf_path),
+            .scratch = true,
             .allocator = allocator,
         };
         try self.content_raw.appendSlice(allocator, content_raw);
-        _ = try self.syncFs();
+
         try self.updateContent();
         try self.updateLinePositions();
         if (self.file_type.ts) |ts_conf| {
@@ -704,7 +727,8 @@ pub const Buffer = struct {
 
     pub fn changeFsExternal(self: *Buffer) !void {
         const old_cursor = self.cursor;
-        const file = try std.fs.cwd().openFile(self.path, .{ .mode = .read_write });
+        const file = try std.fs.cwd().openFile(self.path, .{});
+        defer file.close();
         const file_content = try file.readToEndAlloc(self.allocator, std.math.maxInt(usize));
         defer self.allocator.free(file_content);
         const file_content_uni = try uni.unicodeFromBytes(self.allocator, file_content);

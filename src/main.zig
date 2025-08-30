@@ -24,6 +24,7 @@ const per = @import("perf.zig");
 pub const Args = struct {
     path: ?[]const u8 = null,
     printer: bool = false,
+    read_only: bool = false,
     highlight_line: ?usize = null,
     term_height: ?usize = null,
 };
@@ -67,6 +68,9 @@ pub fn main() !void {
         if (std.mem.eql(u8, arg, "--printer")) {
             args.printer = true;
             continue;
+        } else if (std.mem.eql(u8, arg, "--readonly") or std.mem.eql(u8, arg, "-r")) {
+            args.read_only = true;
+            continue;
         } else if (std.mem.startsWith(u8, arg, "--highlight-line=")) {
             const val = arg[17..];
             const val_exp = try env.expand(allocator, val, std.posix.getenv);
@@ -82,11 +86,8 @@ pub fn main() !void {
     }
 
     if (args.printer) {
-        const path = args.path orelse return error.NoPath;
-        const file = try std.fs.cwd().openFile(path, .{ .mode = .read_write });
-        const file_content = try file.readToEndAlloc(allocator, std.math.maxInt(usize));
-        defer allocator.free(file_content);
-        var buffer = try buf.Buffer.init(allocator, path, file_content);
+        args.read_only = true;
+        var buffer = try buf.Buffer.init(allocator, args.path orelse return error.NoPath);
         defer buffer.deinit();
         try pri.printBuffer(
             &buffer,
@@ -96,16 +97,20 @@ pub fn main() !void {
         return;
     }
 
-    term = try ter.Terminal.init(allocator, &std_out_writer.interface, try ter.terminalSize());
-    defer term.deinit();
-
     editor = try edi.Editor.init(allocator, .{});
     defer editor.deinit();
 
     const path = if (args.path) |path| try allocator.dupe(u8, path) else fzf.pickFile(allocator) catch return;
     defer allocator.free(path);
 
-    try editor.openBuffer(path);
+    editor.openBuffer(path) catch |e| {
+        log.errPrint("open buffer \"{s}\" error: {}\n", .{ path, e });
+        return e;
+    };
+
+    term = try ter.Terminal.init(allocator, &std_out_writer.interface, try ter.terminalSize());
+    defer term.deinit();
+
     try startEditor(allocator);
     defer editor.disconnect() catch {};
 }
@@ -336,7 +341,10 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     defer allocator.free(multi_key);
 
                     if (editor.mode == .normal and eql(u8, multi_key, " w")) {
-                        buffer.write() catch |e| log.err(@This(), "write buffer error: {}\n", .{e});
+                        buffer.write() catch |e| {
+                            log.err(@This(), "write buffer error: {}\n", .{e});
+                            try editor.sendMessageFmt("write buffer error: {}", .{e});
+                        };
                     } else if (editor.mode == .normal and eql(u8, multi_key, " d")) {
                         buffer.goToDefinition() catch |e| log.err(@This(), "go to def LSP error: {}\n", .{e});
                     } else if (editor.mode == .normal and eql(u8, multi_key, " r")) {

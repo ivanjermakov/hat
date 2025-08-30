@@ -77,6 +77,7 @@ test "e2e" {
     try createTmpFiles();
 
     const setup = try setupEditor();
+
     sleep(100 * ms);
     try setup.tty_in.writeAll("q");
 

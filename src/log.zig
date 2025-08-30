@@ -60,6 +60,12 @@ pub fn trace(comptime caller: type, comptime fmt: []const u8, args: anytype) voi
     log(caller, .trace, fmt, args);
 }
 
+pub fn errPrint(comptime fmt: []const u8, args: anytype) void {
+    const writer = &main.std_err_writer.interface;
+    writer.print(fmt, args) catch {};
+    writer.flush() catch {};
+}
+
 pub fn assertEql(comptime Caller: type, comptime T: type, actual: []const T, expected: []const T) void {
     if (!std.mem.eql(T, actual, expected)) {
         err(Caller, "assert failed:\n  actual: {any}\n  expected: {any}\n", .{ actual, expected });

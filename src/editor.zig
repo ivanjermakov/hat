@@ -88,11 +88,9 @@ pub const Editor = struct {
             return;
         }
         log.debug(@This(), "opening file at path {s}\n", .{path});
-        const file = try std.fs.cwd().openFile(path, .{ .mode = .read_write });
-        const file_content = try file.readToEndAlloc(self.allocator, std.math.maxInt(usize));
-        defer self.allocator.free(file_content);
+        const b = try buf.Buffer.init(self.allocator, path);
         var buffer = try self.allocator.create(buf.Buffer);
-        buffer.* = try buf.Buffer.init(self.allocator, path, file_content);
+        buffer.* = b;
 
         try self.buffers.insert(self.allocator, 0, buffer);
         self.active_buffer = buffer;
@@ -137,7 +135,7 @@ pub const Editor = struct {
     pub fn openScratch(self: *Editor, content: ?[]const u8) !void {
         defer self.resetHover();
         const buffer = try self.allocator.create(buf.Buffer);
-        buffer.* = try buf.Buffer.init(self.allocator, null, content orelse "");
+        buffer.* = try buf.Buffer.initScratch(self.allocator, content orelse "");
         log.debug(@This(), "opening scratch {s}\n", .{buffer.path});
 
         try self.buffers.insert(self.allocator, 0, buffer);
@@ -316,7 +314,7 @@ pub const Editor = struct {
         }
     }
 
-    pub fn sendMessageFmt(self: *Editor, comptime fmt: []const u8, args: anytype) !void {
+    pub fn sendMessageFmt(self: *Editor, comptime fmt: []const u8, args: anytype) FatalError!void {
         const msg = try std.fmt.allocPrint(self.allocator, fmt, args);
         defer self.allocator.free(msg);
         try main.editor.sendMessage(msg);
