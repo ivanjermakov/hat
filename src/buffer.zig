@@ -428,7 +428,6 @@ pub const Buffer = struct {
         } else {
             try self.lineAlignIndent(self.cursor.row);
         }
-        try self.commitChanges();
     }
 
     pub fn clearSelection(self: *Buffer) void {
@@ -462,7 +461,8 @@ pub const Buffer = struct {
         log.trace(@This(), "line byte positions: {any}\n", .{self.line_positions.items});
     }
 
-    pub fn updateIndents(self: *Buffer) !void {
+    pub fn updateIndents(self: *Buffer) FatalError!void {
+        try self.reparse();
         const spans = if (self.ts_state) |ts_state| ts_state.indent.spans.items else return;
         self.indents.clearRetainingCapacity();
 

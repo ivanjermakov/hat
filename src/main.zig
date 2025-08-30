@@ -269,6 +269,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     try buffer.commitChanges();
                 } else if (normal_or_select and eql(u8, key, "=")) {
                     try buffer.changeAlignIndent();
+                    try buffer.commitChanges();
                     try editor.enterMode(.normal);
                 } else if (normal_or_select and eql(u8, key, "y")) {
                     buffer.copySelectionToClipboard() catch |e| log.err(@This(), "copy to clipboard error: {}\n", .{e});
