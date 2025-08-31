@@ -40,7 +40,8 @@ pub var std_out_writer: std.fs.File.Writer = undefined;
 
 pub var std_err_buf: [2 << 14]u8 = undefined;
 pub var std_err = std.fs.File.stderr();
-pub var std_err_writer: std.fs.File.Writer = undefined;
+pub var std_err_file_writer: std.fs.File.Writer = undefined;
+pub var std_err_writer: *std.io.Writer = undefined;
 
 pub var tty_in: std.fs.File = undefined;
 
@@ -57,10 +58,12 @@ pub fn main() !void {
     const allocator = if (builtin.mode == .Debug) debug_allocator.allocator() else std.heap.c_allocator;
 
     std_out_writer = std_out.writer(&std_out_buf);
-    std_err_writer = std_err.writer(&std_err_buf);
+    std_err_file_writer = std_err.writer(&std_err_buf);
+    std_err_writer = &std_err_file_writer.interface;
     tty_in = try std.fs.cwd().openFile("/dev/tty", .{});
 
-    log.init();
+    log.init(std_err_writer, null);
+    log.info(@This(), "hat started, pid: {}\n", .{std.c.getpid()});
 
     sig.registerAll();
 

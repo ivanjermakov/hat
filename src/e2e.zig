@@ -39,9 +39,10 @@ fn setupEditor() !Setup {
     const mock_stdout: File = .{ .handle = stdout_pipe[1] };
     main.std_out = mock_stdout;
     main.std_out_writer = mock_stdout.writer(&main.std_out_buf);
-    main.std_err_writer = main.std_out.writer(&main.std_err_buf);
+    main.std_err_file_writer = main.std_out.writer(&main.std_err_buf);
+    main.std_err_writer = &main.std_err_file_writer.interface;
 
-    const editor_thread = try std.Thread.spawn(.{}, startEditor, .{});
+    const editor_thread = try std.Thread.spawn(.{ .allocator = allocator }, startEditor, .{});
     return .{ .handle = editor_thread, .tty_in = mock_tty_in_write, .stdout = main.std_out };
 }
 
@@ -70,13 +71,13 @@ fn skipE2e() bool {
     return false;
 }
 
-test "e2e" {
-    log.init();
-    log.level = .warn;
+test "e2e open quit" {
     if (skipE2e()) return;
     try createTmpFiles();
 
     const setup = try setupEditor();
+
+    log.init(main.std_err_writer, .debug);
 
     sleep(100 * ms);
     try setup.tty_in.writeAll("q");
