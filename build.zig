@@ -35,7 +35,8 @@ pub fn build(b: *std.Build) void {
     const run_step = b.step("run", "");
     run_step.dependOn(&run.step);
 
-    const tests = b.addTest(.{ .root_module = root_module });
+    const test_runner: std.Build.Step.Compile.TestRunner = .{ .path = b.path("src/test_runner.zig"), .mode = .simple };
+    const tests = b.addTest(.{ .root_module = root_module, .test_runner = test_runner });
     linkLibs(b, tests);
     const run_tests = b.addRunArtifact(tests);
     const test_step = b.step("test", "");
@@ -45,7 +46,7 @@ pub fn build(b: *std.Build) void {
     check_step.dependOn(&exe.step);
     check_step.dependOn(&tests.step);
 
-    const cov_tests = b.addTest(.{ .root_module = root_module });
+    const cov_tests = b.addTest(.{ .root_module = root_module, .test_runner = test_runner });
     linkLibs(b, cov_tests);
     cov_tests.use_llvm = true;
     cov_tests.setExecCmd(&.{ "kcov", "--include-path=src/", b.pathJoin(&.{ b.install_path, "kcov" }), null });
