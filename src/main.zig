@@ -212,7 +212,6 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                         }
                     }
                     try buffer.changeInsertText(printable.items);
-                    editor.dirty.completion = true;
 
                     // global
                 } else if (eql(u8, key, "<up>")) {

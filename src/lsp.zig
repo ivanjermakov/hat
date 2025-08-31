@@ -295,7 +295,6 @@ pub const LspConnection = struct {
 
             for (buffer.pending_changes.items) |change| {
                 const event = try change.toLsp(self.allocator);
-                log.info(@This(), "change new text: {?any}\n", .{change.new_text});
                 try changes.append(self.allocator, event);
             }
             try self.sendNotification("textDocument/didChange", .{

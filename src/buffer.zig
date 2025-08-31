@@ -360,6 +360,7 @@ pub const Buffer = struct {
         try self.applyChange(change);
         try self.uncommitted_changes.append(self.allocator, change.*);
         try self.pending_changes.append(self.allocator, try change.clone(self.allocator));
+        main.editor.dirty.completion = true;
     }
 
     pub fn commitChanges(self: *Buffer) FatalError!void {
