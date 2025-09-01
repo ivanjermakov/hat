@@ -140,7 +140,7 @@ pub const LspConnection = struct {
     }
 
     pub fn lspLoop(self: *LspConnection) !void {
-        while (self.status != .Closed) {
+        while (self.status != .Closed and self.status != .Disconnecting) {
             try self.update();
             std.Thread.sleep(main.sleep_lsp_ns);
         }
@@ -504,6 +504,9 @@ pub const LspConnection = struct {
                 .CompletionList => |l| break :b l.items,
             }
         };
+
+        main.main_loop_mutex.lock();
+        defer main.main_loop_mutex.unlock();
         main.editor.completion_menu.updateItems(items) catch |e| {
             log.debug(@This(), "cmp menu update failed: {}\n", .{e});
         };

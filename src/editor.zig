@@ -254,6 +254,7 @@ pub const Editor = struct {
                         }
                     },
                     .Closed => {
+                        conn.thread.join();
                         conn.deinit();
                         _ = self.lsp_connections.remove(entry.key_ptr.*);
                     },
