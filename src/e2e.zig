@@ -77,7 +77,7 @@ test "e2e open quit" {
 
     const setup = try setupEditor();
 
-    log.init(main.std_err_writer, .debug);
+    log.init(main.std_err_writer, null);
 
     sleep(100 * ms);
     try setup.tty_in.writeAll("q");

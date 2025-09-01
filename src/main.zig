@@ -148,6 +148,13 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
             editor.dirty.input = false;
             editor.dotRepeatExecuted();
             while (editor.key_queue.items.len > 0) {
+                if (log.enabled(.debug)) {
+                    log.debug(@This(), "key queue: ", .{});
+                    for (editor.key_queue.items) |key| {
+                        log.errPrint("{f}", .{key});
+                    }
+                    log.errPrint("\n", .{});
+                }
                 const raw_key = editor.key_queue.items[0];
                 const key = try std.fmt.allocPrint(allocator, "{f}", .{raw_key});
                 defer allocator.free(key);
@@ -204,7 +211,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     var printable: std.array_list.Aligned(u21, null) = .empty;
                     defer printable.deinit(allocator);
                     keys_consumed = 0;
-                    // read all cosecutive printable keys in case this is a paste command
+                    // read all consecutive printable keys in case this is a paste command
                     while (true) {
                         const next_key = if (keys_consumed < editor.key_queue.items.len) editor.key_queue.items[keys_consumed] else null;
                         if (next_key != null and next_key.?.printable != null) {
@@ -392,6 +399,8 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     keys_consumed = 0;
                     break;
                 }
+
+                log.debug(@This(), "consuming: {} keys\n", .{keys_consumed});
                 for (0..keys_consumed) |_| {
                     switch (editor.dot_repeat_state) {
                         .inside, .commit_ready => {
