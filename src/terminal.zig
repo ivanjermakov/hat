@@ -522,7 +522,7 @@ pub fn parseAnsi(input: *std.array_list.Aligned(u8, null)) !inp.Key {
                     _ = input.orderedRemove(0);
                     _ = input.orderedRemove(0);
                 }
-            } else if (input.items.len > 0 and isPrintableAscii(input.items[0])) {
+            } else if (input.items.len > 0 and isPrintableAscii(input.items[0]) and input.items[0] != ' ') {
                 key.printable = input.items[0];
                 key.modifiers |= @intFromEnum(inp.Modifier.alt);
                 _ = input.orderedRemove(0);
@@ -617,6 +617,7 @@ test "parseAnsi" {
     try expectEqlKey("?\x01", "?", 1);
     try expectEqlKey("\x01", "<c-a>", 0);
     try expectEqlKey("\x1b", "<escape>", 0);
+    try expectEqlKey("\x1b ", "<escape>", 1);
     try expectEqlKey("\x1b[A", "<up>", 0);
     try expectEqlKey("\x1bOQ", "<f2>", 0);
     try expectEqlKey("\x1b\x4d\x1b", "<m-M>", 1);
