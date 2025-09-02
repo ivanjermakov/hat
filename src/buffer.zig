@@ -419,6 +419,7 @@ pub const Buffer = struct {
     }
 
     pub fn changeAlignIndent(self: *Buffer) !void {
+        if (self.ts_state == null) return;
         try self.updateIndents();
         if (self.selection) |selection| {
             const start: usize = @intCast(selection.start.row);
@@ -463,8 +464,8 @@ pub const Buffer = struct {
     }
 
     pub fn updateIndents(self: *Buffer) FatalError!void {
-        try self.reparse();
         const spans = if (self.ts_state) |ts_state| ts_state.indent.spans.items else return;
+        try self.reparse();
         self.indents.clearRetainingCapacity();
 
         var indent_bytes = std.AutoHashMap(usize, void).init(self.allocator);
