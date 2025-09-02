@@ -430,6 +430,14 @@ pub fn computeLayout(term_dims: Dimensions) Layout {
     };
 }
 
+/// Conversion of a sequence of bytes into a sequence of keys is not straightforward,
+/// because ANSI sequences are timing-dependent.
+/// For example, "\x1b=" if valid for both "<escape>=" and "<m-=>", but this ambiguity occurs if both keys are pressed
+/// in a single frame (with quick keyboard taps, when replaying macros, in simulated input within e2e tests).
+///
+/// For consistency, this function will never produce a key with .meta modifier, because of escape-or-meta
+/// timing ambiguity.
+/// If <m-*> mapping is desired, modify 0x1b switch clause, but beware of the shortcomings.
 pub fn parseAnsi(input: *std.array_list.Aligned(u8, null)) !inp.Key {
     if (input.items.len == 0) return error.NoInput;
     log.debug(@This(), "codes: {any}\n", .{input.items});
@@ -522,10 +530,6 @@ pub fn parseAnsi(input: *std.array_list.Aligned(u8, null)) !inp.Key {
                     _ = input.orderedRemove(0);
                     _ = input.orderedRemove(0);
                 }
-            } else if (input.items.len > 0 and isPrintableAscii(input.items[0]) and input.items[0] != ' ') {
-                key.printable = input.items[0];
-                key.modifiers |= @intFromEnum(inp.Modifier.alt);
-                _ = input.orderedRemove(0);
             } else {
                 key.code = .escape;
             }
@@ -618,9 +622,9 @@ test "parseAnsi" {
     try expectEqlKey("\x01", "<c-a>", 0);
     try expectEqlKey("\x1b", "<escape>", 0);
     try expectEqlKey("\x1b ", "<escape>", 1);
+    try expectEqlKey("\x1b=", "<escape>", 1);
     try expectEqlKey("\x1b[A", "<up>", 0);
     try expectEqlKey("\x1bOQ", "<f2>", 0);
-    try expectEqlKey("\x1b\x4d\x1b", "<m-M>", 1);
     try expectEqlKey("ф", "ф", 0);
     try expectEqlKey("🚧", "🚧", 0);
     try expectEqlKey("🚧🚧", "🚧", 4);
@@ -644,7 +648,7 @@ test "getKeys" {
     const keys = try getKeys(a, "aA0?\x01\x1b\x1b[A\x1bOQ\x1b\x4d");
     defer a.free(keys);
 
-    inline for (.{ "a", "A", "0", "?", "<c-a>", "<escape>", "<up>", "<f2>", "<m-M>" }, 0..) |expected, i| {
+    inline for (.{ "a", "A", "0", "?", "<c-a>", "<escape>", "<up>", "<f2>", "<escape>", "M" }, 0..) |expected, i| {
         const actual = try std.fmt.allocPrint(a, "{f}", .{keys[i]});
         defer a.free(actual);
         try std.testing.expectEqualStrings(expected, actual);
