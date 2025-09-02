@@ -96,7 +96,7 @@ test "e2e lsp completion accept" {
 
     sleep(100 * ms);
     try setup.tty_in.writeAll("ostd.debug.pri");
-    sleep(100 * ms);
+    sleep(200 * ms);
     try setup.tty_in.writeAll("\n();\x1b wq");
 
     setup.handle.join();
