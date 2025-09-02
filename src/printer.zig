@@ -1,4 +1,5 @@
 const std = @import("std");
+const File = std.fs.File;
 
 const buf = @import("buffer.zig");
 const co = @import("color.zig");
@@ -40,14 +41,13 @@ pub fn printBuffer(buffer: *buf.Buffer, writer: *std.io.Writer, highlight: ?High
     var row: i32 = start_row;
     while (row < end_row) {
         defer {
-            _ = writer.write("\x1b[0m") catch {};
-            _ = writer.write("\n") catch {};
+            if (row + 1 < buffer.line_positions.items.len) writer.writeAll("\n") catch {};
             last_attrs = null;
             row += 1;
         }
         if (row < 0 or row >= buffer.line_positions.items.len) continue;
+        defer writer.writeAll("\x1b[0m") catch {};
         const line = buffer.lineContent(@intCast(row));
-
         var byte: usize = buffer.lineStart(@intCast(row));
 
         for (line) |ch| {
@@ -67,22 +67,101 @@ pub fn printBuffer(buffer: *buf.Buffer, writer: *std.io.Writer, highlight: ?High
                 try co.attributes.write(ch_attrs, &attrs_writer);
             }
 
-            if (highlight != null and row == highlight.?.highlight_line) {
-                try co.attributes.write(co.attributes.selection, &attrs_writer);
-            }
+            const hi_line = highlight != null and row == highlight.?.highlight_line;
+            if (hi_line) try co.attributes.write(co.attributes.selection, &attrs_writer);
 
             attrs = attrs_writer.buffered();
             if (last_attrs == null or !std.mem.eql(u8, attrs, last_attrs.?)) {
-                _ = try writer.write("\x1b[0m");
-                _ = try writer.write(attrs);
+                if (buffer.ts_state != null) writer.writeAll("\x1b[0m") catch {};
+                try writer.writeAll(attrs);
                 @memcpy(&last_attrs_buf, &attrs_buf);
                 last_attrs = last_attrs_buf[0..attrs.len];
             }
-
             try uni.unicodeToBytesWrite(writer, &.{ch});
-
             byte += try std.unicode.utf8CodepointSequenceLength(ch);
         }
     }
     try writer.flush();
+}
+
+fn createTmpFiles() !void {
+    const tmp_file = try std.fs.cwd().createFile("/tmp/hat_e2e.zig", .{ .truncate = true });
+    defer tmp_file.close();
+    try tmp_file.writeAll(
+        \\const std = @import("std");
+        \\pub fn main() !void {
+        \\    std.debug.print("hello!\n", .{});
+        \\}
+        \\
+    );
+}
+
+fn mockIo() !File {
+    const stdout_pipe = try std.posix.pipe();
+    const mock_stdout_write: File = .{ .handle = stdout_pipe[1] };
+    const mock_stdout_read: File = .{ .handle = stdout_pipe[0] };
+    main.std_out = mock_stdout_write;
+    main.std_out_writer = mock_stdout_write.writer(&main.std_out_buf);
+    main.std_err_file_writer = main.std_err.writer(&main.std_err_buf);
+    main.std_err_writer = &main.std_err_file_writer.interface;
+    return mock_stdout_read;
+}
+
+test "printer no ts" {
+    try createTmpFiles();
+
+    main.std_err_file_writer = main.std_err.writer(&main.std_err_buf);
+    var log_writer = main.std_err_file_writer.interface;
+    log.init(&log_writer, null);
+
+    const allocator = std.testing.allocator;
+    var buffer = try buf.Buffer.init(allocator, "/tmp/hat_e2e.zig");
+    defer buffer.deinit();
+    if (buffer.ts_state) |*ts| ts.deinit();
+    buffer.ts_state = null;
+
+    var content_writer = std.io.Writer.Allocating.init(allocator);
+    defer content_writer.deinit();
+    const writer = &content_writer.writer;
+
+    try printBuffer(&buffer, writer, null);
+
+    try std.testing.expectEqualStrings(
+        "const std = @import(\"std\");\x1b[0m\n" ++
+            "pub fn main() !void {\x1b[0m\n" ++
+            "    std.debug.print(\"hello!\\n\", .{});\x1b[0m\n" ++
+            "}\x1b[0m\n" ++
+            "\x1b[0m",
+        content_writer.written(),
+    );
+}
+
+test "printer no ts highlight" {
+    try createTmpFiles();
+
+    main.std_err_file_writer = main.std_err.writer(&main.std_err_buf);
+    var log_writer = main.std_err_file_writer.interface;
+    log.init(&log_writer, null);
+
+    const allocator = std.testing.allocator;
+    var buffer = try buf.Buffer.init(allocator, "/tmp/hat_e2e.zig");
+    defer buffer.deinit();
+    if (buffer.ts_state) |*ts| ts.deinit();
+    buffer.ts_state = null;
+
+    var content_writer = std.io.Writer.Allocating.init(allocator);
+    defer content_writer.deinit();
+    const writer = &content_writer.writer;
+
+    try printBuffer(&buffer, writer, .{ .term_height = 10, .highlight_line = 2 });
+
+    try std.testing.expectEqualStrings(
+        "\n\n\n" ++
+            "const std = @import(\"std\");\x1b[0m\n" ++
+            "pub fn main() !void {\x1b[0m\n" ++
+            "\x1b[48;2;62;62;67m    std.debug.print(\"hello!\\n\", .{});\x1b[0m\n" ++
+            "}\x1b[0m\n" ++
+            "\x1b[0m",
+        content_writer.written(),
+    );
 }

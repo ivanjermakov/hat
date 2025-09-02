@@ -39,7 +39,7 @@ fn setupEditor() !Setup {
     const mock_stdout: File = .{ .handle = stdout_pipe[1] };
     main.std_out = mock_stdout;
     main.std_out_writer = mock_stdout.writer(&main.std_out_buf);
-    main.std_err_file_writer = main.std_out.writer(&main.std_err_buf);
+    main.std_err_file_writer = main.std_err.writer(&main.std_err_buf);
     main.std_err_writer = &main.std_err_file_writer.interface;
 
     const editor_thread = try std.Thread.spawn(.{ .allocator = allocator }, startEditor, .{});
@@ -118,7 +118,7 @@ test "e2e lsp completion accept" {
 test "e2e update indents" {
     main.std_err_file_writer = main.std_err.writer(&main.std_err_buf);
     var log_writer = main.std_err_file_writer.interface;
-    log.init(&log_writer, .debug);
+    log.init(&log_writer, null);
     if (skipE2e()) return;
     try createTmpFiles();
 

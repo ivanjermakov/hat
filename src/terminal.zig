@@ -433,7 +433,7 @@ pub fn computeLayout(term_dims: Dimensions) Layout {
 /// Conversion of a sequence of bytes into a sequence of keys is not straightforward,
 /// because ANSI sequences are timing-dependent.
 /// For example, "\x1b=" if valid for both "<escape>=" and "<m-=>", but this ambiguity occurs if both keys are pressed
-/// in a single frame (with quick keyboard taps, when replaying macros, in simulated input within e2e tests).
+/// in a single frame (with quick keyboard taps on in simulated input within e2e tests).
 ///
 /// For consistency, this function will never produce a key with .meta modifier, because of escape-or-meta
 /// timing ambiguity.
