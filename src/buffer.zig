@@ -1265,3 +1265,42 @@ test "undo/redo" {
     try buffer.updateRaw();
     try testing.expectEqualStrings("defabc", buffer.content_raw.items);
 }
+
+test "find" {
+    var buffer = try testSetupScratch(
+        \\abc
+        \\def
+        \\bca
+    );
+    defer main.editor.deinit();
+
+    const query = &.{ 'b', 'c' };
+
+    for (0..2) |_| {
+        try buffer.findNext(query, true);
+        try testing.expectEqualDeep(
+            Span{ .start = .{ .col = 1 }, .end = .{ .col = 3 } },
+            buffer.selection,
+        );
+
+        try buffer.findNext(query, true);
+        try testing.expectEqualDeep(
+            Span{ .start = .{ .row = 2, .col = 0 }, .end = .{ .row = 2, .col = 2 } },
+            buffer.selection,
+        );
+    }
+
+    for (0..2) |_| {
+        try buffer.findNext(query, false);
+        try testing.expectEqualDeep(
+            Span{ .start = .{ .col = 1 }, .end = .{ .col = 3 } },
+            buffer.selection,
+        );
+
+        try buffer.findNext(query, false);
+        try testing.expectEqualDeep(
+            Span{ .start = .{ .row = 2, .col = 0 }, .end = .{ .row = 2, .col = 2 } },
+            buffer.selection,
+        );
+    }
+}
