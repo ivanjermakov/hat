@@ -739,19 +739,17 @@ pub const Buffer = struct {
         defer self.allocator.free(spans);
         const cursor_pos = self.cursorToPos(self.cursor);
         var match: ?usize = null;
-        if (forward) {
-            for (0..spans.len) |i_| {
-                const i = if (forward) i_ else spans.len - i_ - 1;
-                if (if (forward) spans[i].start > cursor_pos else spans[i].start < cursor_pos) {
-                    match = i;
-                    break;
-                }
+        for (0..spans.len) |i_| {
+            const i = if (forward) i_ else spans.len - i_ - 1;
+            if (if (forward) spans[i].start > cursor_pos else spans[i].start < cursor_pos) {
+                match = i;
+                break;
+            }
+        } else {
+            if (spans.len > 0) {
+                match = if (forward) 0 else spans.len - 1;
             } else {
-                if (spans.len > 0) {
-                    match = if (forward) 0 else spans.len - 1;
-                } else {
-                    try main.editor.sendMessageFmt("no matches for {s}", .{query_b});
-                }
+                try main.editor.sendMessageFmt("no matches for {s}", .{query_b});
             }
         }
         if (match) |m| {
