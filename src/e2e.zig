@@ -84,3 +84,33 @@ test "e2e open quit" {
 
     setup.handle.join();
 }
+
+test "e2e lsp completion accept" {
+    main.std_err_file_writer = main.std_err.writer(&main.std_err_buf);
+    var log_writer = main.std_err_file_writer.interface;
+    log.init(&log_writer, null);
+    if (skipE2e()) return;
+    try createTmpFiles();
+
+    const setup = try setupEditor();
+
+    sleep(100 * ms);
+    try setup.tty_in.writeAll("ostd.debug.pri");
+    sleep(100 * ms);
+    try setup.tty_in.writeAll("\n();\x1b wq");
+
+    setup.handle.join();
+
+    const tmp_file = try std.fs.cwd().openFile("/tmp/hat_e2e.zig", .{});
+    defer tmp_file.close();
+    const tmp_file_content = try tmp_file.readToEndAlloc(allocator, std.math.maxInt(usize));
+    defer allocator.free(tmp_file_content);
+    try std.testing.expectEqualStrings(
+        \\const std = @import("std");
+        \\std.debug.print();
+        \\pub fn main() !void {
+        \\    std.debug.print("hello!\n", .{});
+        \\}
+        \\
+    , tmp_file_content);
+}
