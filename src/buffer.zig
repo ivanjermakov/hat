@@ -758,10 +758,7 @@ pub const Buffer = struct {
             const span = spans[m];
             try main.editor.sendMessageFmt("[{}/{}] {s}", .{ m + 1, spans.len, query_b });
             self.moveCursor(self.posToCursor(span.start));
-            self.selection = .{
-                .start = self.posToCursor(span.start),
-                .end = self.posToCursor(span.end - 1),
-            };
+            self.selection = .fromByteSpan(self, span);
         }
     }
 

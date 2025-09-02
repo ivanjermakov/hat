@@ -76,6 +76,13 @@ pub const Span = struct {
             .end = self.end.toLsp(),
         };
     }
+
+    pub fn fromByteSpan(buffer: *const buf.Buffer, byte_span: ByteSpan) Span {
+        return .{
+            .start = buffer.posToCursor(byte_span.start),
+            .end = buffer.posToCursor(byte_span.end),
+        };
+    }
 };
 
 pub const ByteSpan = struct {
