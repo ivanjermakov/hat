@@ -89,6 +89,8 @@ pub fn init(writer: *std.io.Writer, target_level: ?Level) void {
                     break;
                 }
             }
+        } else {
+            level = .none;
         }
     }
     info(@This(), "logging enabled, level: {f}\n", .{level});
