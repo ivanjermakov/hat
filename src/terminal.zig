@@ -15,6 +15,7 @@ const log = @import("log.zig");
 const main = @import("main.zig");
 const cmd = @import("ui/command_line.zig");
 const cmp = @import("ui/completion_menu.zig");
+const act = @import("ui/code_action.zig");
 const uni = @import("unicode.zig");
 
 const c = @cImport({
@@ -80,6 +81,7 @@ pub const Terminal = struct {
         try self.drawCompletionMenu(cmp_menu);
 
         if (main.editor.hover_contents) |hover| try self.drawHover(hover, layout.buffer);
+        if (main.editor.code_actions) |code_actions| try self.drawCodeActions(code_actions, layout.buffer);
         if (main.editor.command_line.command == null) try self.drawMessage();
         try self.updateCursor();
         if (main.editor.command_line.command != null) try self.drawCmd(&main.editor.command_line);
@@ -333,6 +335,34 @@ pub const Terminal = struct {
             doc_pos.col = @max(0, @as(i32, @intCast(self.dimensions.width)) - doc_width);
         }
         try self.drawOverlay(doc_lines.items, doc_pos);
+    }
+
+    fn drawCodeActions(self: *Terminal, code_actions: []const act.CodeAction, area: Area) !void {
+        var overlay_lines: std.array_list.Aligned([]const u8, null) = .empty;
+        defer {
+            for (overlay_lines.items) |l| self.allocator.free(l);
+            overlay_lines.deinit(self.allocator);
+        }
+        for (code_actions) |code_action| {
+            const line = try std.fmt.allocPrint(self.allocator, "[{c}] {s}", .{ code_action.hint, code_action.title });
+            try overlay_lines.append(self.allocator, line);
+        }
+        const buffer = main.editor.active_buffer;
+        const max_doc_width = 90;
+        var longest_line: usize = 0;
+        for (overlay_lines.items) |line| {
+            if (line.len > longest_line) longest_line = line.len;
+        }
+        var pos = buffer.cursor
+            .applyOffset(buffer.offset.negate())
+            .applyOffset(area.pos)
+            .applyOffset(.{ .row = 1 });
+        const overlay_width = @min(max_doc_width, longest_line);
+        if (pos.col + overlay_width > self.dimensions.width) {
+            pos.col = @max(0, @as(i32, @intCast(self.dimensions.width)) - overlay_width);
+        }
+        std.debug.print("{any}\n", .{overlay_lines.items});
+        try self.drawOverlay(overlay_lines.items, pos);
     }
 
     /// Draw a box on top of the editor's content, containing `lines`
