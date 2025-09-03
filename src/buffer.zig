@@ -558,7 +558,6 @@ pub const Buffer = struct {
         return Cursor{ .row = @intCast(i), .col = @intCast(pos - line_start) };
     }
 
-    /// Line character length (excl. newline character)
     pub fn lineLength(self: *const Buffer, row: usize) usize {
         if (row == 0) return self.line_positions.items[row] - 1;
         return self.line_positions.items[row] - self.line_positions.items[row - 1] - 1;
@@ -813,8 +812,7 @@ pub const Buffer = struct {
     }
 
     fn fullSpan(self: *Buffer) Span {
-        if (self.content.items.len == 0) return Span{ .start = .{}, .end = .{} };
-        return Span{ .start = .{}, .end = .{ .row = @intCast(self.line_positions.items.len) } };
+        return .fromByteSpan(self, .{ .start = 0, .end = self.content.items.len });
     }
 
     fn applyChange(self: *Buffer, change: *cha.Change) FatalError!void {
@@ -1060,6 +1058,31 @@ test "test buffer" {
     defer main.editor.deinit();
 
     try testing.expectEqualStrings("abc\n", buffer.content_raw.items);
+}
+
+test "cursorToBytePos" {
+    var buffer = try testSetupScratch("one");
+    defer main.editor.deinit();
+
+    try testing.expectEqualDeep(3, buffer.cursorToBytePos(.{ .col = 3 }));
+}
+
+test "cursorToBytePos newline" {
+    var buffer = try testSetupScratch("one\n");
+    defer main.editor.deinit();
+
+    try testing.expectEqualDeep(4, buffer.cursorToBytePos(.{ .row = 1 }));
+}
+
+test "textAt" {
+    var buffer = try testSetupScratch("one");
+    defer main.editor.deinit();
+
+    try testing.expectEqualSlices(
+        u21,
+        &.{ 'o', 'n', 'e' },
+        buffer.textAt(.{ .start = .{}, .end = .{ .col = 3 } }),
+    );
 }
 
 test "moveCursor" {
