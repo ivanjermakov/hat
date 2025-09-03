@@ -8,12 +8,13 @@ const log = @import("log.zig");
 const main = @import("main.zig");
 const ter = @import("terminal.zig");
 const uni = @import("unicode.zig");
+const cli = @import("cli.zig");
 
 pub const HighlightConfig = struct {
     term_height: usize,
     highlight_line: usize,
 
-    pub fn fromArgs(args: main.Args) !?HighlightConfig {
+    pub fn fromArgs(args: cli.Args) !?HighlightConfig {
         if (args.highlight_line == null) return null;
         return .{
             .highlight_line = args.highlight_line.?,

@@ -22,14 +22,7 @@ const uni = @import("unicode.zig");
 const mut = @import("mutex.zig");
 const per = @import("perf.zig");
 const cha = @import("change.zig");
-
-pub const Args = struct {
-    path: ?[]const u8 = null,
-    printer: bool = false,
-    read_only: bool = false,
-    highlight_line: ?usize = null,
-    term_height: ?usize = null,
-};
+const cli = @import("cli.zig");
 
 pub const sleep_ns: u64 = 16 * std.time.ns_per_ms;
 pub const sleep_lsp_ns: u64 = sleep_ns;
@@ -48,8 +41,6 @@ pub var tty_in: std.fs.File = undefined;
 pub var editor: edi.Editor = undefined;
 pub var term: ter.Terminal = undefined;
 
-pub var args: Args = .{};
-
 pub var main_loop_mutex: mut.Mutex = .{};
 
 pub fn main() !void {
@@ -65,33 +56,20 @@ pub fn main() !void {
     log.init(std_err_writer, null);
     log.info(@This(), "hat started, pid: {}\n", .{std.c.getpid()});
 
-    sig.registerAll();
+    const args = cli.Args.parse(allocator) catch |e| {
+        log.errPrint("invalid args: {}\n", .{e});
+        log.errPrint("{s}", .{cli.usage});
+        return e;
+    };
 
-    var cmd_args = std.process.args();
-    _ = cmd_args.skip();
-    while (cmd_args.next()) |arg| {
-        if (std.mem.eql(u8, arg, "--printer")) {
-            args.printer = true;
-            continue;
-        } else if (std.mem.eql(u8, arg, "--readonly") or std.mem.eql(u8, arg, "-r")) {
-            args.read_only = true;
-            continue;
-        } else if (std.mem.startsWith(u8, arg, "--highlight-line=")) {
-            const val = arg[17..];
-            const val_exp = try env.expand(allocator, val, std.posix.getenv);
-            args.highlight_line = try std.fmt.parseInt(usize, val_exp, 10) - 1;
-            continue;
-        } else if (std.mem.startsWith(u8, arg, "--term-height=")) {
-            const val = arg[14..];
-            const val_exp = try env.expand(allocator, val, std.posix.getenv);
-            args.term_height = try std.fmt.parseInt(usize, val_exp, 10);
-            continue;
-        }
-        args.path = @constCast(arg);
+    if (args.help) {
+        log.errPrint("{s}", .{cli.usage});
+        return;
     }
 
+    sig.registerAll();
+
     if (args.printer) {
-        args.read_only = true;
         var buffer = try buf.Buffer.init(allocator, args.path orelse return error.NoPath);
         defer buffer.deinit();
         try pri.printBuffer(
