@@ -38,6 +38,7 @@ pub var std_err_writer: *std.io.Writer = undefined;
 
 pub var tty_in: std.fs.File = undefined;
 
+
 pub var editor: edi.Editor = undefined;
 pub var term: ter.Terminal = undefined;
 
@@ -410,6 +411,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
             buffer.version += 1;
             buffer.clearDiagnostics();
             try buffer.reparse();
+            buffer.updateGitHunks() catch |e| log.err(@This(), "git hunk update error: {}", .{e});
             perf.parse = timer.lap();
             for (buffer.lsp_connections.items) |conn| {
                 conn.didChange(editor.active_buffer) catch |e| log.err(@This(), "did change LSP error: {}\n", .{e});

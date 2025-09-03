@@ -143,7 +143,7 @@ pub const Editor = struct {
         main.editor.dirty.draw = true;
     }
 
-    pub fn enterMode(self: *Editor, mode: Mode) FatalError!void {
+    pub fn enterMode(self: *Editor, mode: Mode) !void {
         self.resetHover();
 
         if (self.mode == mode) return;
