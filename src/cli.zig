@@ -7,19 +7,20 @@ pub const usage =
     \\  hat [options] [file]
     \\
     \\Options:
-    \\  -h, --help          Print this help message
     \\  -r, --readonly      Open buffer in read-only mode
     \\  -p, --printer       Printer mode: print [file] to stdout and exit
     \\  --highlight-line=R  Printer mode: highlight line R (1-based index)
     \\  --term-height=H     Printer mode: speicfy terminal height in rows
     \\                        offset buffer so that the highlight line is in
     \\                        the middle of the terminal
-    \\
+    \\  -h, --help          Print this help message
+    \\  -v, --version       Print version info and exit
 ;
 
 pub const Args = struct {
     path: ?[]const u8 = null,
     help: bool = false,
+    version: bool = false,
     printer: bool = false,
     read_only: bool = false,
     highlight_line: ?usize = null,
@@ -33,6 +34,9 @@ pub const Args = struct {
         while (cmd_args.next()) |arg| {
             if (eql(u8, arg, "-h") or eql(u8, arg, "--help")) {
                 args.help = true;
+                continue;
+            } else if (eql(u8, arg, "-v") or eql(u8, arg, "--version")) {
+                args.version = true;
                 continue;
             } else if (eql(u8, arg, "-p") or eql(u8, arg, "--printer")) {
                 args.printer = true;
@@ -57,3 +61,7 @@ pub const Args = struct {
         return args;
     }
 };
+
+pub fn version() !std.SemanticVersion {
+    return try .parse(@import("zon").version);
+}

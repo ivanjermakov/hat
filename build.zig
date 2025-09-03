@@ -1,4 +1,5 @@
 const std = @import("std");
+const manifest = @import("build.zig.zon");
 
 fn linkLibs(b: *std.Build, compile: *std.Build.Step.Compile) void {
     compile.linkLibC();
@@ -9,9 +10,12 @@ fn linkLibs(b: *std.Build, compile: *std.Build.Step.Compile) void {
 
     const regex = b.dependency("pcrez", .{});
     compile.root_module.addImport("regex", regex.module("pcrez"));
+
+    const zon = b.createModule(.{ .root_source_file = b.path("build.zig.zon") });
+    compile.root_module.addImport("zon", zon);
 }
 
-pub fn build(b: *std.Build) void {
+pub fn build(b: *std.Build) !void {
     b.reference_trace = 10;
 
     const target = b.standardTargetOptions(.{});

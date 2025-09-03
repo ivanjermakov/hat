@@ -63,7 +63,11 @@ pub fn main() !void {
     };
 
     if (args.help) {
-        log.errPrint("{s}", .{cli.usage});
+        log.errPrint("{s}\n", .{cli.usage});
+        return;
+    }
+    if (args.version) {
+        log.errPrint("{f}\n", .{try cli.version()});
         return;
     }
 
