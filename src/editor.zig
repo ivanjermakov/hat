@@ -35,6 +35,12 @@ pub const Config = struct {
     /// Char to denote terminal lines after end of buffer
     /// See vim's :h fillchars -> eob
     end_of_buffer_char: ?u8 = null,
+    number_line_mode: NumberLineMode = .absolute,
+};
+
+pub const NumberLineMode = enum {
+    absolute,
+    relative,
 };
 
 pub const Editor = struct {
