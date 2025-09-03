@@ -35,6 +35,12 @@ pub const Config = struct {
     /// Char to denote terminal lines after end of buffer
     /// See vim's :h fillchars -> eob
     end_of_buffer_char: ?u8 = null,
+    /// In buffers with TS indent support, autoindent inserted newline
+    indent_newline: bool = false,
+    /// In buffers with TS indent support, reindent current line upon insertion of one of `reindent_block_end_chars`
+    reindent_block_end: bool = false,
+
+    pub const reindent_block_end_chars: []const u21 = &.{ '}', ']', ')' };
 };
 
 pub const Editor = struct {
