@@ -350,7 +350,9 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                         buffer.findReferences() catch |e| log.err(@This(), "find references LSP error: {}\n", .{e});
                     } else if (editor.mode == .normal and eql(u8, multi_key, " n")) {
                         try buffer.renamePrompt();
-                    } else if (editor.mode == .normal and eql(u8, key, "r") and key2.printable != null) {
+                    } else if (editor.mode == .normal and eql(u8, multi_key, " f")) {
+                        try buffer.findSymbols();
+                    } else if (editor.mode == .normal and eql(u8, key, "r") and editor.key_queue.items[1].printable != null) {
                         const macro_name: u8 = @intCast(key2.printable.?);
                         try editor.startMacro(macro_name);
                     } else if (editor.mode == .normal and eql(u8, key, "@") and key2.printable != null) {

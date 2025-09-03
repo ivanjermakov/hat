@@ -19,6 +19,7 @@ pub const file_type = std.StaticStringMap(FileTypeConfig).initComptime(.{
             .lib_symbol = "tree_sitter_typescript",
             .highlight_query = TsConfig.highlight_query_from_nvim("ecma"),
             .indent_query = TsConfig.highlight_query_from_nvim("ecma"),
+            .symbol_query = TsConfig.symbol_query_from_aerial("ecma"),
         },
     } },
     .{ ".zig", FileTypeConfig{
@@ -27,7 +28,9 @@ pub const file_type = std.StaticStringMap(FileTypeConfig).initComptime(.{
     } },
 });
 
-const nvim_ts_path = "$HOME/.local/share/nvim/lazy/nvim-treesitter";
+const nvim_runtime_path = "$HOME/.local/share/nvim";
+const nvim_ts_path = nvim_runtime_path ++ "/lazy/nvim-treesitter";
+const nvim_aerial_path = nvim_runtime_path ++ "/lazy/aerial.nvim";
 
 pub const FileTypeConfig = struct {
     name: []const u8,
@@ -40,6 +43,7 @@ pub const TsConfig = struct {
     lib_symbol: []const u8,
     highlight_query: []const u8,
     indent_query: []const u8,
+    symbol_query: ?[]const u8,
 
     pub fn from_nvim(comptime name: []const u8) TsConfig {
         return .{
@@ -47,6 +51,7 @@ pub const TsConfig = struct {
             .lib_symbol = "tree_sitter_" ++ name,
             .highlight_query = highlight_query_from_nvim(name),
             .indent_query = indent_query_from_nvim(name),
+            .symbol_query = symbol_query_from_aerial(name),
         };
     }
 
@@ -77,6 +82,10 @@ pub const TsConfig = struct {
 
     pub fn indent_query_from_nvim(comptime name: []const u8) []const u8 {
         return nvim_ts_path ++ "/queries/" ++ name ++ "/indents.scm";
+    }
+
+    pub fn symbol_query_from_aerial(comptime name: []const u8) []const u8 {
+        return nvim_aerial_path ++ "/queries/" ++ name ++ "/aerial.scm";
     }
 };
 
