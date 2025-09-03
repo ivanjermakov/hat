@@ -22,8 +22,8 @@ pub const Level = enum(u8) {
             .@"error" => .red,
             .warn => .yellow,
             .info => .blue,
-            .debug => .white,
-            .trace => .bright_black,
+            .debug => .cyan,
+            .trace => .white,
         };
     }
 

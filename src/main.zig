@@ -149,11 +149,9 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
             editor.dotRepeatExecuted();
             while (editor.key_queue.items.len > 0) {
                 if (log.enabled(.debug)) {
-                    log.debug(@This(), "key queue: ", .{});
-                    for (editor.key_queue.items) |key| {
-                        log.errPrint("{f}", .{key});
-                    }
-                    log.errPrint("\n", .{});
+                    log.debug(@This(), "key queue: \"", .{});
+                    for (editor.key_queue.items) |key| log.errPrint("{f}", .{key});
+                    log.errPrint("\"\n", .{});
                 }
                 const raw_key = editor.key_queue.items[0];
                 const key = try std.fmt.allocPrint(allocator, "{f}", .{raw_key});
@@ -164,8 +162,10 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                 if (normal_or_select and key.len == 1 and std.ascii.isDigit(key[0])) {
                     const d = std.fmt.parseInt(usize, key, 10) catch unreachable;
                     repeat_count = (if (repeat_count) |rc| rc * 10 else 0) + d;
+                    log.debug(@This(), "repeat count: {?}\n", .{repeat_count});
                     const removed = editor.key_queue.orderedRemove(0);
                     try editor.recordMacroKey(removed);
+                    continue;
                 }
 
                 var keys_consumed: usize = 1;
@@ -373,7 +373,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                         try editor.startMacro(macro_name);
                     } else if (editor.mode == .normal and eql(u8, key, "@") and key2.printable != null) {
                         const macro_name: u8 = @intCast(key2.printable.?);
-                        try editor.replayMacro(macro_name);
+                        try editor.replayMacro(macro_name, keys_consumed);
                     } else if (normal_or_select and eql(u8, multi_key, "gk")) {
                         buffer.moveCursor(.{ .col = buffer.cursor.col });
                         buffer.centerCursor();
@@ -400,7 +400,11 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     break;
                 }
 
-                log.debug(@This(), "consuming: {} keys\n", .{keys_consumed});
+                if (log.enabled(.debug)) {
+                    log.debug(@This(), "consuming: {} keys: \"", .{keys_consumed});
+                    for (editor.key_queue.items[0..keys_consumed]) |k| log.errPrint("{f}", .{k});
+                    log.errPrint("\"\n", .{});
+                }
                 for (0..keys_consumed) |_| {
                     switch (editor.dot_repeat_state) {
                         .inside, .commit_ready => {

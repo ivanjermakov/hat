@@ -299,17 +299,19 @@ pub const Editor = struct {
         }
     }
 
-    pub fn replayMacro(self: *Editor, name: u8) !void {
+    pub fn replayMacro(self: *Editor, name: u8, keys_consumed: usize) !void {
         if (self.recording_macro) |m| {
             // replaying macros while recording a macro is a tricky case, skip it
             log.warn(@This(), "attempt to replay macro @{c} while recording @{}\n", .{ name, m });
             return;
         }
         if (self.macros.get(name)) |macro| {
-            log.debug(@This(), "replaying macro @{c}\n", .{name});
-            for (macro.items) |key| {
-                try self.key_queue.append(self.allocator, key);
+            if (log.enabled(.debug)) {
+                log.debug(@This(), "replaying macro @{c} \"", .{name});
+                for (macro.items) |k| log.errPrint("{f}", .{k});
+                log.errPrint("\"\n", .{});
             }
+            try self.key_queue.insertSlice(self.allocator, keys_consumed, macro.items);
         } else {
             try self.sendMessageFmt("no macro @{c}", .{name});
         }
