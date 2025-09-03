@@ -1,8 +1,8 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index d08f12d..8f80de2 100644
+index c3c8474..67a8a90 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
-@@ -158,14 +158,6 @@ pub const Buffer = struct {
+@@ -181,14 +181,6 @@ pub const Buffer = struct {
          _ = try self.syncFs();
  
          self.file_history_index = self.history_index;
@@ -17,7 +17,7 @@ index d08f12d..8f80de2 100644
      }
  
      pub fn moveCursor(self: *Buffer, new_cursor: Cursor) void {
-@@ -354,6 +346,11 @@ pub const Buffer = struct {
+@@ -385,6 +377,11 @@ pub const Buffer = struct {
          self.history_index = self.history.items.len - 1;
  
          main.editor.dotRepeatCommitReady();
@@ -29,16 +29,7 @@ index d08f12d..8f80de2 100644
      }
  
      pub fn changeInsertText(self: *Buffer, text: []const u21) FatalError!void {
-@@ -485,7 +482,7 @@ pub const Buffer = struct {
-         }
-     }
- 
--    pub fn undo(self: *Buffer) !void {
-+    pub fn undo(self: *Buffer) FatalError!void {
-         log.debug(@This(), "undo: {?}/{}\n", .{ self.history_index, self.history.items.len });
-         if (self.history_index) |h_idx| {
-             const hist_to_undo = self.history.items[h_idx].items;
-@@ -497,6 +494,11 @@ pub const Buffer = struct {
+@@ -514,6 +511,11 @@ pub const Buffer = struct {
                  self.moveCursor(inv_change.new_span.?.start);
              }
              self.history_index = if (h_idx > 0) h_idx - 1 else null;
@@ -50,7 +41,7 @@ index d08f12d..8f80de2 100644
          }
      }
  
-@@ -512,6 +514,11 @@ pub const Buffer = struct {
+@@ -529,6 +531,11 @@ pub const Buffer = struct {
              self.moveCursor(change.new_span.?.start);
          }
          self.history_index = redo_idx;
@@ -63,7 +54,7 @@ index d08f12d..8f80de2 100644
  
      pub fn textAt(self: *const Buffer, span: Span) []const u21 {
 diff --git a/src/editor.zig b/src/editor.zig
-index 8fded32..4a9794b 100644
+index a7b9259..bf1ae1a 100644
 --- a/src/editor.zig
 +++ b/src/editor.zig
 @@ -32,6 +32,7 @@ pub const DotRepeat = enum {
