@@ -140,3 +140,33 @@ test "e2e update indents" {
         \\
     , tmp_file_content);
 }
+
+test "e2e marco record replay count" {
+    if (!try e2eSetup()) return;
+    const setup = try setupEditor();
+
+    sleep(100 * ms);
+    try setup.tty_in.writeAll("rroabc\x1br");
+    try setup.tty_in.writeAll("5@r");
+    try setup.tty_in.writeAll(" wq");
+
+    setup.handle.join();
+
+    const tmp_file = try std.fs.cwd().openFile("/tmp/hat_e2e.zig", .{});
+    defer tmp_file.close();
+    const tmp_file_content = try tmp_file.readToEndAlloc(allocator, std.math.maxInt(usize));
+    defer allocator.free(tmp_file_content);
+    try std.testing.expectEqualStrings(
+        \\const std = @import("std");
+        \\abc
+        \\abc
+        \\abc
+        \\abc
+        \\abc
+        \\abc
+        \\pub fn main() !void {
+        \\    std.debug.print("hello!\n", .{});
+        \\}
+        \\
+    , tmp_file_content);
+}
