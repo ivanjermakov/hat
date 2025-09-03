@@ -407,12 +407,14 @@ pub const Editor = struct {
         self.dot_repeat_state = .outside;
     }
 
-    pub fn dotRepeat(self: *Editor) FatalError!void {
+    pub fn dotRepeat(self: *Editor, keys_consumed: usize) FatalError!void {
         if (self.dot_repeat_input.items.len > 0) {
-            log.debug(@This(), "dot repeat of {any}\n", .{self.dot_repeat_input.items});
-            for (self.dot_repeat_input.items) |key| {
-                try self.key_queue.append(self.allocator, key);
+            if (log.enabled(.debug)) {
+                log.debug(@This(), "dot repeat of \"", .{});
+                for (self.dot_repeat_input.items) |k| log.errPrint("{f}", .{k});
+                log.errPrint("\"\n", .{});
             }
+            try self.key_queue.insertSlice(self.allocator, keys_consumed, self.dot_repeat_input.items);
             self.dot_repeat_state = .executing;
         }
     }
