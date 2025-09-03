@@ -37,7 +37,7 @@ pub const Level = enum(u8) {
             .debug => "dbg",
             .trace => "trc",
         };
-        try writer.print("{f}{s}{f}", .{self.ansi(), str, co.AnsiColor.reset});
+        try writer.print("{f}{s}{f}", .{ self.ansi(), str, co.AnsiColor.reset });
     }
 };
 
@@ -77,8 +77,9 @@ pub fn enabled(lvl: Level) bool {
     return @intFromEnum(lvl) <= @intFromEnum(level);
 }
 
-pub fn init(writer: *std.io.Writer, target_level: ?Level) void {
-    log_writer = writer;
+pub fn init(writer: ?*std.io.Writer, target_level: ?Level) void {
+    if (writer) |w| log_writer = w;
+
     if (target_level) |tl| {
         level = tl;
     } else {

@@ -11,6 +11,25 @@ const log = @import("log.zig");
 const main = @import("main.zig");
 const ter = @import("terminal.zig");
 
+fn e2eSetup() !bool {
+    main.std_err_file_writer = main.std_err.writer(&main.std_err_buf);
+    log.log_writer = &main.std_err_file_writer.interface;
+    log.init(log.log_writer, null);
+    if (e2eSkip()) return false;
+    try createTmpFiles();
+    return true;
+}
+
+fn e2eSkip() bool {
+    if (std.posix.getenv("SKIP_E2E")) |skip| {
+        if (std.mem.eql(u8, skip, "true")) {
+            log.warn(@This(), "skipped e2e test\n", .{});
+            return true;
+        }
+    }
+    return false;
+}
+
 fn createTmpFiles() !void {
     const tmp_file = try std.fs.cwd().createFile("/tmp/hat_e2e.zig", .{ .truncate = true });
     defer tmp_file.close();
@@ -61,20 +80,8 @@ fn startEditor() !void {
     defer main.editor.disconnect() catch {};
 }
 
-fn skipE2e() bool {
-    if (std.posix.getenv("SKIP_E2E")) |skip| {
-        if (std.mem.eql(u8, skip, "true")) {
-            log.warn(@This(), "skipped e2e test\n", .{});
-            return true;
-        }
-    }
-    return false;
-}
-
 test "e2e open quit" {
-    if (skipE2e()) return;
-    try createTmpFiles();
-
+    if (!try e2eSetup()) return;
     const setup = try setupEditor();
 
     log.init(main.std_err_writer, null);
@@ -86,12 +93,7 @@ test "e2e open quit" {
 }
 
 test "e2e lsp completion accept" {
-    main.std_err_file_writer = main.std_err.writer(&main.std_err_buf);
-    var log_writer = main.std_err_file_writer.interface;
-    log.init(&log_writer, null);
-    if (skipE2e()) return;
-    try createTmpFiles();
-
+    if (!try e2eSetup()) return;
     const setup = try setupEditor();
 
     sleep(100 * ms);
@@ -116,12 +118,7 @@ test "e2e lsp completion accept" {
 }
 
 test "e2e update indents" {
-    main.std_err_file_writer = main.std_err.writer(&main.std_err_buf);
-    var log_writer = main.std_err_file_writer.interface;
-    log.init(&log_writer, null);
-    if (skipE2e()) return;
-    try createTmpFiles();
-
+    if (!try e2eSetup()) return;
     const setup = try setupEditor();
 
     sleep(100 * ms);
