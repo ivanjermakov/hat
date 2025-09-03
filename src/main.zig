@@ -427,6 +427,14 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
             term.draw() catch |e| log.err(@This(), "draw error: {}\n", .{e});
         } else if (editor.dirty.cursor) {
             editor.dirty.cursor = false;
+            term.updateCursor() catch |e| log.err(@This(), "update cursor error: {}", .{e});
+
+            if (buffer.highlights.items.len > 0) {
+                buffer.highlights.clearRetainingCapacity();
+                // redraw next frame to clear invalid highlights
+                editor.dirty.draw = true;
+            }
+            buffer.highlight() catch |e| log.err(@This(), "highlight LSP error: {}", .{e});
             term.updateCursor() catch |e| log.err(@This(), "update cursor error: {}\n", .{e});
         }
         perf.draw = timer.lap();
