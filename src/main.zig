@@ -373,7 +373,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                         try editor.startMacro(macro_name);
                     } else if (editor.mode == .normal and eql(u8, key, "@") and key2.printable != null) {
                         const macro_name: u8 = @intCast(key2.printable.?);
-                        try editor.replayMacro(macro_name, keys_consumed);
+                        for (0..@intCast(repeat_or_1)) |_| try editor.replayMacro(macro_name, keys_consumed);
                     } else if (normal_or_select and eql(u8, multi_key, "gk")) {
                         buffer.moveCursor(.{ .col = buffer.cursor.col });
                         buffer.centerCursor();
