@@ -375,31 +375,37 @@ pub const Editor = struct {
 
     pub fn dotRepeatStart(self: *Editor) void {
         if (self.dot_repeat_state == .executing) return;
+        log.trace(@This(), "dot repeat start\n", .{});
         self.dot_repeat_input_uncommitted.clearRetainingCapacity();
         self.dot_repeat_state = .inside;
     }
 
     pub fn dotRepeatInside(self: *Editor) void {
         if (self.dot_repeat_state == .executing) return;
+        log.trace(@This(), "dot repeat outside\n", .{});
         self.dot_repeat_state = .inside;
     }
 
     pub fn dotRepeatOutside(self: *Editor) void {
         if (self.dot_repeat_state == .executing) return;
+        log.trace(@This(), "dot repeat outside\n", .{});
         self.dot_repeat_state = .outside;
     }
 
     pub fn dotRepeatExecuted(self: *Editor) void {
+        log.trace(@This(), "dot repeat commit executed\n", .{});
         if (self.dot_repeat_state == .executing) self.dot_repeat_state = .outside;
     }
 
     pub fn dotRepeatCommitReady(self: *Editor) void {
         if (self.dot_repeat_state == .executing) return;
         self.dot_repeat_state = .commit_ready;
+        log.trace(@This(), "dot repeat commit ready\n", .{});
     }
 
     pub fn dotRepeatCommit(self: *Editor) FatalError!void {
         std.debug.assert(self.dot_repeat_state == .commit_ready);
+        log.trace(@This(), "dot repeat commit\n", .{});
 
         self.dot_repeat_input.clearRetainingCapacity();
         try self.dot_repeat_input.appendSlice(self.allocator, self.dot_repeat_input_uncommitted.items);

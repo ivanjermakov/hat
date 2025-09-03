@@ -440,7 +440,7 @@ pub fn computeLayout(term_dims: Dimensions) Layout {
 /// If <m-*> mapping is desired, modify 0x1b switch clause, but beware of the shortcomings.
 pub fn parseAnsi(input: *std.array_list.Aligned(u8, null)) !inp.Key {
     if (input.items.len == 0) return error.NoInput;
-    log.debug(@This(), "codes: {any}\n", .{input.items});
+    log.trace(@This(), "codes: {any}\n", .{input.items});
     var key: inp.Key = .{};
     const code = input.items[0];
     switch (code) {
@@ -569,7 +569,7 @@ pub fn getKeys(allocator: Allocator, codes: []const u8) ![]inp.Key {
             log.debug(@This(), "{}\n", .{e});
             continue;
         };
-        log.debug(@This(), "key: \"{f}\"\n", .{key});
+        log.trace(@This(), "key: \"{f}\"\n", .{key});
         try keys.append(allocator, key);
     }
     return try keys.toOwnedSlice(allocator);

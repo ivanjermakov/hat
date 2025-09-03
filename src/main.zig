@@ -319,7 +319,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                         editor.openBuffer(path) catch |e| log.err(@This(), "open buffer {s} error: {}\n", .{ path, e });
                     }
                 } else if (editor.mode == .normal and eql(u8, key, ".")) {
-                    try editor.dotRepeat();
+                    try editor.dotRepeat(keys_consumed);
                 } else if (editor.mode == .normal and eql(u8, key, "/")) {
                     editor.command_line.activate(.find);
                 } else if (editor.mode == .normal and eql(u8, key, "n")) {
