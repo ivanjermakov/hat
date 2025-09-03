@@ -1,20 +1,20 @@
 ## Files
 
-- src/main.zig: entrypoint, update loop, key mappings
-- src/file_type.zig: per-filetype configuration of LSP clients, Tree-sitter parser, other user preferences
-- src/lsp.zig: LSP clients configuration & interface
-- src/editor.zig: editor lifecycle, cross-buffer actions
-- src/buffer.zig: buffer manipulation, edit engine, change history
-- src/core.zig: common structs
-- src/terminal.zig: tty input read & parse, tty output (draw to terminal)
-- src/ts.zig: Tree-sitter C library wrapper
-- src/ui/*: dir with UI components used in `Terminal.draw`
-- src/printer.zig: one-shot buffer printer, similar to `cat`/`bat`
-- src/color.zig: helper in theming with ANSI codes
-- src/input.zig: key abstraction
-- src/external.zig: helper in running external programs
-- src/cli.zig: CLI arg parse
-- src/test_runner.zig: custom test runner
+- `src/main.zig`: entrypoint, update loop, key mappings
+- `src/file_type.zig`: per-filetype configuration of LSP clients, Tree-sitter parser, other user preferences
+- `src/lsp.zig`: LSP clients configuration & interface
+- `src/editor.zig`: editor lifecycle, cross-buffer actions
+- `src/buffer.zig`: buffer manipulation, edit engine, change history
+- `src/core.zig`: common structs
+- `src/terminal.zig`: tty input read & parse, tty output (draw to terminal)
+- `src/ts.zig`: Tree-sitter C library wrapper
+- `src/ui/*`: dir with UI components used in `Terminal.draw`
+- `src/printer.zig`: one-shot buffer printer, similar to `cat`/`bat`
+- `src/color.zig`: helper in theming with ANSI codes
+- `src/input.zig`: key abstraction
+- `src/external.zig`: helper in running external programs
+- `src/cli.zig`: CLI arg parse
+- `src/test_runner.zig`: custom test runner
 
 ## Design
 
@@ -75,3 +75,68 @@ Run tests:
 ```bash
 zig build test
 ```
+
+## FAQ
+
+### How to customize key mappings?
+
+See `src/main.zig`, change or add a new clause with your key mapping:
+
+```zig
+} else if (editor.mode == .normal and eql(u8, key, "G")) {
+    try editor.sendMessage("G pressed!");
+```
+
+Note that ordering is important, first matching condition consumes the key(s).
+
+### How to customize color theme?
+
+See `attributes` and `color` in `src/color.zig`.
+
+### How to set up a custom file type?
+
+Add a new entry in `file_type` in `file_type.zig`.
+For Tree-sitter features, initialize `ts: TsConfig`.
+
+Example configuration for Rust using `nvim-treesitter` queries:
+
+```zig
+.{ ".rs", FileTypeConfig{
+    .name = "rust",
+    .ts = TsConfig.from_nvim("rust"),
+} },
+```
+
+### How to set up a custom LSP client?
+
+- Add a new entry in `file_type` in `file_type.zig` for your filetype if missing.
+- Add a new entry in `lsp_config` in `lsp.zig` with your filetype.
+
+Example configuration for Rust and `rust-analyzer`:
+
+```zig
+.{ ".rs", FileTypeConfig{
+    .name = "rust",
+    .ts = TsConfig.from_nvim("rust"),
+} },
+```
+
+```zig
+LspConfig{
+    .name = "rust-analyzer",
+    .cmd = &.{ "rust-analyzer" },
+    .file_types = &.{"rust"},
+},
+```
+
+### How to add a new picker, similar to "find in files"?
+
+See implementation of `Editor.findInFiles`.
+Hat spawns `fzf` with piped input and handles output as selected item.
+
+### How to add a new UI element, for example status line?
+
+- See `Terminal.draw` and `Terminal.drawOverlay`
+- If some custom data is needed, expand the `Editor` struct, similar to `Editor.completion_menu`
+- To make it performant, make sure to update it only when necessary, using `Editor.dirty` flags
+- When layout changes are needed, update `Terminal.computeLayout` accordingly

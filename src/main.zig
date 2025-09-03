@@ -219,7 +219,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     editor.dismissMessage();
                     repeat_count = null;
                 } else if (normal_or_select and eql(u8, key, "<c-c>")) {
-                    editor.sendMessage("press q to close buffer") catch {};
+                    try editor.sendMessage("press q to close buffer");
                 } else if (normal_or_select and eql(u8, key, "<c-z>")) {
                     // raise SIGTSTP to suspend hat. SIGCONT is handled by `sig.zig` once hat is fg'ed
                     term.deinit();
