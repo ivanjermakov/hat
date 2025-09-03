@@ -86,7 +86,7 @@ pub fn printBuffer(buffer: *buf.Buffer, writer: *std.io.Writer, highlight: ?High
 }
 
 fn createTmpFiles() !void {
-    const tmp_file = try std.fs.cwd().createFile("/tmp/hat_e2e.zig", .{ .truncate = true });
+    const tmp_file = try std.fs.cwd().createFile("/tmp/hat_e2e.txt", .{ .truncate = true });
     defer tmp_file.close();
     try tmp_file.writeAll(
         \\const std = @import("std");
@@ -97,17 +97,6 @@ fn createTmpFiles() !void {
     );
 }
 
-fn mockIo() !File {
-    const stdout_pipe = try std.posix.pipe();
-    const mock_stdout_write: File = .{ .handle = stdout_pipe[1] };
-    const mock_stdout_read: File = .{ .handle = stdout_pipe[0] };
-    main.std_out = mock_stdout_write;
-    main.std_out_writer = mock_stdout_write.writer(&main.std_out_buf);
-    main.std_err_file_writer = main.std_err.writer(&main.std_err_buf);
-    main.std_err_writer = &main.std_err_file_writer.interface;
-    return mock_stdout_read;
-}
-
 test "printer no ts" {
     try createTmpFiles();
 
@@ -116,7 +105,7 @@ test "printer no ts" {
     log.init(&log_writer, null);
 
     const allocator = std.testing.allocator;
-    var buffer = try buf.Buffer.init(allocator, "/tmp/hat_e2e.zig");
+    var buffer = try buf.Buffer.init(allocator, "/tmp/hat_e2e.txt");
     defer buffer.deinit();
     if (buffer.ts_state) |*ts| ts.deinit();
     buffer.ts_state = null;
@@ -145,7 +134,7 @@ test "printer no ts highlight" {
     log.init(&log_writer, null);
 
     const allocator = std.testing.allocator;
-    var buffer = try buf.Buffer.init(allocator, "/tmp/hat_e2e.zig");
+    var buffer = try buf.Buffer.init(allocator, "/tmp/hat_e2e.txt");
     defer buffer.deinit();
     if (buffer.ts_state) |*ts| ts.deinit();
     buffer.ts_state = null;
