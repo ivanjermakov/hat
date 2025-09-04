@@ -331,7 +331,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                             const indent = buf.lineIndentSpaces(buffer.lineContent(@intCast(buffer.cursor.row + 1)));
                             const span = Span{
                                 .start = pos,
-                                .end = buffer.posToCursor(buffer.cursorToBytePos(pos) + 1 + indent),
+                                .end = buffer.posToCursor(buffer.cursorToPos(pos) + 1 + indent),
                             };
                             var change = try cha.Change.initReplace(allocator, buffer, span, &.{' '});
                             try buffer.appendChange(&change);
@@ -414,7 +414,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                                     .row = buffer.cursor.row,
                                     .col = @intCast(buffer.lineLength(@intCast(buffer.cursor.row))),
                                 };
-                                const span = Span{ .start = pos, .end = buffer.posToCursor(buffer.cursorToBytePos(pos) + 1) };
+                                const span = Span{ .start = pos, .end = buffer.posToCursor(buffer.cursorToPos(pos) + 1) };
                                 var change = try cha.Change.initDelete(allocator, buffer, span);
                                 try buffer.appendChange(&change);
                             }
