@@ -28,7 +28,6 @@ pub const Mutex = struct {
         if (log.enabled(.debug) and locked_for > report_lock_threshold_ns) {
             log.debug(@This(), "locked for {}us\n", .{locked_for / std.time.ns_per_us});
         }
-        self.locked_at = null;
     }
 };
 

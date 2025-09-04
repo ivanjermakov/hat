@@ -53,20 +53,16 @@ pub fn findInFiles(allocator: Allocator) !FindResult {
 }
 
 pub fn pickBuffer(allocator: Allocator, buffers: []const *buf.Buffer) ![]const u8 {
-    var bufs = std.array_list.Managed(u8).init(allocator);
+    var bufs: std.io.Writer.Allocating = .init(allocator);
+    defer bufs.deinit();
     for (buffers) |buffer| {
-        const s = try std.fmt.allocPrint(
-            allocator,
+        try bufs.writer.print(
             "{s}:{}:{}\n",
             .{ buffer.path, buffer.cursor.row + 1, buffer.cursor.col + 1 },
         );
-        defer allocator.free(s);
-        try bufs.appendSlice(s);
     }
-    const bufs_str = try bufs.toOwnedSlice();
-    defer allocator.free(bufs_str);
 
-    const out = try ext.runExternalWait(allocator, fzf_cmd_with_preview, bufs_str, null);
+    const out = try ext.runExternalWait(allocator, fzf_cmd_with_preview, bufs.written(), null);
     defer allocator.free(out);
     if (out.len == 0) return error.EmptyOut;
     var iter = std.mem.splitScalar(u8, out, ':');
@@ -74,18 +70,16 @@ pub fn pickBuffer(allocator: Allocator, buffers: []const *buf.Buffer) ![]const u
 }
 
 pub fn pickLspLocation(allocator: Allocator, locations: []const lsp.types.Location) !FindResult {
-    var bufs = std.array_list.Managed(u8).init(allocator);
+    var bufs: std.io.Writer.Allocating = .init(allocator);
+    defer bufs.deinit();
     for (locations) |location| {
         const start = location.range.start;
         const path = try uri.toPath(allocator, location.uri);
         defer allocator.free(path);
-        const s = try std.fmt.allocPrint(
-            allocator,
+        try bufs.writer.print(
             "{s}:{}:{}:\n",
             .{ path, start.line + 1, start.character + 1 },
         );
-        defer allocator.free(s);
-        try bufs.appendSlice(s);
     }
     const bufs_str = try bufs.toOwnedSlice();
     defer allocator.free(bufs_str);

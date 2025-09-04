@@ -1,8 +1,8 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index ea5bb1c..fda9fd4 100644
+index c3c8474..39f2977 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
-@@ -659,6 +659,12 @@ pub const Buffer = struct {
+@@ -666,6 +666,12 @@ pub const Buffer = struct {
          try self.commitChanges();
      }
  
@@ -16,10 +16,10 @@ index ea5bb1c..fda9fd4 100644
          if (self.selection) |selection| {
              try clp.write(self.allocator, self.rawTextAt(selection));
 diff --git a/src/editor.zig b/src/editor.zig
-index 33b09f3..ac5a9af 100644
+index a7b9259..e87fdfb 100644
 --- a/src/editor.zig
 +++ b/src/editor.zig
-@@ -150,7 +150,7 @@ pub const Editor = struct {
+@@ -143,7 +143,7 @@ pub const Editor = struct {
          main.editor.dirty.draw = true;
      }
  
@@ -29,7 +29,7 @@ index 33b09f3..ac5a9af 100644
  
          if (self.mode == mode) return;
 diff --git a/src/lsp.zig b/src/lsp.zig
-index 1ff7f63..0093c13 100644
+index bd45888..be732ec 100644
 --- a/src/lsp.zig
 +++ b/src/lsp.zig
 @@ -106,6 +106,7 @@ pub const LspConnection = struct {
@@ -40,7 +40,7 @@ index 1ff7f63..0093c13 100644
              },
              .workspace = .{
                  .workspaceFolders = true,
-@@ -200,6 +201,8 @@ pub const LspConnection = struct {
+@@ -198,6 +199,8 @@ pub const LspConnection = struct {
                          try self.handleHoverResponse(arena.allocator(), response_result);
                      } else if (std.mem.eql(u8, method, "textDocument/rename")) {
                          try self.handleRenameResponse(arena.allocator(), response_result);
@@ -49,7 +49,7 @@ index 1ff7f63..0093c13 100644
                      }
                  },
                  .notification => |notif| {
-@@ -251,6 +254,18 @@ pub const LspConnection = struct {
+@@ -249,6 +252,18 @@ pub const LspConnection = struct {
          });
      }
  
@@ -68,7 +68,7 @@ index 1ff7f63..0093c13 100644
      pub fn rename(self: *LspConnection, new_name: []const u8) !void {
          if ((self.server_init orelse return).value.capabilities.renameProvider == null) return;
          const buffer = main.editor.active_buffer;
-@@ -534,6 +549,20 @@ pub const LspConnection = struct {
+@@ -537,6 +552,20 @@ pub const LspConnection = struct {
          try main.editor.applyWorkspaceEdit(result.value);
      }
  
@@ -87,18 +87,18 @@ index 1ff7f63..0093c13 100644
 +    }
 +
      fn handleNotification(self: *LspConnection, arena: Allocator, notif: lsp.JsonRPCMessage.Notification) !void {
-         _ = self;
          log.trace(@This(), "notification: {s}\n", .{notif.method});
+         if (std.mem.eql(u8, notif.method, "window/logMessage")) {
 diff --git a/src/main.zig b/src/main.zig
-index 34ec556..27b34f1 100644
+index 69bf3f9..0b4440a 100644
 --- a/src/main.zig
 +++ b/src/main.zig
-@@ -343,6 +343,8 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+@@ -350,6 +350,8 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                          buffer.findReferences() catch |e| log.err(@This(), "find references LSP error: {}\n", .{e});
                      } else if (editor.mode == .normal and eql(u8, multi_key, " n")) {
                          try buffer.renamePrompt();
 +                    } else if (editor.mode == .normal and eql(u8, multi_key, " l")) {
 +                        buffer.format() catch |e| log.err(@This(), "format LSP error: {}", .{e});
-                     } else if (editor.mode == .normal and eql(u8, key, "r") and editor.key_queue.items[1].printable != null) {
-                         const macro_name: u8 = @intCast(key2.printable.?[0]);
+                     } else if (editor.mode == .normal and eql(u8, key, "r") and key2.printable != null) {
+                         const macro_name: u8 = @intCast(key2.printable.?);
                          try editor.startMacro(macro_name);

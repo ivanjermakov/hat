@@ -11,6 +11,26 @@ const nvim_runtime_path = "$HOME/.local/share/nvim";
 const nvim_ts_path = nvim_runtime_path ++ "/lazy/nvim-treesitter";
 const nvim_aerial_path = nvim_runtime_path ++ "/lazy/aerial.nvim";
 
+pub const file_type = std.StaticStringMap(FileTypeConfig).initComptime(.{
+    .{ ".c", FileTypeConfig{
+        .name = "c",
+        .ts = TsConfig.from_nvim("c"),
+    } },
+    .{ ".ts", FileTypeConfig{
+        .name = "typescript",
+        .ts = .{
+            .lib_path = TsConfig.lib_path_from_nvim("typescript"),
+            .lib_symbol = "tree_sitter_typescript",
+            .highlight_query = TsConfig.highlight_query_from_nvim("ecma"),
+            .indent_query = TsConfig.highlight_query_from_nvim("ecma"),
+        },
+    } },
+    .{ ".zig", FileTypeConfig{
+        .name = "zig",
+        .ts = TsConfig.from_nvim("zig"),
+    } },
+});
+
 pub const FileTypeConfig = struct {
     name: []const u8,
     ts: ?TsConfig = null,
@@ -69,24 +89,3 @@ pub const TsConfig = struct {
 };
 
 pub const plain: FileTypeConfig = .{ .name = "plain", .ts = null };
-
-pub const file_type = std.StaticStringMap(FileTypeConfig).initComptime(.{
-    .{ ".c", FileTypeConfig{
-        .name = "c",
-        .ts = TsConfig.from_nvim("c"),
-    } },
-    .{ ".ts", FileTypeConfig{
-        .name = "typescript",
-        .ts = .{
-            .lib_path = TsConfig.lib_path_from_nvim("typescript"),
-            .lib_symbol = "tree_sitter_typescript",
-            .highlight_query = TsConfig.highlight_query_from_nvim("ecma"),
-            .indent_query = TsConfig.highlight_query_from_nvim("ecma"),
-            .symbol_query = TsConfig.symbol_query_from_aerial("typescript"),
-        },
-    } },
-    .{ ".zig", FileTypeConfig{
-        .name = "zig",
-        .ts = TsConfig.from_nvim("zig"),
-    } },
-});

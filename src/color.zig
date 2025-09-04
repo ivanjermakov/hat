@@ -37,12 +37,14 @@ pub const AnsiColor = enum(u8) {
     bright_magenta,
     bright_cyan,
     bright_white,
-
-    pub const reset = "\x1b[0m";
+    reset,
 
     pub fn format(self: AnsiColor, writer: *std.io.Writer) std.io.Writer.Error!void {
-        const escapeCode = "\x1b[38;5;";
-        try writer.print("{s}{}{s}", .{ escapeCode, @intFromEnum(self), "m" });
+        if (self == .reset) {
+            try writer.writeAll("\x1b[0m");
+        } else {
+            try writer.print("\x1b[38;5;{}m", .{@intFromEnum(self)});
+        }
     }
 };
 

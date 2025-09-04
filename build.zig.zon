@@ -1,6 +1,6 @@
 .{
     .name = .hat,
-    .version = "0.0.0",
+    .version = "0.1.0",
     .fingerprint = 0x920bac492a5fa19e,
     .minimum_zig_version = "0.15.1",
     .dependencies = .{

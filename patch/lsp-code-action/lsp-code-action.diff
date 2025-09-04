@@ -1,19 +1,20 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index ea5bb1c..3d513cb 100644
+index c3c8474..8d4dd07 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
-@@ -23,8 +23,9 @@ const lsp = @import("lsp.zig");
+@@ -23,9 +23,10 @@ const lsp = @import("lsp.zig");
  const main = @import("main.zig");
  const ter = @import("terminal.zig");
  const ts = @import("ts.zig");
 -const dia = @import("ui/diagnostic.zig");
  const uni = @import("unicode.zig");
+ const uri = @import("uri.zig");
 +const dia = @import("ui/diagnostic.zig");
 +const act = @import("ui/code_action.zig");
  
  pub const Buffer = struct {
      path: []const u8,
-@@ -255,6 +256,7 @@ pub const Buffer = struct {
+@@ -269,6 +270,7 @@ pub const Buffer = struct {
  
          main.editor.dirty.cursor = true;
          main.editor.resetHover();
@@ -21,7 +22,7 @@ index ea5bb1c..3d513cb 100644
      }
  
      pub fn centerCursor(self: *Buffer) void {
-@@ -597,6 +599,18 @@ pub const Buffer = struct {
+@@ -604,6 +606,18 @@ pub const Buffer = struct {
          }
      }
  
@@ -41,7 +42,7 @@ index ea5bb1c..3d513cb 100644
          const cmd = &main.editor.command_line;
          const line = self.lineContent(@intCast(self.cursor.row));
 diff --git a/src/editor.zig b/src/editor.zig
-index 33b09f3..cc7ecbe 100644
+index a7b9259..5a2dcb1 100644
 --- a/src/editor.zig
 +++ b/src/editor.zig
 @@ -13,6 +13,7 @@ const main = @import("main.zig");
@@ -53,14 +54,14 @@ index 33b09f3..cc7ecbe 100644
  const uni = @import("unicode.zig");
  const ur = @import("uri.zig");
 @@ -51,6 +52,7 @@ pub const Editor = struct {
-     messages: std.array_list.Managed([]const u8),
+     messages: std.array_list.Aligned([]const u8, null) = .empty,
      message_read_idx: usize = 0,
      hover_contents: ?[]const u8 = null,
 +    code_actions: ?[]const act.CodeAction = null,
-     key_queue: std.array_list.Managed(inp.Key),
-     dot_repeat_input: std.array_list.Managed(inp.Key),
-     dot_repeat_input_uncommitted: std.array_list.Managed(inp.Key),
-@@ -152,6 +154,7 @@ pub const Editor = struct {
+     key_queue: std.array_list.Aligned(inp.Key, null) = .empty,
+     dot_repeat_input: std.array_list.Aligned(inp.Key, null) = .empty,
+     dot_repeat_input_uncommitted: std.array_list.Aligned(inp.Key, null) = .empty,
+@@ -145,6 +147,7 @@ pub const Editor = struct {
  
      pub fn enterMode(self: *Editor, mode: Mode) FatalError!void {
          self.resetHover();
@@ -68,15 +69,15 @@ index 33b09f3..cc7ecbe 100644
  
          if (self.mode == mode) return;
          if (self.mode == .insert) try self.active_buffer.commitChanges();
-@@ -193,6 +196,7 @@ pub const Editor = struct {
-         self.messages.deinit();
+@@ -186,6 +189,7 @@ pub const Editor = struct {
+         self.messages.deinit(self.allocator);
  
          self.resetHover();
 +        self.resetCodeActions();
  
-         for (self.key_queue.items) |key| key.deinit();
-         self.key_queue.deinit();
-@@ -372,6 +376,15 @@ pub const Editor = struct {
+         self.key_queue.deinit(self.allocator);
+         self.dot_repeat_input.deinit(self.allocator);
+@@ -360,6 +364,15 @@ pub const Editor = struct {
          }
      }
  
@@ -93,7 +94,7 @@ index 33b09f3..cc7ecbe 100644
          const keys = try ter.getKeys(self.allocator, str);
          defer self.allocator.free(keys);
 diff --git a/src/lsp.zig b/src/lsp.zig
-index 1ff7f63..eb7eedc 100644
+index bd45888..fe2ca81 100644
 --- a/src/lsp.zig
 +++ b/src/lsp.zig
 @@ -9,11 +9,13 @@ const buf = @import("buffer.zig");
@@ -118,7 +119,7 @@ index 1ff7f63..eb7eedc 100644
              },
              .workspace = .{
                  .workspaceFolders = true,
-@@ -200,6 +203,8 @@ pub const LspConnection = struct {
+@@ -198,6 +201,8 @@ pub const LspConnection = struct {
                          try self.handleHoverResponse(arena.allocator(), response_result);
                      } else if (std.mem.eql(u8, method, "textDocument/rename")) {
                          try self.handleRenameResponse(arena.allocator(), response_result);
@@ -127,7 +128,7 @@ index 1ff7f63..eb7eedc 100644
                      }
                  },
                  .notification => |notif| {
-@@ -251,6 +256,15 @@ pub const LspConnection = struct {
+@@ -249,6 +254,15 @@ pub const LspConnection = struct {
          });
      }
  
@@ -143,7 +144,7 @@ index 1ff7f63..eb7eedc 100644
      pub fn rename(self: *LspConnection, new_name: []const u8) !void {
          if ((self.server_init orelse return).value.capabilities.renameProvider == null) return;
          const buffer = main.editor.active_buffer;
-@@ -534,6 +548,18 @@ pub const LspConnection = struct {
+@@ -537,6 +551,18 @@ pub const LspConnection = struct {
          try main.editor.applyWorkspaceEdit(result.value);
      }
  
@@ -160,21 +161,20 @@ index 1ff7f63..eb7eedc 100644
 +    }
 +
      fn handleNotification(self: *LspConnection, arena: Allocator, notif: lsp.JsonRPCMessage.Notification) !void {
-         _ = self;
          log.trace(@This(), "notification: {s}\n", .{notif.method});
+         if (std.mem.eql(u8, notif.method, "window/logMessage")) {
 diff --git a/src/main.zig b/src/main.zig
-index 34ec556..7de8f84 100644
+index 69bf3f9..d01208a 100644
 --- a/src/main.zig
 +++ b/src/main.zig
-@@ -161,6 +161,15 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+@@ -161,6 +161,14 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                  const cmd_active = editor.command_line.command != null;
                  var repeat_or_1: i32 = 1;
                  if (repeat_count) |rc| repeat_or_1 = @intCast(rc);
 +                const code_action = if (editor.code_actions) |code_actions| b: {
 +                    if (raw_key.printable) |printable| {
 +                        for (code_actions) |action| {
-+                            if (action.hint == printable[0])
-+                                break :b action;
++                            if (action.hint == printable) break :b action;
 +                        }
 +                    }
 +                    break :b null;
@@ -182,18 +182,18 @@ index 34ec556..7de8f84 100644
  
                  // command line menu
                  if (cmd_active) {
-@@ -180,6 +189,10 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
-                         try editor.command_line.insert(raw_key.printable.?);
-                     }
+@@ -188,6 +196,10 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+                 } else if (cmp_menu_active and eql(u8, key, "\n")) {
+                     editor.completion_menu.accept() catch |e| log.err(@This(), "cmp accept error: {}\n", .{e});
  
-+                // code action menu
++                    // code action menu
 +                } else if (code_action) |action| {
 +                    buffer.codeActionExecute(action) catch |e| log.err(@This(), "code action exec error: {}\n", .{e});
 +
                      // text insertion
                  } else if (editor.mode == .insert and editor.key_queue.items[0].printable != null) {
-                     var printable = std.array_list.Managed(u21).init(allocator);
-@@ -341,6 +354,8 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+                     var printable: std.array_list.Aligned(u21, null) = .empty;
+@@ -348,6 +360,8 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                          buffer.goToDefinition() catch |e| log.err(@This(), "go to def LSP error: {}\n", .{e});
                      } else if (editor.mode == .normal and eql(u8, multi_key, " r")) {
                          buffer.findReferences() catch |e| log.err(@This(), "find references LSP error: {}\n", .{e});
@@ -201,11 +201,11 @@ index 34ec556..7de8f84 100644
 +                        buffer.codeAction() catch |e| log.err(@This(), "code action LSP error: {}\n", .{e});
                      } else if (editor.mode == .normal and eql(u8, multi_key, " n")) {
                          try buffer.renamePrompt();
-                     } else if (editor.mode == .normal and eql(u8, key, "r") and editor.key_queue.items[1].printable != null) {
-@@ -349,6 +364,9 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
-                     } else if (editor.mode == .normal and eql(u8, key, "@") and editor.key_queue.items[1].printable != null) {
-                         const macro_name: u8 = @intCast(key2.printable.?[0]);
-                         try editor.replayMacro(macro_name);
+                     } else if (editor.mode == .normal and eql(u8, key, "r") and key2.printable != null) {
+@@ -356,6 +370,9 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+                     } else if (editor.mode == .normal and eql(u8, key, "@") and key2.printable != null) {
+                         const macro_name: u8 = @intCast(key2.printable.?);
+                         for (0..@intCast(repeat_or_1)) |_| try editor.replayMacro(macro_name, keys_consumed);
 +                    } else if (normal_or_select and eql(u8, multi_key, "gi")) {
 +                        buffer.moveCursor(.{ .col = buffer.cursor.col });
 +                        buffer.centerCursor();
@@ -213,7 +213,7 @@ index 34ec556..7de8f84 100644
                          buffer.moveCursor(.{ .col = buffer.cursor.col });
                          buffer.centerCursor();
 diff --git a/src/terminal.zig b/src/terminal.zig
-index 431a217..fee7eb9 100644
+index dab7c9b..7d2baa1 100644
 --- a/src/terminal.zig
 +++ b/src/terminal.zig
 @@ -15,6 +15,7 @@ const log = @import("log.zig");
@@ -237,14 +237,14 @@ index 431a217..fee7eb9 100644
      }
  
 +    fn drawCodeActions(self: *Terminal, code_actions: []const act.CodeAction, area: Area) !void {
-+        var overlay_lines = std.array_list.Managed([]const u8).init(self.allocator);
++        var overlay_lines: std.array_list.Aligned([]const u8, null) = .empty;
 +        defer {
 +            for (overlay_lines.items) |l| self.allocator.free(l);
-+            overlay_lines.deinit();
++            overlay_lines.deinit(self.allocator);
 +        }
 +        for (code_actions) |code_action| {
 +            const line = try std.fmt.allocPrint(self.allocator, "[{c}] {s}", .{ code_action.hint, code_action.title });
-+            try overlay_lines.append(line);
++            try overlay_lines.append(self.allocator, line);
 +        }
 +        const buffer = main.editor.active_buffer;
 +        const max_doc_width = 90;
@@ -269,7 +269,7 @@ index 431a217..fee7eb9 100644
      fn drawOverlay(self: *Terminal, lines: []const []const u8, pos: Cursor) !void {
 diff --git a/src/ui/code_action.zig b/src/ui/code_action.zig
 new file mode 100644
-index 0000000..73b1730
+index 0000000..8246f40
 --- /dev/null
 +++ b/src/ui/code_action.zig
 @@ -0,0 +1,67 @@
@@ -304,9 +304,9 @@ index 0000000..73b1730
 +};
 +
 +pub fn fromLsp(allocator: Allocator, lsp_code_actions: []const lsp.types.CodeAction) ![]const CodeAction {
-+    var bag = std.array_list.Managed(u8).init(allocator);
-+    try bag.appendSlice(hint_bag);
-+    defer bag.deinit();
++    var bag: std.array_list.Aligned(u8, null) = .empty;
++    try bag.appendSlice(allocator, hint_bag);
++    defer bag.deinit(allocator);
 +    var code_actions = std.array_list.Managed(CodeAction).init(allocator);
 +    for (lsp_code_actions) |lsp_code_action| {
 +        var action = try CodeAction.init(allocator, lsp_code_action);

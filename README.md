@@ -56,6 +56,7 @@ Hat is a **ha**ckable modal **t**ext editor for modern terminals.
 | ✔️   | Buffer centering          | [patch/buffer-centering](/patch/buffer-centering)     |
 | ✔️   | Autosave                  | [patch/autosave](/patch/autosave)                     |
 | ✔️   | Relative line numbers     | [patch/relative-number](/patch/relative-number)       |
+| ✔️   | Auto-indent               | [patch/auto-indent](/patch/auto-indent)               |
 
 ## Philosophy
 

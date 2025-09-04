@@ -1,0 +1,76 @@
+diff --git a/src/buffer.zig b/src/buffer.zig
+index c3c8474..1ddd4c4 100644
+--- a/src/buffer.zig
++++ b/src/buffer.zig
+@@ -502,6 +502,22 @@ pub const Buffer = struct {
+         }
+     }
+ 
++    pub fn indentEmptyLine(self: *Buffer) FatalError!void {
++        std.debug.assert(self.cursor.col == 0);
++        if (self.lineLength(@intCast(self.cursor.row)) != 0) return;
++        try self.updateIndents();
++
++        const correct_indent: usize = self.indents.items[@intCast(self.cursor.row)];
++        const correct_indent_spaces = correct_indent * self.file_type.indent_spaces;
++        if (correct_indent_spaces > 0) {
++            const indent_text = try self.allocator.alloc(u21, correct_indent_spaces);
++            defer self.allocator.free(indent_text);
++            @memset(indent_text, ' ');
++            var indent_change = try cha.Change.initInsert(self.allocator, self, self.cursor, indent_text);
++            try self.appendChange(&indent_change);
++        }
++    }
++
+     pub fn undo(self: *Buffer) !void {
+         log.debug(@This(), "undo: {?}/{}\n", .{ self.history_index, self.history.items.len });
+         if (self.history_index) |h_idx| {
+diff --git a/src/editor.zig b/src/editor.zig
+index a7b9259..694328c 100644
+--- a/src/editor.zig
++++ b/src/editor.zig
+@@ -35,6 +35,12 @@ pub const Config = struct {
+     /// Char to denote terminal lines after end of buffer
+     /// See vim's :h fillchars -> eob
+     end_of_buffer_char: ?u8 = null,
++    /// In buffers with TS indent support, autoindent inserted newline
++    indent_newline: bool = false,
++    /// In buffers with TS indent support, reindent current line upon insertion of one of `reindent_block_end_chars`
++    reindent_block_end: bool = false,
++
++    pub const reindent_block_end_chars: []const u21 = &.{ '}', ']', ')' };
+ };
+ 
+ pub const Editor = struct {
+diff --git a/src/main.zig b/src/main.zig
+index 69bf3f9..b55760e 100644
+--- a/src/main.zig
++++ b/src/main.zig
+@@ -199,6 +199,17 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+                         if (next_key != null and next_key.?.printable != null) {
+                             try printable.append(allocator, next_key.?.printable.?);
+                             keys_consumed += 1;
++                            if (editor.config.indent_newline and keys_consumed == 1 and next_key.?.printable == '\n') {
++                                try buffer.changeInsertText(try printable.toOwnedSlice(allocator));
++                                try buffer.indentEmptyLine();
++                            }
++                            if (editor.config.reindent_block_end and
++                                std.mem.containsAtLeastScalar(u21, edi.Config.reindent_block_end_chars, 1, next_key.?.printable.?))
++                            {
++                                try buffer.changeInsertText(try printable.toOwnedSlice(allocator));
++                                log.warn(@This(), "align!!!\n", .{});
++                                try buffer.changeAlignIndent();
++                            }
+                         } else {
+                             break;
+                         }
+@@ -291,6 +302,9 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+                     var change = try cha.Change.initInsert(allocator, buffer, pos, &.{'\n'});
+                     try buffer.appendChange(&change);
+                     if (!below) buffer.moveCursor(.{ .row = row });
++                    if (editor.config.indent_newline) {
++                        try buffer.indentEmptyLine();
++                    }
+                 } else if (editor.mode == .normal and eql(u8, key, "u")) {
+                     try buffer.undo();
+                 } else if (editor.mode == .normal and eql(u8, key, "U")) {

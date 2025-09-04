@@ -1,18 +1,18 @@
 const std = @import("std");
 
 pub fn findPatches(allocator: std.mem.Allocator) ![]const []const u8 {
-    var patch_names = std.array_list.Managed([]const u8).init(allocator);
+    var patch_names: std.array_list.Aligned([]const u8, null) = .empty;
     var patch_dir = try std.fs.cwd().openDir("patch", .{ .iterate = true });
     defer patch_dir.close();
     var dir_iter = patch_dir.iterate();
     while (try dir_iter.next()) |d| {
-        try patch_names.append(try allocator.dupe(u8, d.name));
+        try patch_names.append(allocator, try allocator.dupe(u8, d.name));
     }
     std.debug.print("found {} patches:", .{patch_names.items.len});
     for (patch_names.items) |n| std.debug.print(" {s}", .{n});
     std.debug.print("\n", .{});
 
-    return try patch_names.toOwnedSlice();
+    return try patch_names.toOwnedSlice(allocator);
 }
 
 pub fn runCmd(

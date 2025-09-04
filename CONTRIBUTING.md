@@ -12,7 +12,7 @@ principles:
 - Consistency
     * Writing unedited buffer to file should produce empty diff
 - Security
-    * Hat won't read/write user files or do network request without explicit user action
+    * Hat won't read/write user files nor do network requests without explicit user intent
     * Security cannot be guaranteed when working with malicious LSP clients or other external programs outside of Hat's
 control
 
@@ -21,8 +21,8 @@ control
 Some assumptions were made to keep Hat simple:
 
 - Unicode support is limited to what common modern terminal emulators support. In Hat, "character" is a Unicode
-codepoint with non-zero width. So no grapheme clustering, no variation selection, no terminal emulator-specific logic.
-As long as non-ascii characters are displayed and editable, we're ok.
+codepoint. So no grapheme clustering, no variation selection, no terminal emulator-specific logic.
+As long as every buffer byte is displayed and editable, we're ok.
 - Hosting terminal emulator is capable of:
     * [Alternate buffer](https://unix.stackexchange.com/questions/288962/what-does-1049h-and-1h-ansi-escape-sequences-do)
     * [Wrap around](https://superuser.com/a/600694/1109910)

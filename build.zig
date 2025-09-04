@@ -1,4 +1,5 @@
 const std = @import("std");
+const manifest = @import("build.zig.zon");
 
 fn linkLibs(b: *std.Build, compile: *std.Build.Step.Compile) void {
     compile.linkLibC();
@@ -9,9 +10,12 @@ fn linkLibs(b: *std.Build, compile: *std.Build.Step.Compile) void {
 
     const regex = b.dependency("pcrez", .{});
     compile.root_module.addImport("regex", regex.module("pcrez"));
+
+    const zon = b.createModule(.{ .root_source_file = b.path("build.zig.zon") });
+    compile.root_module.addImport("zon", zon);
 }
 
-pub fn build(b: *std.Build) void {
+pub fn build(b: *std.Build) !void {
     b.reference_trace = 10;
 
     const target = b.standardTargetOptions(.{});
@@ -35,7 +39,8 @@ pub fn build(b: *std.Build) void {
     const run_step = b.step("run", "");
     run_step.dependOn(&run.step);
 
-    const tests = b.addTest(.{ .root_module = root_module });
+    const test_runner: std.Build.Step.Compile.TestRunner = .{ .path = b.path("src/test_runner.zig"), .mode = .simple };
+    const tests = b.addTest(.{ .root_module = root_module, .test_runner = test_runner });
     linkLibs(b, tests);
     const run_tests = b.addRunArtifact(tests);
     const test_step = b.step("test", "");
@@ -45,7 +50,7 @@ pub fn build(b: *std.Build) void {
     check_step.dependOn(&exe.step);
     check_step.dependOn(&tests.step);
 
-    const cov_tests = b.addTest(.{ .root_module = root_module });
+    const cov_tests = b.addTest(.{ .root_module = root_module, .test_runner = test_runner });
     linkLibs(b, cov_tests);
     cov_tests.use_llvm = true;
     cov_tests.setExecCmd(&.{ "kcov", "--include-path=src/", b.pathJoin(&.{ b.install_path, "kcov" }), null });

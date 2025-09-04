@@ -6,6 +6,7 @@ const main = @import("main.zig");
 
 pub const log_level_var = "HAT_LOG";
 pub var level: Level = .none;
+pub var log_writer: *std.io.Writer = undefined;
 
 pub const Level = enum(u8) {
     none = 0,
@@ -21,22 +22,22 @@ pub const Level = enum(u8) {
             .@"error" => .red,
             .warn => .yellow,
             .info => .blue,
-            .debug => .white,
-            .trace => .bright_black,
+            .debug => .cyan,
+            .trace => .white,
         };
     }
 
     pub fn format(self: Level, writer: *std.io.Writer) std.io.Writer.Error!void {
         try writer.print("{f}", .{self.ansi()});
-        try switch (self) {
+        const str = switch (self) {
             .none => unreachable,
-            .@"error" => writer.writeAll("err"),
-            .warn => writer.writeAll("wrn"),
-            .info => writer.writeAll("inf"),
-            .debug => writer.writeAll("dbg"),
-            .trace => writer.writeAll("trc"),
+            .@"error" => "err",
+            .warn => "wrn",
+            .info => "inf",
+            .debug => "dbg",
+            .trace => "trc",
         };
-        try writer.writeAll(co.AnsiColor.reset);
+        try writer.print("{f}{s}{f}", .{ self.ansi(), str, co.AnsiColor.reset });
     }
 };
 
@@ -60,6 +61,11 @@ pub fn trace(comptime caller: type, comptime fmt: []const u8, args: anytype) voi
     log(caller, .trace, fmt, args);
 }
 
+pub fn errPrint(comptime fmt: []const u8, args: anytype) void {
+    log_writer.print(fmt, args) catch {};
+    log_writer.flush() catch {};
+}
+
 pub fn assertEql(comptime Caller: type, comptime T: type, actual: []const T, expected: []const T) void {
     if (!std.mem.eql(T, actual, expected)) {
         err(Caller, "assert failed:\n  actual: {any}\n  expected: {any}\n", .{ actual, expected });
@@ -71,17 +77,24 @@ pub fn enabled(lvl: Level) bool {
     return @intFromEnum(lvl) <= @intFromEnum(level);
 }
 
-pub fn init() void {
-    if (std.posix.getenv(log_level_var)) |level_var| {
-        inline for (std.meta.fields(Level)) |l| {
-            if (std.mem.eql(u8, l.name, level_var)) {
-                level = @enumFromInt(l.value);
-                break;
+pub fn init(writer: ?*std.io.Writer, target_level: ?Level) void {
+    if (writer) |w| log_writer = w;
+
+    if (target_level) |tl| {
+        level = tl;
+    } else {
+        if (std.posix.getenv(log_level_var)) |level_var| {
+            inline for (std.meta.fields(Level)) |l| {
+                if (std.mem.eql(u8, l.name, level_var)) {
+                    level = @enumFromInt(l.value);
+                    break;
+                }
             }
+        } else {
+            level = .none;
         }
     }
     info(@This(), "logging enabled, level: {f}\n", .{level});
-    info(@This(), "pid: {}\n", .{std.c.getpid()});
 }
 
 fn log(comptime caller: type, comptime lvl: Level, comptime fmt: []const u8, args: anytype) void {
@@ -89,13 +102,12 @@ fn log(comptime caller: type, comptime lvl: Level, comptime fmt: []const u8, arg
     var now_buf: [32]u8 = undefined;
     const now_str = dt.Datetime.now().formatISO8601Buf(&now_buf, false) catch "";
 
-    const writer = &main.std_err_writer.interface;
-    writer.print(
-        "{s} {f} {f}{s: <16}{s} ",
+    log_writer.print(
+        "{s} {f} {f}{s: <16}{f} ",
         .{ now_str, lvl, co.AnsiColor.magenta, callerName(caller), co.AnsiColor.reset },
     ) catch {};
-    writer.print(fmt, args) catch {};
-    writer.flush() catch {};
+    log_writer.print(fmt, args) catch {};
+    log_writer.flush() catch {};
 }
 
 fn callerName(comptime caller: type) []const u8 {
