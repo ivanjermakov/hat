@@ -253,6 +253,9 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     buffer.moveToTokenEnd();
                 } else if (normal_or_select and eql(u8, key, "i")) {
                     try editor.enterMode(.insert);
+                } else if (normal_or_select and eql(u8, key, "a")) {
+                    buffer.moveCursor(buffer.cursor.applyOffset(.{ .col = 1 }));
+                    try editor.enterMode(.insert);
                 } else if (normal_or_select and eql(u8, key, "\n")) {
                     if (buffer.cursor.row + 1 < buffer.line_positions.items.len) {
                         buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = repeat_or_1 }));
