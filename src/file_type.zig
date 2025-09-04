@@ -23,6 +23,7 @@ pub const file_type = std.StaticStringMap(FileTypeConfig).initComptime(.{
             .lib_symbol = "tree_sitter_typescript",
             .highlight_query = TsConfig.highlight_query_from_nvim("ecma"),
             .indent_query = TsConfig.highlight_query_from_nvim("ecma"),
+            .symbol_query = TsConfig.symbol_query_from_aerial("ecma"),
         },
     } },
     .{ ".zig", FileTypeConfig{

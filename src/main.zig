@@ -201,19 +201,19 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
 
                     // text insertion
                 } else if (editor.mode == .insert and editor.key_queue.items[0].printable != null) {
-                    var printable = std.array_list.Managed(u21).init(allocator);
+                    var printable: std.array_list.Aligned(u21, null) = .empty;
                     keys_consumed = 0;
                     // read all cosecutive printable keys in case this is a paste command
                     while (true) {
                         const next_key = if (keys_consumed < editor.key_queue.items.len) editor.key_queue.items[keys_consumed] else null;
                         if (next_key != null and next_key.?.printable != null) {
-                            try printable.appendSlice(next_key.?.printable.?);
+                            try printable.append(allocator, next_key.?.printable.?);
                             keys_consumed += 1;
                         } else {
                             break;
                         }
                     }
-                    const insert_text = try printable.toOwnedSlice();
+                    const insert_text = try printable.toOwnedSlice(allocator);
                     defer allocator.free(insert_text);
                     try buffer.changeInsertText(insert_text);
                     editor.dirty.completion = true;
@@ -397,9 +397,6 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     } else if (editor.mode == .normal and eql(u8, key, "r") and key2.printable != null) {
                         const macro_name: u8 = @intCast(key2.printable.?);
                         try editor.startMacro(macro_name);
-                    } else if (editor.mode == .normal and eql(u8, key, "@") and editor.key_queue.items[1].printable != null) {
-                        const macro_name: u8 = @intCast(key2.printable.?[0]);
-                        try editor.replayMacro(macro_name);
                     } else if (normal_or_select and eql(u8, multi_key, "gi")) {
                         buffer.moveCursor(.{ .col = buffer.cursor.col });
                         buffer.centerCursor();

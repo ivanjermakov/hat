@@ -33,8 +33,8 @@ const uri = @import("uri.zig");
 pub const Buffer = struct {
     path: []const u8,
     uri: []const u8,
-    git_root: ?[]const u8,
-    git_hunks: std.array_list.Managed(git.Hunk),
+    git_root: ?[]const u8 = null,
+    git_hunks: std.array_list.Aligned(git.Hunk, null) = .empty,
     file: ?std.fs.File,
     stat: ?std.fs.File.Stat = null,
     /// Incremented on every content change
@@ -72,7 +72,7 @@ pub const Buffer = struct {
     uncommitted_changes: std.array_list.Aligned(cha.Change, null) = .empty,
     lsp_connections: std.array_list.Aligned(*lsp.LspConnection, null) = .empty,
     scratch: bool = false,
-    highlights: std.array_list.Managed(Span),
+    highlights: std.array_list.Aligned(Span, null) = .empty,
     allocator: Allocator,
 
     pub fn init(allocator: Allocator, path: []const u8) !Buffer {
@@ -94,7 +94,6 @@ pub const Buffer = struct {
             .file_type = file_type,
             .uri = buf_uri,
             .git_root = git_root,
-            .highlights = std.array_list.Managed(Span).init(allocator),
             .allocator = allocator,
         };
 
@@ -157,7 +156,7 @@ pub const Buffer = struct {
 
         self.allocator.free(self.uri);
         if (self.git_root) |gr| self.allocator.free(gr);
-        self.git_hunks.deinit();
+        self.git_hunks.deinit(self.allocator);
         self.allocator.free(self.path);
 
         if (self.ts_state) |*ts_state| ts_state.deinit();
@@ -535,7 +534,7 @@ pub const Buffer = struct {
             if (git.diffHunks(self.allocator, staged_path, current_path) catch return) |hunks| {
                 defer self.allocator.free(hunks);
                 log.debug(@This(), "git hunks: {any}\n", .{hunks});
-                try self.git_hunks.appendSlice(hunks);
+                try self.git_hunks.appendSlice(self.allocator, hunks);
             }
         }
     }

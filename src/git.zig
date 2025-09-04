@@ -24,10 +24,10 @@ pub fn gitRoot(allocator: Allocator, file_path: []const u8) !?[]const u8 {
 }
 
 pub fn show(allocator: Allocator, file_path: []const u8) !?[]const u8 {
-    var path_arg = std.array_list.Managed(u8).init(allocator);
-    defer path_arg.deinit();
-    try path_arg.appendSlice(":");
-    try path_arg.appendSlice(file_path);
+    var path_arg: std.array_list.Aligned(u8, null) = .empty;
+    defer path_arg.deinit(allocator);
+    try path_arg.appendSlice(allocator, ":");
+    try path_arg.appendSlice(allocator, file_path);
     const args = .{ "git", "--no-pager", "show", path_arg.items };
     var exit_code: u8 = undefined;
     const content = try ext.runExternalWait(allocator, &args, null, &exit_code);
@@ -66,7 +66,7 @@ pub const Hunk = struct {
 };
 
 pub fn parseDiff(allocator: Allocator, diff: []const u8) ![]const Hunk {
-    var hunks = std.array_list.Managed(Hunk).init(allocator);
+    var hunks: std.array_list.Aligned(Hunk, null) = .empty;
     var hunk_iter = std.mem.splitSequence(u8, diff, "\n@@");
     // skip file info before first hunk
     _ = hunk_iter.next();
@@ -85,13 +85,13 @@ pub fn parseDiff(allocator: Allocator, diff: []const u8) ![]const Hunk {
         if (std.mem.indexOf(u8, stats, ",")) |comma_idx| {
             const start_line = try std.fmt.parseInt(usize, stats[1..comma_idx], 10);
             const len = try std.fmt.parseInt(usize, stats[comma_idx + 1 ..], 10);
-            try hunks.append(.{ .type = .fromCounts(adds, deletes), .line = start_line, .len = len });
+            try hunks.append(allocator, .{ .type = .fromCounts(adds, deletes), .line = start_line, .len = len });
         } else {
             const start_line = try std.fmt.parseInt(usize, stats[1..], 10);
-            try hunks.append(.{ .type = .fromCounts(adds, deletes), .line = start_line, .len = 0 });
+            try hunks.append(allocator, .{ .type = .fromCounts(adds, deletes), .line = start_line, .len = 0 });
         }
     }
-    return hunks.toOwnedSlice();
+    return hunks.toOwnedSlice(allocator);
 }
 
 test "parseDiff" {

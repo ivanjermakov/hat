@@ -604,13 +604,12 @@ pub const LspConnection = struct {
     }
 
     fn handleHighlightResponse(self: *LspConnection, arena: Allocator, resp: ?std.json.Value) !void {
-        _ = self;
         if (resp == null or resp.? == .null) return;
         const result = try std.json.parseFromValue([]const types.DocumentHighlight, arena, resp.?, .{});
         const buffer = main.editor.active_buffer;
         buffer.highlights.clearRetainingCapacity();
         for (result.value) |hi| {
-            try buffer.highlights.append(Span.fromLsp(hi.range));
+            try buffer.highlights.append(self.allocator, Span.fromLsp(hi.range));
         }
         if (buffer.highlights.items.len > 0) {
             log.debug(@This(), "got {} highlights\n", .{buffer.highlights.items.len});

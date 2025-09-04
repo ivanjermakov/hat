@@ -438,14 +438,14 @@ pub const Terminal = struct {
     }
 
     fn drawCodeActions(self: *Terminal, code_actions: []const act.CodeAction, area: Area) !void {
-        var overlay_lines = std.array_list.Managed([]const u8).init(self.allocator);
+        var overlay_lines: std.array_list.Aligned([]const u8, null) = .empty;
         defer {
             for (overlay_lines.items) |l| self.allocator.free(l);
-            overlay_lines.deinit();
+            overlay_lines.deinit(self.allocator);
         }
         for (code_actions) |code_action| {
             const line = try std.fmt.allocPrint(self.allocator, "[{c}] {s}", .{ code_action.hint, code_action.title });
-            try overlay_lines.append(line);
+            try overlay_lines.append(self.allocator, line);
         }
         const buffer = main.editor.active_buffer;
         const max_doc_width = 90;

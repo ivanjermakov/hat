@@ -29,10 +29,10 @@ pub const CodeAction = struct {
 };
 
 pub fn fromLsp(allocator: Allocator, lsp_code_actions: []const lsp.types.CodeAction) ![]const CodeAction {
-    var bag = std.array_list.Managed(u8).init(allocator);
-    try bag.appendSlice(hint_bag);
-    defer bag.deinit();
-    var code_actions = std.array_list.Managed(CodeAction).init(allocator);
+    var bag: std.array_list.Aligned(u8, null) = .empty;
+    try bag.appendSlice(allocator, hint_bag);
+    defer bag.deinit(allocator);
+    var code_actions: std.array_list.Aligned(CodeAction, null) = .empty;
     for (lsp_code_actions) |lsp_code_action| {
         var action = try CodeAction.init(allocator, lsp_code_action);
         if (std.mem.indexOfScalar(u8, bag.items, action.hint)) |available_idx| {
@@ -40,9 +40,9 @@ pub fn fromLsp(allocator: Allocator, lsp_code_actions: []const lsp.types.CodeAct
         } else {
             action.hint = bag.orderedRemove(0);
         }
-        try code_actions.append(action);
+        try code_actions.append(allocator, action);
     }
-    return try code_actions.toOwnedSlice();
+    return try code_actions.toOwnedSlice(allocator);
 }
 
 test "fromLsp with collisions" {

@@ -91,7 +91,7 @@ pub fn pickLspLocation(allocator: Allocator, locations: []const lsp.types.Locati
 }
 
 pub fn pickSymbol(allocator: Allocator, buffer: *const buf.Buffer, symbols: []const ByteSpan) !FindResult {
-    var lines = std.array_list.Managed(u8).init(allocator);
+    var lines: std.array_list.Aligned(u8, null) = .empty;
     for (symbols) |symbol| {
         const pos = buffer.posToCursor(symbol.start);
         const symbol_name = buffer.content_raw.items[symbol.start..symbol.end];
@@ -101,9 +101,9 @@ pub fn pickSymbol(allocator: Allocator, buffer: *const buf.Buffer, symbols: []co
             .{ symbol_name, pos.row + 1, pos.col + 1 },
         );
         defer allocator.free(s);
-        try lines.appendSlice(s);
+        try lines.appendSlice(allocator, s);
     }
-    const bufs_str = try lines.toOwnedSlice();
+    const bufs_str = try lines.toOwnedSlice(allocator);
     defer allocator.free(bufs_str);
 
     const preview_cmd = try std.fmt.allocPrint(
