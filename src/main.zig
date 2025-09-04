@@ -7,6 +7,7 @@ const buf = @import("buffer.zig");
 const co = @import("color.zig");
 const core = @import("core.zig");
 const Cursor = core.Cursor;
+const Span = core.Span;
 const FatalError = core.FatalError;
 const edi = @import("editor.zig");
 const env = @import("env.zig");
@@ -299,6 +300,23 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     var change = try cha.Change.initInsert(allocator, buffer, pos, &.{'\n'});
                     try buffer.appendChange(&change);
                     if (!below) buffer.moveCursor(.{ .row = row });
+                } else if (editor.mode == .normal and eql(u8, key, "J")) {
+                    for (0..@intCast(repeat_or_1)) |_| {
+                        if (buffer.cursor.row + 1 < buffer.line_positions.items.len) {
+                            const pos: Cursor = .{
+                                .row = buffer.cursor.row,
+                                .col = @intCast(buffer.lineLength(@intCast(buffer.cursor.row))),
+                            };
+                            const indent = buf.lineIndentSpaces(buffer.lineContent(@intCast(buffer.cursor.row + 1)));
+                            const span = Span{
+                                .start = pos,
+                                .end = buffer.posToCursor(buffer.cursorToBytePos(pos) + 1 + indent),
+                            };
+                            var change = try cha.Change.initReplace(allocator, buffer, span, &.{' '});
+                            try buffer.appendChange(&change);
+                        }
+                    }
+                    try buffer.commitChanges();
                 } else if (editor.mode == .normal and eql(u8, key, "u")) {
                     try buffer.undo();
                 } else if (editor.mode == .normal and eql(u8, key, "U")) {
@@ -380,6 +398,20 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                         });
                     } else if (normal_or_select and eql(u8, multi_key, "gh")) {
                         buffer.moveCursor(.{ .row = buffer.cursor.row, .col = 0 });
+                    } else if (editor.mode == .normal and eql(u8, multi_key, "gJ")) {
+                        log.warn(@This(), "gJ???\n", .{});
+                        for (0..@intCast(repeat_or_1)) |_| {
+                            if (buffer.cursor.row + 1 < buffer.line_positions.items.len) {
+                                const pos: Cursor = .{
+                                    .row = buffer.cursor.row,
+                                    .col = @intCast(buffer.lineLength(@intCast(buffer.cursor.row))),
+                                };
+                                const span = Span{ .start = pos, .end = buffer.posToCursor(buffer.cursorToBytePos(pos) + 1) };
+                                var change = try cha.Change.initDelete(allocator, buffer, span);
+                                try buffer.appendChange(&change);
+                            }
+                        }
+                        try buffer.commitChanges();
                     } else {
                         // no multi-key matches, drop first key as it will never match
                         keys_consumed = 1;
