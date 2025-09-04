@@ -145,10 +145,12 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                 if (normal_or_select and key.len == 1 and std.ascii.isDigit(key[0])) {
                     const d = std.fmt.parseInt(usize, key, 10) catch unreachable;
                     repeat_count = (if (repeat_count) |rc| rc * 10 else 0) + d;
-                    log.debug(@This(), "repeat count: {?}\n", .{repeat_count});
-                    const removed = editor.key_queue.orderedRemove(0);
-                    try editor.recordMacroKey(removed);
-                    continue;
+                    if (repeat_count != 0) {
+                        log.debug(@This(), "repeat count: {?}\n", .{repeat_count});
+                        const removed = editor.key_queue.orderedRemove(0);
+                        try editor.recordMacroKey(removed);
+                        continue;
+                    }
                 }
 
                 var keys_consumed: usize = 1;
@@ -243,6 +245,19 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     const half_screen = @divFloor(@as(i32, @intCast(term.dimensions.height)), 2);
                     buffer.moveCursor(buffer.cursor.applyOffset(.{ .row = repeat_or_1 * half_screen }));
                     buffer.centerCursor();
+                } else if (normal_or_select and eql(u8, key, "G")) {
+                    buffer.moveCursor(.{
+                        .row = @as(i32, @intCast(buffer.line_positions.items.len)) - 1,
+                        .col = buffer.cursor.col,
+                    });
+                    buffer.centerCursor();
+                } else if (normal_or_select and eql(u8, key, "$")) {
+                    buffer.moveCursor(.{
+                        .row = buffer.cursor.row,
+                        .col = @intCast(buffer.lineLength(@intCast(buffer.cursor.row))),
+                    });
+                } else if (normal_or_select and eql(u8, key, "0")) {
+                    buffer.moveCursor(.{ .row = buffer.cursor.row, .col = 0 });
                 } else if (normal_or_select and eql(u8, key, "w")) {
                     buffer.moveToNextWord();
                 } else if (normal_or_select and eql(u8, key, "W")) {
@@ -385,22 +400,9 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     } else if (editor.mode == .normal and eql(u8, key, "@") and key2.printable != null) {
                         const macro_name: u8 = @intCast(key2.printable.?);
                         for (0..@intCast(repeat_or_1)) |_| try editor.replayMacro(macro_name, keys_consumed);
-                    } else if (normal_or_select and eql(u8, multi_key, "gk")) {
+                    } else if (normal_or_select and eql(u8, multi_key, "gg")) {
                         buffer.moveCursor(.{ .col = buffer.cursor.col });
                         buffer.centerCursor();
-                    } else if (normal_or_select and eql(u8, multi_key, "gj")) {
-                        buffer.moveCursor(.{
-                            .row = @as(i32, @intCast(buffer.line_positions.items.len)) - 1,
-                            .col = buffer.cursor.col,
-                        });
-                        buffer.centerCursor();
-                    } else if (normal_or_select and eql(u8, multi_key, "gl")) {
-                        buffer.moveCursor(.{
-                            .row = buffer.cursor.row,
-                            .col = @intCast(buffer.lineLength(@intCast(buffer.cursor.row))),
-                        });
-                    } else if (normal_or_select and eql(u8, multi_key, "gh")) {
-                        buffer.moveCursor(.{ .row = buffer.cursor.row, .col = 0 });
                     } else if (editor.mode == .normal and eql(u8, multi_key, "gJ")) {
                         log.warn(@This(), "gJ???\n", .{});
                         for (0..@intCast(repeat_or_1)) |_| {
