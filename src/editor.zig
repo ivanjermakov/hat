@@ -43,6 +43,12 @@ pub const Config = struct {
     /// If <`term_width`, left padding is `(term_width-centering_width)/2`
     centering_width: ?usize = null,
     number_line_mode: NumberLineMode = .absolute,
+    /// In buffers with TS indent support, autoindent inserted newline
+    indent_newline: bool = false,
+    /// In buffers with TS indent support, reindent current line upon insertion of one of `reindent_block_end_chars`
+    reindent_block_end: bool = false,
+
+    pub const reindent_block_end_chars: []const u21 = &.{ '}', ']', ')' };
 };
 
 pub const NumberLineMode = enum {

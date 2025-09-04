@@ -539,6 +539,22 @@ pub const Buffer = struct {
         }
     }
 
+    pub fn indentEmptyLine(self: *Buffer) FatalError!void {
+        std.debug.assert(self.cursor.col == 0);
+        if (self.lineLength(@intCast(self.cursor.row)) != 0) return;
+        try self.updateIndents();
+
+        const correct_indent: usize = self.indents.items[@intCast(self.cursor.row)];
+        const correct_indent_spaces = correct_indent * self.file_type.indent_spaces;
+        if (correct_indent_spaces > 0) {
+            const indent_text = try self.allocator.alloc(u21, correct_indent_spaces);
+            defer self.allocator.free(indent_text);
+            @memset(indent_text, ' ');
+            var indent_change = try cha.Change.initInsert(self.allocator, self, self.cursor, indent_text);
+            try self.appendChange(&indent_change);
+        }
+    }
+
     pub fn undo(self: *Buffer) FatalError!void {
         log.debug(@This(), "undo: {?}/{}\n", .{ self.history_index, self.history.items.len });
         if (self.history_index) |h_idx| {
