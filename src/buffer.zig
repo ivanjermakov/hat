@@ -901,6 +901,15 @@ pub const Buffer = struct {
     }
 };
 
+pub fn lineIndentSpaces(line: []const u21) usize {
+    var leading_spaces: usize = 0;
+    for (line) |ch| {
+        if (!isWhitespace(ch)) break;
+        leading_spaces += 1;
+    }
+    return leading_spaces;
+}
+
 fn nextWordStart(line: []const u21, pos: usize) ?usize {
     if (line.len == 0) return null;
     var col = pos;
@@ -1006,15 +1015,6 @@ fn isDigit(ch: u21) bool {
 /// Token is a string that is usually lexed by a programming language as a single name
 fn isToken(ch: u21) bool {
     return isAlphabet(ch) or isDigit(ch) or ch == '_' or ch == '-';
-}
-
-fn lineIndentSpaces(line: []const u21) usize {
-    var leading_spaces: usize = 0;
-    for (line) |ch| {
-        if (ch != ' ') break;
-        leading_spaces += 1;
-    }
-    return leading_spaces;
 }
 
 var scratch_id: usize = 0;
