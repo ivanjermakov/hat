@@ -201,25 +201,6 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                 } else if (code_action) |action| {
                     buffer.codeActionExecute(action) catch |e| log.err(@This(), "code action exec error: {}\n", .{e});
 
-                    // text insertion
-                } else if (editor.mode == .insert and editor.key_queue.items[0].printable != null) {
-                    var printable: std.array_list.Aligned(u21, null) = .empty;
-                    keys_consumed = 0;
-                    // read all cosecutive printable keys in case this is a paste command
-                    while (true) {
-                        const next_key = if (keys_consumed < editor.key_queue.items.len) editor.key_queue.items[keys_consumed] else null;
-                        if (next_key != null and next_key.?.printable != null) {
-                            try printable.append(allocator, next_key.?.printable.?);
-                            keys_consumed += 1;
-                        } else {
-                            break;
-                        }
-                    }
-                    const insert_text = try printable.toOwnedSlice(allocator);
-                    defer allocator.free(insert_text);
-                    try buffer.changeInsertText(insert_text);
-                    editor.dirty.completion = true;
-
                     // cmp_menu
                 } else if (cmp_menu_active and eql(u8, key, "<up>")) {
                     editor.completion_menu.prevItem();
@@ -247,7 +228,6 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                                 std.mem.containsAtLeastScalar(u21, edi.Config.reindent_block_end_chars, 1, next_key.?.printable.?))
                             {
                                 try buffer.changeInsertText(try printable.toOwnedSlice(allocator));
-                                log.warn(@This(), "align!!!\n", .{});
                                 try buffer.changeAlignIndent();
                             }
                         } else {

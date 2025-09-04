@@ -178,7 +178,7 @@ pub const Terminal = struct {
         }
         if (buffer.git_hunks.items.len > 0) {
             const hunks = buffer.git_hunks.items;
-            log.debug(@This(), "hunks: {any}\n", .{hunks});
+            log.trace(@This(), "hunks: {any}\n", .{hunks});
             var hunk_idx: usize = 0;
             for (@intCast(area.pos.row)..@as(usize, @intCast(area.pos.row)) + area.dims.height) |term_row| {
                 const buffer_row = @as(i32, @intCast(term_row)) + buffer.offset.row;

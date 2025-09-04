@@ -431,6 +431,7 @@ pub const Buffer = struct {
     }
 
     pub fn changeAlignIndent(self: *Buffer) !void {
+        log.trace(@This(), "align indent\n", .{});
         if (self.ts_state == null) return;
         try self.updateIndents();
         if (self.selection) |selection| {
