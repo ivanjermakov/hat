@@ -14,7 +14,7 @@ const ts_c = @cImport({
 
 pub const ts = ts_c;
 
-const ByteSpan = core.ByteSpan;
+const ByteSpan = core.SpanFlat;
 
 pub fn ParseResult(comptime SpanType: type) type {
     return struct {

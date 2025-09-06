@@ -1,8 +1,8 @@
 diff --git a/src/core.zig b/src/core.zig
-index 880684d..aa148d2 100644
+index 1d21d32..e2bbb48 100644
 --- a/src/core.zig
 +++ b/src/core.zig
-@@ -95,6 +95,7 @@ pub const ByteSpan = struct {
+@@ -102,6 +102,7 @@ pub const ByteSpan = struct {
  };
  
  pub const Layout = struct {
@@ -11,7 +11,7 @@ index 880684d..aa148d2 100644
      buffer: Area,
  };
 diff --git a/src/editor.zig b/src/editor.zig
-index 8fded32..ec8722a 100644
+index a7b9259..aa3e0fc 100644
 --- a/src/editor.zig
 +++ b/src/editor.zig
 @@ -35,6 +35,11 @@ pub const Config = struct {
@@ -27,7 +27,7 @@ index 8fded32..ec8722a 100644
  
  pub const Editor = struct {
 diff --git a/src/terminal.zig b/src/terminal.zig
-index 6b87009..2d380cd 100644
+index dab7c9b..c35160c 100644
 --- a/src/terminal.zig
 +++ b/src/terminal.zig
 @@ -411,20 +411,32 @@ pub fn terminalSize() !Dimensions {
