@@ -5,7 +5,7 @@ const buf = @import("../buffer.zig");
 const col = @import("../color.zig");
 const core = @import("../core.zig");
 const Cursor = core.Cursor;
-const ByteSpan = core.ByteSpan;
+const SpanFlat = core.SpanFlat;
 const ext = @import("../external.zig");
 const log = @import("../log.zig");
 const lsp = @import("../lsp.zig");
@@ -90,7 +90,7 @@ pub fn pickLspLocation(allocator: Allocator, locations: []const lsp.types.Locati
     return .init(allocator, out);
 }
 
-pub fn pickSymbol(allocator: Allocator, buffer: *const buf.Buffer, symbols: []const ByteSpan) !FindResult {
+pub fn pickSymbol(allocator: Allocator, buffer: *const buf.Buffer, symbols: []const SpanFlat) !FindResult {
     var lines: std.array_list.Aligned(u8, null) = .empty;
     for (symbols) |symbol| {
         const pos = buffer.posToCursor(symbol.start);

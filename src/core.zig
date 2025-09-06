@@ -77,7 +77,7 @@ pub const Span = struct {
         };
     }
 
-    pub fn fromByteSpan(buffer: *const buf.Buffer, byte_span: ByteSpan) Span {
+    pub fn fromSpanFlat(buffer: *const buf.Buffer, byte_span: SpanFlat) Span {
         return .{
             .start = buffer.posToCursor(byte_span.start),
             .end = buffer.posToCursor(byte_span.end),
@@ -85,23 +85,23 @@ pub const Span = struct {
     }
 };
 
-pub const ByteSpan = struct {
+pub const SpanFlat = struct {
     start: usize,
     end: usize,
 
-    pub fn init(span: ByteSpan, capture_name: []const u8) ?ByteSpan {
+    pub fn init(span: SpanFlat, capture_name: []const u8) ?SpanFlat {
         if (!std.mem.eql(u8, capture_name, "name")) return null;
         return span;
     }
 
-    pub fn fromBufSpan(buffer: *const buf.Buffer, span: Span) ByteSpan {
+    pub fn fromBufSpan(buffer: *const buf.Buffer, span: Span) SpanFlat {
         return .{
-            .start = buffer.cursorToBytePos(span.start),
-            .end = buffer.cursorToBytePos(span.end),
+            .start = buffer.cursorToPos(span.start),
+            .end = buffer.cursorToPos(span.end),
         };
     }
 
-    pub fn fromRegex(match: reg.RegexMatch) ByteSpan {
+    pub fn fromRegex(match: reg.RegexMatch) SpanFlat {
         return .{ .start = match.getStartAt(0).?, .end = match.getEndAt(0).? };
     }
 };

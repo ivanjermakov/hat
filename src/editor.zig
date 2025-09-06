@@ -163,21 +163,30 @@ pub const Editor = struct {
         main.editor.dirty.draw = true;
     }
 
-    pub fn enterMode(self: *Editor, mode: Mode) !void {
+    pub fn enterMode(self: *Editor, mode: Mode) FatalError!void {
+        const buffer = self.active_buffer;
         self.resetHover();
         self.resetCodeActions();
 
         if (self.mode == mode) return;
-        if (self.mode == .insert) try self.active_buffer.commitChanges();
+        if (self.mode == .insert) try buffer.commitChanges();
 
         switch (mode) {
             .normal => {
-                self.active_buffer.clearSelection();
+                buffer.clearSelection();
                 self.completion_menu.reset();
             },
-            .select => self.active_buffer.selectChar(),
-            .select_line => self.active_buffer.selectLine(),
-            .insert => self.active_buffer.clearSelection(),
+            .select => {
+                const end_pos = buffer.cursorToPos(buffer.cursor) + 1;
+                buffer.selection = .{ .start = buffer.cursor, .end = buffer.posToCursor(end_pos) };
+                log.warn(@This(), "selection: {?}\n", .{buffer.selection});
+                self.dirty.draw = true;
+            },
+            .select_line => {
+                buffer.selection = buffer.lineSpan(@intCast(buffer.cursor.row));
+                self.dirty.draw = true;
+            },
+            .insert => buffer.clearSelection(),
         }
         if (mode != .normal) self.dotRepeatInside();
         log.debug(@This(), "mode: {}->{}\n", .{ self.mode, mode });
