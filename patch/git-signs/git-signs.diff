@@ -1,40 +1,40 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index d08f12d..f59ce1d 100644
+index c3c8474..1377070 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
-@@ -24,11 +24,14 @@ const main = @import("main.zig");
+@@ -24,12 +24,15 @@ const main = @import("main.zig");
  const ter = @import("terminal.zig");
  const ts = @import("ts.zig");
  const dia = @import("ui/diagnostic.zig");
 +const git = @import("git.zig");
  const uni = @import("unicode.zig");
+ const uri = @import("uri.zig");
  
  pub const Buffer = struct {
      path: []const u8,
      uri: []const u8,
-+    git_root: ?[]const u8,
++    git_root: ?[]const u8 = null,
 +    git_hunks: std.array_list.Aligned(git.Hunk, null) = .empty,
      file: ?std.fs.File,
      stat: ?std.fs.File.Stat = null,
      /// Incremented on every content change
-@@ -81,11 +84,16 @@ pub const Buffer = struct {
+@@ -78,12 +81,15 @@ pub const Buffer = struct {
          const abs_path = std.fs.realpathAlloc(allocator, buf_path) catch null;
          defer if (abs_path) |a| allocator.free(a);
-         const uri = try std.fmt.allocPrint(allocator, "file://{s}", .{abs_path orelse buf_path});
-+
+         const buf_uri = try uri.fromPath(allocator, abs_path orelse buf_path);
 +        const git_root = git.gitRoot(allocator, buf_path) catch null;
 +        log.debug(@This(), "git root: {?s}\n", .{git_root});
-+
+ 
          var self = Buffer{
              .path = buf_path,
              .file = file,
              .file_type = file_type,
-             .uri = uri,
+             .uri = buf_uri,
 +            .git_root = git_root,
-             .scratch = scratch,
              .allocator = allocator,
          };
-@@ -121,6 +129,8 @@ pub const Buffer = struct {
+ 
+@@ -144,6 +150,8 @@ pub const Buffer = struct {
          self.lsp_connections.deinit(self.allocator);
  
          self.allocator.free(self.uri);
@@ -43,16 +43,7 @@ index d08f12d..f59ce1d 100644
          self.allocator.free(self.path);
  
          if (self.ts_state) |*ts_state| ts_state.deinit();
-@@ -332,7 +342,7 @@ pub const Buffer = struct {
-         try self.pending_changes.append(self.allocator, try change.clone(self.allocator));
-     }
- 
--    pub fn commitChanges(self: *Buffer) FatalError!void {
-+    pub fn commitChanges(self: *Buffer) !void {
-         if (self.uncommitted_changes.items.len == 0) {
-             log.debug(@This(), "no changes to commit\n", .{});
-             return;
-@@ -485,6 +495,31 @@ pub const Buffer = struct {
+@@ -502,6 +510,31 @@ pub const Buffer = struct {
          }
      }
  
@@ -85,10 +76,10 @@ index d08f12d..f59ce1d 100644
          log.debug(@This(), "undo: {?}/{}\n", .{ self.history_index, self.history.items.len });
          if (self.history_index) |h_idx| {
 diff --git a/src/color.zig b/src/color.zig
-index 4bbebcd..87b2779 100644
+index f6ee63d..5f4dd32 100644
 --- a/src/color.zig
 +++ b/src/color.zig
-@@ -68,6 +68,7 @@ pub const Attr = union(enum) {
+@@ -70,6 +70,7 @@ pub const Attr = union(enum) {
      bg: RgbColor,
      underline: RgbColor,
      curly_underline,
@@ -96,7 +87,7 @@ index 4bbebcd..87b2779 100644
  
      pub fn write(self: Attr, writer: *std.io.Writer) !void {
          switch (self) {
-@@ -75,6 +76,7 @@ pub const Attr = union(enum) {
+@@ -77,6 +78,7 @@ pub const Attr = union(enum) {
              .bg => |c| try writer.print("\x1b[48;2;{};{};{}m", .{ c.r, c.g, c.b }),
              .underline => |c| try writer.print("\x1b[58;2;{};{};{}m", .{ c.r, c.g, c.b }),
              .curly_underline => _ = try writer.write("\x1b[4:3m"),
@@ -104,7 +95,7 @@ index 4bbebcd..87b2779 100644
          }
      }
  };
-@@ -93,6 +95,9 @@ pub const attributes = enum {
+@@ -95,6 +97,9 @@ pub const attributes = enum {
      pub const message = &[_]Attr{.{ .bg = color.gray2 }};
      pub const command_line = &[_]Attr{.{ .bg = color.gray2 }};
      pub const number_line = &[_]Attr{.{ .fg = color.gray4 }};
@@ -115,10 +106,10 @@ index 4bbebcd..87b2779 100644
      pub fn write(attrs: []const Attr, writer: *std.io.Writer) !void {
          for (attrs) |attr| {
 diff --git a/src/editor.zig b/src/editor.zig
-index 8fded32..843eff3 100644
+index a7b9259..e87fdfb 100644
 --- a/src/editor.zig
 +++ b/src/editor.zig
-@@ -145,7 +145,7 @@ pub const Editor = struct {
+@@ -143,7 +143,7 @@ pub const Editor = struct {
          main.editor.dirty.draw = true;
      }
  
@@ -276,21 +267,18 @@ index 0000000..75687c7
 +    try std.testing.expectEqualDeep(hunks[1], Hunk{ .type = .delete, .line = 37, .len = 0 });
 +}
 diff --git a/src/main.zig b/src/main.zig
-index 1e17568..5f6c2f8 100644
+index 69bf3f9..52a0d87 100644
 --- a/src/main.zig
 +++ b/src/main.zig
-@@ -41,9 +41,9 @@ pub var std_err_writer = std_err.writer(&std_err_buf);
+@@ -38,6 +38,7 @@ pub var std_err_writer: *std.io.Writer = undefined;
  
  pub var tty_in: std.fs.File = undefined;
  
 +
  pub var editor: edi.Editor = undefined;
  pub var term: ter.Terminal = undefined;
--
- pub var args: Args = .{};
  
- pub var main_loop_mutex: mut.Mutex = .{};
-@@ -398,6 +398,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+@@ -410,6 +411,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
              buffer.version += 1;
              buffer.clearDiagnostics();
              try buffer.reparse();
@@ -299,7 +287,7 @@ index 1e17568..5f6c2f8 100644
              for (buffer.lsp_connections.items) |conn| {
                  conn.didChange(editor.active_buffer) catch |e| log.err(@This(), "did change LSP error: {}\n", .{e});
 diff --git a/src/terminal.zig b/src/terminal.zig
-index 6b87009..456bbb6 100644
+index dab7c9b..a401116 100644
 --- a/src/terminal.zig
 +++ b/src/terminal.zig
 @@ -152,6 +152,38 @@ pub const Terminal = struct {
