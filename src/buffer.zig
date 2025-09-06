@@ -11,7 +11,7 @@ const clp = @import("clipboard.zig");
 const core = @import("core.zig");
 const Span = core.Span;
 const Cursor = core.Cursor;
-const ByteSpan = core.ByteSpan;
+const ByteSpan = core.SpanFlat;
 const Dimensions = core.Dimensions;
 const FatalError = core.FatalError;
 const dt = @import("datetime.zig");
@@ -209,7 +209,8 @@ pub const Buffer = struct {
             return;
         }
 
-        const max_col = ter.lineColLength(self.lineContent(@intCast(new_cursor.row)));
+        var max_col = ter.lineColLength(self.lineContent(@intCast(new_cursor.row)));
+        if (max_col > 0 and !self.lineTerminated(@intCast(new_cursor.row))) max_col -= 1;
         var col: i32 = @intCast(@min(new_cursor.col, max_col));
         if (vertical_only) {
             if (self.cursor_desired_col) |desired| {
@@ -230,8 +231,8 @@ pub const Buffer = struct {
             .select => {
                 const selection = &self.selection.?;
                 // temporary make selection span inclusive to simplify cursor search
-                selection.end = self.posToCursor(self.cursorToBytePos(selection.end) - 1);
-                defer selection.end = self.posToCursor(self.cursorToBytePos(selection.end) + 1);
+                selection.end = self.posToCursor(self.cursorToPos(selection.end) - 1);
+                defer selection.end = self.posToCursor(self.cursorToPos(selection.end) + 1);
                 if (std.meta.eql(selection.start, old_cursor)) {
                     selection.start = self.cursor;
                 } else {
@@ -290,7 +291,7 @@ pub const Buffer = struct {
         if (nextWordStart(line, @intCast(self.cursor.col))) |col| {
             self.moveCursor(.{ .row = self.cursor.row, .col = @intCast(col) });
             if (self.selection == null) {
-                self.selection = .{ .start = old_cursor, .end = self.posToCursor(self.cursorToBytePos(self.cursor) + 1) };
+                self.selection = .{ .start = old_cursor, .end = self.posToCursor(self.cursorToPos(self.cursor) + 1) };
                 main.editor.dirty.draw = true;
             }
             main.editor.dotRepeatInside();
@@ -319,7 +320,7 @@ pub const Buffer = struct {
         if (self.selection == null) {
             self.selection = .{
                 .start = self.cursor,
-                .end = self.posToCursor(self.cursorToBytePos(old_cursor) + 1),
+                .end = self.posToCursor(self.cursorToPos(old_cursor) + 1),
             };
             main.editor.dirty.draw = true;
         }
@@ -334,7 +335,7 @@ pub const Buffer = struct {
         if (wordEnd(line, @intCast(self.cursor.col + 1))) |col| {
             self.moveCursor(.{ .row = self.cursor.row, .col = @intCast(col) });
             if (self.selection == null) {
-                self.selection = .{ .start = old_cursor, .end = self.posToCursor(self.cursorToBytePos(self.cursor) + 1) };
+                self.selection = .{ .start = old_cursor, .end = self.posToCursor(self.cursorToPos(self.cursor) + 1) };
                 main.editor.dirty.draw = true;
             }
             main.editor.dotRepeatInside();
@@ -350,7 +351,7 @@ pub const Buffer = struct {
         if (tokenEnd(line, @intCast(self.cursor.col + 1))) |col| {
             self.moveCursor(.{ .row = self.cursor.row, .col = @intCast(col) });
             if (self.selection == null) {
-                self.selection = .{ .start = old_cursor, .end = self.posToCursor(self.cursorToBytePos(self.cursor) + 1) };
+                self.selection = .{ .start = old_cursor, .end = self.posToCursor(self.cursorToPos(self.cursor) + 1) };
                 main.editor.dirty.draw = true;
             }
             main.editor.dotRepeatInside();
@@ -394,12 +395,10 @@ pub const Buffer = struct {
     }
 
     pub fn changeDeleteChar(self: *Buffer) !void {
-        var span: Span = .{ .start = self.cursor, .end = self.cursor.applyOffset(.{ .col = 1 }) };
-        const line_len = self.lineLength(@intCast(self.cursor.row));
-        if (self.cursor.col == line_len) {
-            span.end = .{ .row = self.cursor.row + 1, .col = 0 };
-        }
-        var change = try cha.Change.initDelete(self.allocator, self, span);
+        const pos = self.cursorToPos(self.cursor);
+        if (pos + 1 == self.content.items.len) return;
+        const span: ByteSpan = .{ .start = pos, .end = pos + 1 };
+        var change = try cha.Change.initDelete(self.allocator, self, .fromByteSpan(self, span));
         try self.appendChange(&change);
     }
 
@@ -413,7 +412,6 @@ pub const Buffer = struct {
 
     pub fn changeSelectionDelete(self: *Buffer) !void {
         if (self.selection) |selection| {
-            try main.editor.enterMode(.normal);
             var change = try cha.Change.initDelete(self.allocator, self, selection);
             try self.appendChange(&change);
         }
@@ -454,11 +452,19 @@ pub const Buffer = struct {
             for (line) |ch| {
                 byte += std.unicode.utf8CodepointSequenceLength(ch) catch unreachable;
             }
-            // new line
-            byte += 1;
-            char += line.len + 1;
+            char += line.len;
+            if (char < self.content.items.len and self.content.items[char] == '\n') {
+                byte += 1;
+                char += 1;
+            }
             try self.line_positions.append(self.allocator, char);
             try self.line_byte_positions.append(self.allocator, byte);
+        }
+        const ps = self.line_positions.items;
+        if (ps.len > 1 and ps[ps.len - 1] == ps[ps.len - 2]) {
+            // remove phantom line
+            _ = self.line_positions.orderedRemove(ps.len - 1);
+            _ = self.line_byte_positions.orderedRemove(self.line_byte_positions.items.len - 1);
         }
         log.trace(@This(), "line positions: {any}\n", .{self.line_positions.items});
         log.trace(@This(), "line byte positions: {any}\n", .{self.line_positions.items});
@@ -541,27 +547,37 @@ pub const Buffer = struct {
         return line_start + @as(usize, @intCast(cursor.col));
     }
 
-    pub fn cursorToBytePos(self: *const Buffer, cursor: Cursor) usize {
-        const line_start = self.lineStart(@intCast(cursor.row));
-        const part_end = line_start + @as(usize, @intCast(cursor.col));
-        const part_byte_len = uni.unicodeByteLen(self.content.items[line_start..part_end]) catch unreachable;
-        return line_start + part_byte_len;
-    }
-
     pub fn posToCursor(self: *const Buffer, pos: usize) Cursor {
         var i: usize = 0;
         var line_start: usize = 0;
         for (self.line_positions.items) |l_pos| {
             if (l_pos > pos) break;
+            if (i > 0 and l_pos == self.line_positions.items[i - 1]) break;
             line_start = l_pos;
             i += 1;
         }
         return Cursor{ .row = @intCast(i), .col = @intCast(pos - line_start) };
     }
 
+    pub fn lineTerminated(self: *const Buffer, row: usize) bool {
+        return row + 1 < self.line_positions.items.len or self.content.getLast() == '\n';
+    }
+
+    /// Line length at `row` (excl. newline char)
     pub fn lineLength(self: *const Buffer, row: usize) usize {
-        if (row == 0) return self.line_positions.items[row] - 1;
-        return self.line_positions.items[row] - self.line_positions.items[row - 1] - 1;
+        if (row == 0) {
+            if (self.content.items.len == 0) {
+                // empty file
+                return 0;
+            }
+            return self.line_positions.items[row] - 1;
+        }
+        const len = self.line_positions.items[row] - self.line_positions.items[row - 1];
+        if (len == 0 or !self.lineTerminated(row)) {
+            // phantom line
+            return len;
+        }
+        return len - 1;
     }
 
     pub fn lineStart(self: *const Buffer, row: usize) usize {
@@ -707,16 +723,6 @@ pub const Buffer = struct {
         try self.commitChanges();
     }
 
-    pub fn selectChar(self: *Buffer) void {
-        self.selection = .{ .start = self.cursor, .end = self.posToCursor(self.cursorToBytePos(self.cursor) + 1) };
-        main.editor.dirty.draw = true;
-    }
-
-    pub fn selectLine(self: *Buffer) void {
-        self.selection = self.lineSpan(@intCast(self.cursor.row));
-        main.editor.dirty.draw = true;
-    }
-
     pub fn syncFs(self: *Buffer) !bool {
         if (self.scratch) return false;
         const stat = try std.fs.cwd().statFile(self.path);
@@ -838,7 +844,7 @@ pub const Buffer = struct {
     }
 
     fn applyChange(self: *Buffer, change: *cha.Change) FatalError!void {
-        log.trace(@This(), "apply change {f}\n", .{change});
+        log.trace(@This(), "apply {f}\n", .{change});
         const span = change.old_span;
 
         if (builtin.mode == .Debug) {
@@ -856,7 +862,6 @@ pub const Buffer = struct {
         };
         change.new_byte_span = ByteSpan.fromBufSpan(self, change.new_span.?);
         self.moveCursor(change.new_span.?.end);
-        self.cursor = change.new_span.?.end;
 
         if (self.ts_state) |*ts_state| try ts_state.edit(change);
     }
@@ -922,6 +927,15 @@ pub const Buffer = struct {
         }
     }
 };
+
+pub fn lineIndentSpaces(line: []const u21) usize {
+    var leading_spaces: usize = 0;
+    for (line) |ch| {
+        if (!isWhitespace(ch)) break;
+        leading_spaces += 1;
+    }
+    return leading_spaces;
+}
 
 fn nextWordStart(line: []const u21, pos: usize) ?usize {
     if (line.len == 0) return null;
@@ -1030,15 +1044,6 @@ fn isToken(ch: u21) bool {
     return isAlphabet(ch) or isDigit(ch) or ch == '_' or ch == '-';
 }
 
-fn lineIndentSpaces(line: []const u21) usize {
-    var leading_spaces: usize = 0;
-    for (line) |ch| {
-        if (ch != ' ') break;
-        leading_spaces += 1;
-    }
-    return leading_spaces;
-}
-
 var scratch_id: usize = 0;
 fn nextScratchId() usize {
     scratch_id += 1;
@@ -1082,18 +1087,18 @@ test "test buffer" {
     try testing.expectEqualStrings("abc\n", buffer.content_raw.items);
 }
 
-test "cursorToBytePos" {
+test "cursorToPos" {
     var buffer = try testSetupScratch("one");
     defer main.editor.deinit();
 
-    try testing.expectEqualDeep(3, buffer.cursorToBytePos(.{ .col = 3 }));
+    try testing.expectEqualDeep(3, buffer.cursorToPos(.{ .col = 3 }));
 }
 
-test "cursorToBytePos newline" {
+test "cursorToPos newline" {
     var buffer = try testSetupScratch("one\n");
     defer main.editor.deinit();
 
-    try testing.expectEqualDeep(4, buffer.cursorToBytePos(.{ .row = 1 }));
+    try testing.expectEqualDeep(4, buffer.cursorToPos(.{ .row = 1 }));
 }
 
 test "textAt" {
@@ -1123,9 +1128,7 @@ test "moveCursor" {
 }
 
 test "moveToNextWord" {
-    var buffer = try testSetupScratch(
-        \\one two three
-    );
+    var buffer = try testSetupScratch("one two three\n");
     defer main.editor.deinit();
 
     buffer.moveToNextWord();
@@ -1133,9 +1136,7 @@ test "moveToNextWord" {
 }
 
 test "moveToPrevWord" {
-    var buffer = try testSetupScratch(
-        \\one two three
-    );
+    var buffer = try testSetupScratch("one two three\n");
     defer main.editor.deinit();
 
     buffer.moveCursor(.{ .row = 0, .col = 10 });
@@ -1150,9 +1151,7 @@ test "moveToPrevWord" {
 }
 
 test "moveToWordEnd" {
-    var buffer = try testSetupScratch(
-        \\one two three
-    );
+    var buffer = try testSetupScratch("one two three\n");
     defer main.editor.deinit();
 
     buffer.moveToWordEnd();
@@ -1169,9 +1168,7 @@ test "moveToWordEnd" {
 }
 
 test "moveToTokenEnd" {
-    var buffer = try testSetupScratch(
-        \\one two three
-    );
+    var buffer = try testSetupScratch("one two three\n");
     defer main.editor.deinit();
 
     buffer.moveToTokenEnd();
@@ -1188,10 +1185,7 @@ test "moveToTokenEnd" {
 }
 
 test "changeSelectionDelete same line" {
-    var buffer = try testSetupScratch(
-        \\abc
-        \\
-    );
+    var buffer = try testSetupScratch("abc\n");
     defer main.editor.deinit();
 
     buffer.cursor = .{ .row = 0, .col = 1 };
