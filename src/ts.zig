@@ -70,7 +70,7 @@ pub const State = struct {
     tree: ?*ts.TSTree = null,
     highlight: ParseResult(AttrsSpan),
     indent: ParseResult(IndentSpanTuple),
-    symbol: ?ParseResult(ByteSpan) = null,
+    symbol: ?ParseResult(SpanFlat) = null,
     allocator: Allocator,
 
     pub fn init(allocator: Allocator, ts_conf: ft.TsConfig) !State {
@@ -88,7 +88,7 @@ pub const State = struct {
             .highlight = try ParseResult(AttrsSpan).init(allocator, language(), highlight_query),
             .indent = try ParseResult(IndentSpanTuple).init(allocator, language(), indent_query),
         };
-        if (symbol_query) |sq| self.symbol = try ParseResult(ByteSpan).init(allocator, language(), sq);
+        if (symbol_query) |sq| self.symbol = try ParseResult(SpanFlat).init(allocator, language(), sq);
         _ = ts.ts_parser_set_language(self.parser, language());
 
         return self;
