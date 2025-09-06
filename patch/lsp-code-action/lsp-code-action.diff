@@ -1,19 +1,20 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index 4ba7445..14ebac4 100644
+index c3c8474..8d4dd07 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
-@@ -23,8 +23,9 @@ const lsp = @import("lsp.zig");
+@@ -23,9 +23,10 @@ const lsp = @import("lsp.zig");
  const main = @import("main.zig");
  const ter = @import("terminal.zig");
  const ts = @import("ts.zig");
 -const dia = @import("ui/diagnostic.zig");
  const uni = @import("unicode.zig");
+ const uri = @import("uri.zig");
 +const dia = @import("ui/diagnostic.zig");
 +const act = @import("ui/code_action.zig");
  
  pub const Buffer = struct {
      path: []const u8,
-@@ -246,6 +247,7 @@ pub const Buffer = struct {
+@@ -269,6 +270,7 @@ pub const Buffer = struct {
  
          main.editor.dirty.cursor = true;
          main.editor.resetHover();
@@ -21,7 +22,7 @@ index 4ba7445..14ebac4 100644
      }
  
      pub fn centerCursor(self: *Buffer) void {
-@@ -595,6 +597,18 @@ pub const Buffer = struct {
+@@ -604,6 +606,18 @@ pub const Buffer = struct {
          }
      }
  
@@ -41,7 +42,7 @@ index 4ba7445..14ebac4 100644
          const cmd = &main.editor.command_line;
          const line = self.lineContent(@intCast(self.cursor.row));
 diff --git a/src/editor.zig b/src/editor.zig
-index 655f009..a098056 100644
+index a7b9259..5a2dcb1 100644
 --- a/src/editor.zig
 +++ b/src/editor.zig
 @@ -13,6 +13,7 @@ const main = @import("main.zig");
@@ -60,7 +61,7 @@ index 655f009..a098056 100644
      key_queue: std.array_list.Aligned(inp.Key, null) = .empty,
      dot_repeat_input: std.array_list.Aligned(inp.Key, null) = .empty,
      dot_repeat_input_uncommitted: std.array_list.Aligned(inp.Key, null) = .empty,
-@@ -147,6 +149,7 @@ pub const Editor = struct {
+@@ -145,6 +147,7 @@ pub const Editor = struct {
  
      pub fn enterMode(self: *Editor, mode: Mode) FatalError!void {
          self.resetHover();
@@ -68,7 +69,7 @@ index 655f009..a098056 100644
  
          if (self.mode == mode) return;
          if (self.mode == .insert) try self.active_buffer.commitChanges();
-@@ -188,6 +191,7 @@ pub const Editor = struct {
+@@ -186,6 +189,7 @@ pub const Editor = struct {
          self.messages.deinit(self.allocator);
  
          self.resetHover();
@@ -76,7 +77,7 @@ index 655f009..a098056 100644
  
          self.key_queue.deinit(self.allocator);
          self.dot_repeat_input.deinit(self.allocator);
-@@ -359,6 +363,15 @@ pub const Editor = struct {
+@@ -360,6 +364,15 @@ pub const Editor = struct {
          }
      }
  
@@ -93,7 +94,7 @@ index 655f009..a098056 100644
          const keys = try ter.getKeys(self.allocator, str);
          defer self.allocator.free(keys);
 diff --git a/src/lsp.zig b/src/lsp.zig
-index c3a4a26..316cfdb 100644
+index bd45888..fe2ca81 100644
 --- a/src/lsp.zig
 +++ b/src/lsp.zig
 @@ -9,11 +9,13 @@ const buf = @import("buffer.zig");
@@ -143,7 +144,7 @@ index c3a4a26..316cfdb 100644
      pub fn rename(self: *LspConnection, new_name: []const u8) !void {
          if ((self.server_init orelse return).value.capabilities.renameProvider == null) return;
          const buffer = main.editor.active_buffer;
-@@ -535,6 +549,18 @@ pub const LspConnection = struct {
+@@ -537,6 +551,18 @@ pub const LspConnection = struct {
          try main.editor.applyWorkspaceEdit(result.value);
      }
  
@@ -163,10 +164,10 @@ index c3a4a26..316cfdb 100644
          log.trace(@This(), "notification: {s}\n", .{notif.method});
          if (std.mem.eql(u8, notif.method, "window/logMessage")) {
 diff --git a/src/main.zig b/src/main.zig
-index e1f2fab..5cb6e5d 100644
+index 69bf3f9..d01208a 100644
 --- a/src/main.zig
 +++ b/src/main.zig
-@@ -160,6 +160,14 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+@@ -161,6 +161,14 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                  const cmd_active = editor.command_line.command != null;
                  var repeat_or_1: i32 = 1;
                  if (repeat_count) |rc| repeat_or_1 = @intCast(rc);
@@ -181,9 +182,9 @@ index e1f2fab..5cb6e5d 100644
  
                  // command line menu
                  if (cmd_active) {
-@@ -179,6 +187,10 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
-                         try editor.command_line.insert(&.{raw_key.printable.?});
-                     }
+@@ -188,6 +196,10 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+                 } else if (cmp_menu_active and eql(u8, key, "\n")) {
+                     editor.completion_menu.accept() catch |e| log.err(@This(), "cmp accept error: {}\n", .{e});
  
 +                    // code action menu
 +                } else if (code_action) |action| {
@@ -192,7 +193,7 @@ index e1f2fab..5cb6e5d 100644
                      // text insertion
                  } else if (editor.mode == .insert and editor.key_queue.items[0].printable != null) {
                      var printable: std.array_list.Aligned(u21, null) = .empty;
-@@ -339,6 +351,8 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+@@ -348,6 +360,8 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                          buffer.goToDefinition() catch |e| log.err(@This(), "go to def LSP error: {}\n", .{e});
                      } else if (editor.mode == .normal and eql(u8, multi_key, " r")) {
                          buffer.findReferences() catch |e| log.err(@This(), "find references LSP error: {}\n", .{e});
@@ -201,10 +202,10 @@ index e1f2fab..5cb6e5d 100644
                      } else if (editor.mode == .normal and eql(u8, multi_key, " n")) {
                          try buffer.renamePrompt();
                      } else if (editor.mode == .normal and eql(u8, key, "r") and key2.printable != null) {
-@@ -347,6 +361,9 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+@@ -356,6 +370,9 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                      } else if (editor.mode == .normal and eql(u8, key, "@") and key2.printable != null) {
                          const macro_name: u8 = @intCast(key2.printable.?);
-                         try editor.replayMacro(macro_name);
+                         for (0..@intCast(repeat_or_1)) |_| try editor.replayMacro(macro_name, keys_consumed);
 +                    } else if (normal_or_select and eql(u8, multi_key, "gi")) {
 +                        buffer.moveCursor(.{ .col = buffer.cursor.col });
 +                        buffer.centerCursor();
@@ -212,7 +213,7 @@ index e1f2fab..5cb6e5d 100644
                          buffer.moveCursor(.{ .col = buffer.cursor.col });
                          buffer.centerCursor();
 diff --git a/src/terminal.zig b/src/terminal.zig
-index ad36b98..8c06b7f 100644
+index dab7c9b..7d2baa1 100644
 --- a/src/terminal.zig
 +++ b/src/terminal.zig
 @@ -15,6 +15,7 @@ const log = @import("log.zig");
