@@ -35,19 +35,24 @@ pub fn printBuffer(buffer: *buf.Buffer, writer: *std.io.Writer, highlight: ?High
     if (highlight) |hi| {
         const half_term: i32 = @divFloor(@as(i32, @intCast(hi.term_height)), 2);
         start_row = @as(i32, @intCast(hi.highlight_line)) - half_term;
-        end_row = start_row + @as(i32, @intCast(hi.term_height));
+        end_row = @min(end_row, start_row + @as(i32, @intCast(hi.term_height)));
     }
 
     var span_index: usize = 0;
     var row: i32 = start_row;
     while (row < end_row) {
+        if (row < 0) {
+            row += 1;
+            writer.writeAll("\n") catch {};
+            continue;
+        }
         defer {
-            if (row + 1 < buffer.line_positions.items.len) writer.writeAll("\n") catch {};
             last_attrs = null;
             row += 1;
+            writer.writeAll("\x1b[0m") catch {};
+            if (buffer.lineTerminated(@intCast(row))) writer.writeAll("\n") catch {};
         }
-        if (row < 0 or row >= buffer.line_positions.items.len) continue;
-        defer writer.writeAll("\x1b[0m") catch {};
+
         const line = buffer.lineContent(@intCast(row));
         var byte: usize = buffer.lineStart(@intCast(row));
 
@@ -78,6 +83,7 @@ pub fn printBuffer(buffer: *buf.Buffer, writer: *std.io.Writer, highlight: ?High
                 @memcpy(&last_attrs_buf, &attrs_buf);
                 last_attrs = last_attrs_buf[0..attrs.len];
             }
+            std.debug.assert(ch != '\n');
             try uni.unicodeToBytesWrite(writer, &.{ch});
             byte += try std.unicode.utf8CodepointSequenceLength(ch);
         }
@@ -86,7 +92,7 @@ pub fn printBuffer(buffer: *buf.Buffer, writer: *std.io.Writer, highlight: ?High
 }
 
 fn createTmpFiles() !void {
-    const tmp_file = try std.fs.cwd().createFile("/tmp/hat_e2e.zig", .{ .truncate = true });
+    const tmp_file = try std.fs.cwd().createFile("/tmp/hat_e2e.txt", .{ .truncate = true });
     defer tmp_file.close();
     try tmp_file.writeAll(
         \\const std = @import("std");
@@ -97,17 +103,6 @@ fn createTmpFiles() !void {
     );
 }
 
-fn mockIo() !File {
-    const stdout_pipe = try std.posix.pipe();
-    const mock_stdout_write: File = .{ .handle = stdout_pipe[1] };
-    const mock_stdout_read: File = .{ .handle = stdout_pipe[0] };
-    main.std_out = mock_stdout_write;
-    main.std_out_writer = mock_stdout_write.writer(&main.std_out_buf);
-    main.std_err_file_writer = main.std_err.writer(&main.std_err_buf);
-    main.std_err_writer = &main.std_err_file_writer.interface;
-    return mock_stdout_read;
-}
-
 test "printer no ts" {
     try createTmpFiles();
 
@@ -116,7 +111,7 @@ test "printer no ts" {
     log.init(&log_writer, null);
 
     const allocator = std.testing.allocator;
-    var buffer = try buf.Buffer.init(allocator, "/tmp/hat_e2e.zig");
+    var buffer = try buf.Buffer.init(allocator, "/tmp/hat_e2e.txt");
     defer buffer.deinit();
     if (buffer.ts_state) |*ts| ts.deinit();
     buffer.ts_state = null;
@@ -131,8 +126,7 @@ test "printer no ts" {
         "const std = @import(\"std\");\x1b[0m\n" ++
             "pub fn main() !void {\x1b[0m\n" ++
             "    std.debug.print(\"hello!\\n\", .{});\x1b[0m\n" ++
-            "}\x1b[0m\n" ++
-            "\x1b[0m",
+            "}\x1b[0m\n",
         content_writer.written(),
     );
 }
@@ -145,7 +139,7 @@ test "printer no ts highlight" {
     log.init(&log_writer, null);
 
     const allocator = std.testing.allocator;
-    var buffer = try buf.Buffer.init(allocator, "/tmp/hat_e2e.zig");
+    var buffer = try buf.Buffer.init(allocator, "/tmp/hat_e2e.txt");
     defer buffer.deinit();
     if (buffer.ts_state) |*ts| ts.deinit();
     buffer.ts_state = null;
@@ -161,8 +155,7 @@ test "printer no ts highlight" {
             "const std = @import(\"std\");\x1b[0m\n" ++
             "pub fn main() !void {\x1b[0m\n" ++
             "\x1b[48;2;62;62;67m    std.debug.print(\"hello!\\n\", .{});\x1b[0m\n" ++
-            "}\x1b[0m\n" ++
-            "\x1b[0m",
+            "}\x1b[0m\n",
         content_writer.written(),
     );
 }
