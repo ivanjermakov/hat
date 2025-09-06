@@ -1,5 +1,5 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index c3c8474..9512727 100644
+index 943fa47..7a56794 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
 @@ -23,9 +23,10 @@ const lsp = @import("lsp.zig");
@@ -14,7 +14,7 @@ index c3c8474..9512727 100644
  
  pub const Buffer = struct {
      path: []const u8,
-@@ -363,7 +364,7 @@ pub const Buffer = struct {
+@@ -364,7 +365,7 @@ pub const Buffer = struct {
          main.editor.dirty.completion = true;
      }
  
@@ -23,7 +23,7 @@ index c3c8474..9512727 100644
          if (self.uncommitted_changes.items.len == 0) {
              log.debug(@This(), "no changes to commit\n", .{});
              return;
-@@ -598,6 +599,27 @@ pub const Buffer = struct {
+@@ -614,6 +615,27 @@ pub const Buffer = struct {
          }
      }
  
@@ -52,21 +52,21 @@ index c3c8474..9512727 100644
          for (self.lsp_connections.items) |conn| {
              try conn.hover();
 diff --git a/src/core.zig b/src/core.zig
-index 1d21d32..3ae092b 100644
+index 31baf8a..b7d5982 100644
 --- a/src/core.zig
 +++ b/src/core.zig
-@@ -89,6 +89,11 @@ pub const ByteSpan = struct {
+@@ -89,6 +89,11 @@ pub const SpanFlat = struct {
      start: usize,
      end: usize,
  
-+    pub fn init(span: ByteSpan, capture_name: []const u8) ?ByteSpan {
++    pub fn init(span: SpanFlat, capture_name: []const u8) ?SpanFlat {
 +        if (!std.mem.eql(u8, capture_name, "name")) return null;
 +        return span;
 +    }
 +
-     pub fn fromBufSpan(buffer: *const buf.Buffer, span: Span) ByteSpan {
+     pub fn fromBufSpan(buffer: *const buf.Buffer, span: Span) SpanFlat {
          return .{
-             .start = buffer.cursorToBytePos(span.start),
+             .start = buffer.cursorToPos(span.start),
 diff --git a/src/file_type.zig b/src/file_type.zig
 index 9ae77c4..de1b233 100644
 --- a/src/file_type.zig
@@ -118,10 +118,10 @@ index 9ae77c4..de1b233 100644
  
  pub const plain: FileTypeConfig = .{ .name = "plain", .ts = null };
 diff --git a/src/main.zig b/src/main.zig
-index 69bf3f9..cd63427 100644
+index 0a3a82d..b22c0e7 100644
 --- a/src/main.zig
 +++ b/src/main.zig
-@@ -350,7 +350,9 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+@@ -398,7 +398,9 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                          buffer.findReferences() catch |e| log.err(@This(), "find references LSP error: {}\n", .{e});
                      } else if (editor.mode == .normal and eql(u8, multi_key, " n")) {
                          try buffer.renamePrompt();
@@ -133,18 +133,18 @@ index 69bf3f9..cd63427 100644
                          try editor.startMacro(macro_name);
                      } else if (editor.mode == .normal and eql(u8, key, "@") and key2.printable != null) {
 diff --git a/src/ts.zig b/src/ts.zig
-index 994aa04..42eef83 100644
+index 1c63d02..fa110d5 100644
 --- a/src/ts.zig
 +++ b/src/ts.zig
-@@ -71,6 +71,7 @@ pub const State = struct {
+@@ -70,6 +70,7 @@ pub const State = struct {
      tree: ?*ts.TSTree = null,
      highlight: ParseResult(AttrsSpan),
      indent: ParseResult(IndentSpanTuple),
-+    symbol: ?ParseResult(ByteSpan) = null,
++    symbol: ?ParseResult(SpanFlat) = null,
      allocator: Allocator,
  
      pub fn init(allocator: Allocator, ts_conf: ft.TsConfig) !State {
-@@ -79,14 +80,18 @@ pub const State = struct {
+@@ -78,14 +79,18 @@ pub const State = struct {
          defer allocator.free(highlight_query);
          const indent_query = try ft.TsConfig.loadQuery(allocator, ts_conf.indent_query);
          defer allocator.free(indent_query);
@@ -158,13 +158,13 @@ index 994aa04..42eef83 100644
              .highlight = try ParseResult(AttrsSpan).init(allocator, language(), highlight_query),
              .indent = try ParseResult(IndentSpanTuple).init(allocator, language(), indent_query),
          };
-+        if (symbol_query) |sq| self.symbol = try ParseResult(ByteSpan).init(allocator, language(), sq);
++        if (symbol_query) |sq| self.symbol = try ParseResult(SpanFlat).init(allocator, language(), sq);
          _ = ts.ts_parser_set_language(self.parser, language());
 +
          return self;
      }
  
-@@ -114,6 +119,7 @@ pub const State = struct {
+@@ -113,6 +118,7 @@ pub const State = struct {
          if (self.tree) |t| ts.ts_tree_delete(t);
          self.highlight.deinit();
          self.indent.deinit();
@@ -173,14 +173,14 @@ index 994aa04..42eef83 100644
  };
  
 diff --git a/src/ui/fzf.zig b/src/ui/fzf.zig
-index 3852c7a..7c71e67 100644
+index 3852c7a..407ad67 100644
 --- a/src/ui/fzf.zig
 +++ b/src/ui/fzf.zig
 @@ -5,6 +5,7 @@ const buf = @import("../buffer.zig");
  const col = @import("../color.zig");
  const core = @import("../core.zig");
  const Cursor = core.Cursor;
-+const ByteSpan = core.ByteSpan;
++const SpanFlat = core.SpanFlat;
  const ext = @import("../external.zig");
  const log = @import("../log.zig");
  const lsp = @import("../lsp.zig");
@@ -197,7 +197,7 @@ index 3852c7a..7c71e67 100644
      return .init(allocator, out);
  }
  
-+pub fn pickSymbol(allocator: Allocator, buffer: *const buf.Buffer, symbols: []const ByteSpan) !FindResult {
++pub fn pickSymbol(allocator: Allocator, buffer: *const buf.Buffer, symbols: []const SpanFlat) !FindResult {
 +    var lines: std.io.Writer.Allocating = .init(allocator);
 +    defer lines.deinit();
 +    for (symbols) |symbol| {
