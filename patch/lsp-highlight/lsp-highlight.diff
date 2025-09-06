@@ -1,16 +1,16 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index d08f12d..11e2f23 100644
+index c3c8474..c29de33 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
-@@ -66,6 +66,7 @@ pub const Buffer = struct {
+@@ -67,6 +67,7 @@ pub const Buffer = struct {
      uncommitted_changes: std.array_list.Aligned(cha.Change, null) = .empty,
      lsp_connections: std.array_list.Aligned(*lsp.LspConnection, null) = .empty,
      scratch: bool = false,
 +    highlights: std.array_list.Aligned(Span, null) = .empty,
      allocator: Allocator,
  
-     pub fn init(allocator: Allocator, path: ?[]const u8, content_raw: []const u8) !Buffer {
-@@ -134,6 +135,7 @@ pub const Buffer = struct {
+     pub fn init(allocator: Allocator, path: []const u8) !Buffer {
+@@ -157,6 +158,7 @@ pub const Buffer = struct {
          self.line_positions.deinit(self.allocator);
          self.line_byte_positions.deinit(self.allocator);
          self.indents.deinit(self.allocator);
@@ -18,8 +18,8 @@ index d08f12d..11e2f23 100644
  
          for (self.history.items) |*i| {
              for (i.items) |*c| c.deinit();
-@@ -332,7 +334,7 @@ pub const Buffer = struct {
-         try self.pending_changes.append(self.allocator, try change.clone(self.allocator));
+@@ -363,7 +365,7 @@ pub const Buffer = struct {
+         main.editor.dirty.completion = true;
      }
  
 -    pub fn commitChanges(self: *Buffer) FatalError!void {
@@ -27,7 +27,7 @@ index d08f12d..11e2f23 100644
          if (self.uncommitted_changes.items.len == 0) {
              log.debug(@This(), "no changes to commit\n", .{});
              return;
-@@ -588,6 +590,12 @@ pub const Buffer = struct {
+@@ -604,6 +606,12 @@ pub const Buffer = struct {
          }
      }
  
@@ -41,10 +41,10 @@ index d08f12d..11e2f23 100644
          const cmd = &main.editor.command_line;
          const line = self.lineContent(@intCast(self.cursor.row));
 diff --git a/src/color.zig b/src/color.zig
-index 4bbebcd..1221fc4 100644
+index f6ee63d..42478e5 100644
 --- a/src/color.zig
 +++ b/src/color.zig
-@@ -82,6 +82,7 @@ pub const Attr = union(enum) {
+@@ -84,6 +84,7 @@ pub const Attr = union(enum) {
  pub const attributes = enum {
      pub const text = &[_]Attr{.{ .fg = color.white }};
      pub const selection = &[_]Attr{.{ .bg = color.gray3 }};
@@ -53,7 +53,7 @@ index 4bbebcd..1221fc4 100644
      pub const string = &[_]Attr{.{ .fg = color.green }};
      pub const literal = &[_]Attr{.{ .fg = color.yellow }};
 diff --git a/src/lsp.zig b/src/lsp.zig
-index e2d791f..c5d81a0 100644
+index bd45888..0ad93ff 100644
 --- a/src/lsp.zig
 +++ b/src/lsp.zig
 @@ -9,6 +9,7 @@ const buf = @import("buffer.zig");
@@ -96,7 +96,7 @@ index e2d791f..c5d81a0 100644
      pub fn rename(self: *LspConnection, new_name: []const u8) !void {
          if ((self.server_init orelse return).value.capabilities.renameProvider == null) return;
          const buffer = main.editor.active_buffer;
-@@ -532,6 +544,20 @@ pub const LspConnection = struct {
+@@ -537,6 +549,20 @@ pub const LspConnection = struct {
          try main.editor.applyWorkspaceEdit(result.value);
      }
  
@@ -118,10 +118,10 @@ index e2d791f..c5d81a0 100644
          log.trace(@This(), "notification: {s}\n", .{notif.method});
          if (std.mem.eql(u8, notif.method, "window/logMessage")) {
 diff --git a/src/main.zig b/src/main.zig
-index 1e17568..535fe98 100644
+index 69bf3f9..16dd837 100644
 --- a/src/main.zig
 +++ b/src/main.zig
-@@ -415,6 +415,14 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+@@ -427,6 +427,14 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
              term.draw() catch |e| log.err(@This(), "draw error: {}\n", .{e});
          } else if (editor.dirty.cursor) {
              editor.dirty.cursor = false;
@@ -137,7 +137,7 @@ index 1e17568..535fe98 100644
          }
          perf.draw = timer.lap();
 diff --git a/src/terminal.zig b/src/terminal.zig
-index 6b87009..f08d732 100644
+index dab7c9b..fad627a 100644
 --- a/src/terminal.zig
 +++ b/src/terminal.zig
 @@ -211,6 +211,14 @@ pub const Terminal = struct {

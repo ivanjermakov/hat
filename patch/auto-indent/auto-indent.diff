@@ -1,8 +1,8 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index cf2da9b..7f38587 100644
+index c3c8474..1ddd4c4 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
-@@ -500,6 +500,22 @@ pub const Buffer = struct {
+@@ -502,6 +502,22 @@ pub const Buffer = struct {
          }
      }
  
@@ -26,7 +26,7 @@ index cf2da9b..7f38587 100644
          log.debug(@This(), "undo: {?}/{}\n", .{ self.history_index, self.history.items.len });
          if (self.history_index) |h_idx| {
 diff --git a/src/editor.zig b/src/editor.zig
-index d5501ad..97f8811 100644
+index a7b9259..694328c 100644
 --- a/src/editor.zig
 +++ b/src/editor.zig
 @@ -35,6 +35,12 @@ pub const Config = struct {
@@ -43,10 +43,10 @@ index d5501ad..97f8811 100644
  
  pub const Editor = struct {
 diff --git a/src/main.zig b/src/main.zig
-index d178a52..8e616cc 100644
+index 69bf3f9..b55760e 100644
 --- a/src/main.zig
 +++ b/src/main.zig
-@@ -207,6 +207,17 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+@@ -199,6 +199,17 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                          if (next_key != null and next_key.?.printable != null) {
                              try printable.append(allocator, next_key.?.printable.?);
                              keys_consumed += 1;
@@ -64,7 +64,7 @@ index d178a52..8e616cc 100644
                          } else {
                              break;
                          }
-@@ -300,6 +311,9 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+@@ -291,6 +302,9 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                      var change = try cha.Change.initInsert(allocator, buffer, pos, &.{'\n'});
                      try buffer.appendChange(&change);
                      if (!below) buffer.moveCursor(.{ .row = row });
