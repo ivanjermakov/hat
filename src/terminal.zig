@@ -98,7 +98,7 @@ pub const Terminal = struct {
             .applyOffset(buffer.offset.negate())
             .applyOffset(layout.buffer.pos));
 
-        try self.writer.writeAll(switch (main.editor.mode) {
+        try self.writer.writeAll(switch (buffer.mode) {
             .normal => cursor_type.steady_block,
             .select, .select_line => cursor_type.steady_underline,
             .insert => cursor_type.steady_bar,
@@ -246,11 +246,11 @@ pub const Terminal = struct {
 
     fn drawCompletionMenu(self: *Terminal, cmp_menu: *cmp.CompletionMenu) !void {
         const max_width = 30;
+        const buffer = main.editor.active_buffer;
 
-        if (main.editor.mode != .insert) return;
+        if (buffer.mode != .insert) return;
         if (cmp_menu.display_items.items.len == 0) return;
 
-        const buffer = main.editor.active_buffer;
         const replace_range = cmp_menu.replace_range.?;
         const menu_pos = (Cursor{
             .row = @intCast(replace_range.start.line),

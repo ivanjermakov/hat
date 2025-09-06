@@ -27,6 +27,21 @@ const dia = @import("ui/diagnostic.zig");
 const uni = @import("unicode.zig");
 const uri = @import("uri.zig");
 
+pub const Mode = enum {
+    normal,
+    select,
+    select_line,
+    insert,
+
+    pub fn isNormalOrSelect(self: Mode) bool {
+        return self == .normal or self.isSelect();
+    }
+
+    pub fn isSelect(self: Mode) bool {
+        return self == .select or self == .select_line;
+    }
+};
+
 pub const Buffer = struct {
     path: []const u8,
     uri: []const u8,
@@ -37,6 +52,7 @@ pub const Buffer = struct {
     file_type: ft.FileTypeConfig,
     content: std.array_list.Aligned(u21, null) = .empty,
     content_raw: std.array_list.Aligned(u8, null) = .empty,
+    mode: Mode = .normal,
     ts_state: ?ts.State = null,
     selection: ?Span = null,
     diagnostics: std.array_list.Aligned(dia.Diagnostic, null) = .empty,
@@ -172,6 +188,35 @@ pub const Buffer = struct {
         if (self.file) |f| f.close();
     }
 
+    pub fn enterMode(self: *Buffer, mode: Mode) FatalError!void {
+        main.editor.resetHover();
+
+        if (self.mode == mode) return;
+        if (self.mode == .insert) try self.commitChanges();
+
+        switch (mode) {
+            .normal => {
+                self.clearSelection();
+                main.editor.completion_menu.reset();
+            },
+            .select => {
+                const end_pos = self.cursorToPos(self.cursor) + 1;
+                self.selection = .{ .start = self.cursor, .end = self.posToCursor(end_pos) };
+                log.warn(@This(), "selection: {?}\n", .{self.selection});
+                main.editor.dirty.draw = true;
+            },
+            .select_line => {
+                self.selection = self.lineSpan(@intCast(self.cursor.row));
+                main.editor.dirty.draw = true;
+            },
+            .insert => self.clearSelection(),
+        }
+        if (mode != .normal) main.editor.dotRepeatInside();
+        log.debug(@This(), "mode: {}->{}\n", .{ self.mode, mode });
+        self.mode = mode;
+        main.editor.dirty.cursor = true;
+    }
+
     pub fn write(self: *Buffer) !void {
         try self.updateRaw();
 
@@ -226,7 +271,7 @@ pub const Buffer = struct {
         };
         self.scrollForCursor(self.cursor);
 
-        switch (main.editor.mode) {
+        switch (self.mode) {
             .select => {
                 const selection = &self.selection.?;
                 // temporary make selection span inclusive to simplify cursor search
@@ -685,14 +730,12 @@ pub const Buffer = struct {
     pub fn copySelectionToClipboard(self: *Buffer) !void {
         if (self.selection) |selection| {
             try clp.write(self.allocator, self.rawTextAt(selection));
-            try main.editor.enterMode(.normal);
+            try self.enterMode(.normal);
         }
     }
 
     pub fn changeInsertFromClipboard(self: *Buffer) !void {
-        if (main.editor.mode == .select or main.editor.mode == .select_line) {
-            try self.changeSelectionDelete();
-        }
+        if (self.mode.isSelect()) try self.changeSelectionDelete();
         const text = try clp.read(self.allocator);
         defer self.allocator.free(text);
         const text_uni = try uni.unicodeFromBytes(self.allocator, text);
@@ -1167,7 +1210,7 @@ test "changeSelectionDelete same line" {
     defer main.editor.deinit();
 
     buffer.cursor = .{ .row = 0, .col = 1 };
-    try main.editor.enterMode(.select);
+    try buffer.enterMode(.select);
     try buffer.changeSelectionDelete();
 
     try buffer.commitChanges();
@@ -1183,7 +1226,7 @@ test "delete selection line to end" {
     defer main.editor.deinit();
 
     buffer.moveCursor(.{ .row = 0, .col = 1 });
-    try main.editor.enterMode(.select);
+    try buffer.enterMode(.select);
     buffer.moveCursor(.{ .row = 0, .col = 3 });
     try buffer.changeSelectionDelete();
 
@@ -1201,7 +1244,7 @@ test "delete selection multiple lines" {
     defer main.editor.deinit();
 
     buffer.moveCursor(.{ .row = 0, .col = 1 });
-    try main.editor.enterMode(.select_line);
+    try buffer.enterMode(.select_line);
     buffer.moveCursor(Cursor{ .row = 1, .col = 2 });
 
     try testing.expectEqualDeep(
@@ -1224,7 +1267,7 @@ test "line delete selection" {
     defer main.editor.deinit();
 
     buffer.moveCursor(.{ .row = 0, .col = 1 });
-    try main.editor.enterMode(.select);
+    try buffer.enterMode(.select);
     buffer.moveCursor(Cursor{ .row = 2, .col = 2 });
 
     try testing.expectEqual(Cursor{ .row = 0, .col = 1 }, buffer.selection.?.start);

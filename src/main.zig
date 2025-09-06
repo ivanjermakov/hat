@@ -140,7 +140,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                 const key = try std.fmt.allocPrint(allocator, "{f}", .{raw_key});
                 defer allocator.free(key);
 
-                const normal_or_select = editor.mode.normalOrSelect();
+                const normal_or_select = buffer.mode.isNormalOrSelect();
 
                 if (normal_or_select and key.len == 1 and std.ascii.isDigit(key[0])) {
                     const d = std.fmt.parseInt(usize, key, 10) catch unreachable;
@@ -154,12 +154,12 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                 }
 
                 var keys_consumed: usize = 1;
-                switch (editor.mode) {
+                switch (buffer.mode) {
                     .normal => editor.dotRepeatOutside(),
                     else => editor.dotRepeatInside(),
                 }
                 const multiple_key = editor.key_queue.items.len > 1;
-                const cmp_menu_active = editor.mode == .insert and
+                const cmp_menu_active = buffer.mode == .insert and
                     editor.completion_menu.display_items.items.len > 0;
                 const cmd_active = editor.command_line.command != null;
                 var repeat_or_1: i32 = 1;
@@ -192,7 +192,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     editor.completion_menu.accept() catch |e| log.err(@This(), "cmp accept error: {}\n", .{e});
 
                     // text insertion
-                } else if (editor.mode == .insert and editor.key_queue.items[0].printable != null) {
+                } else if (buffer.mode == .insert and editor.key_queue.items[0].printable != null) {
                     var printable: std.array_list.Aligned(u21, null) = .empty;
                     defer printable.deinit(allocator);
                     keys_consumed = 0;
@@ -218,7 +218,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                 } else if (eql(u8, key, "<right>")) {
                     buffer.moveCursor(buffer.cursor.applyOffset(.{ .col = 1 }));
                 } else if (eql(u8, key, "<escape>")) {
-                    try editor.enterMode(.normal);
+                    try buffer.enterMode(.normal);
                     editor.dismissMessage();
                     repeat_count = null;
                 } else if (normal_or_select and eql(u8, key, "<c-c>")) {
@@ -267,10 +267,10 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                 } else if (normal_or_select and eql(u8, key, "E")) {
                     buffer.moveToTokenEnd();
                 } else if (normal_or_select and eql(u8, key, "i")) {
-                    try editor.enterMode(.insert);
+                    try buffer.enterMode(.insert);
                 } else if (normal_or_select and eql(u8, key, "a")) {
                     buffer.moveCursor(buffer.cursor.applyOffset(.{ .col = 1 }));
-                    try editor.enterMode(.insert);
+                    try buffer.enterMode(.insert);
                 } else if (normal_or_select and eql(u8, key, "^")) {
                     const indent = buf.lineIndentSpaces(buffer.lineContent(@intCast(buffer.cursor.row)));
                     buffer.moveCursor(.{ .row = buffer.cursor.row, .col = @intCast(indent) });
@@ -284,15 +284,15 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     }
                 } else if (normal_or_select and eql(u8, key, "c")) {
                     try buffer.changeSelectionDelete();
-                    try editor.enterMode(.insert);
+                    try buffer.enterMode(.insert);
                 } else if (normal_or_select and eql(u8, key, "d")) {
                     try buffer.changeSelectionDelete();
-                    try editor.enterMode(.normal);
+                    try buffer.enterMode(.normal);
                     try buffer.commitChanges();
                 } else if (normal_or_select and eql(u8, key, "=")) {
                     try buffer.changeAlignIndent();
                     try buffer.commitChanges();
-                    try editor.enterMode(.normal);
+                    try buffer.enterMode(.normal);
                 } else if (normal_or_select and eql(u8, key, "y")) {
                     buffer.copySelectionToClipboard() catch |e| log.err(@This(), "copy to clipboard error: {}\n", .{e});
                 } else if (normal_or_select and eql(u8, key, "p")) {
@@ -307,13 +307,13 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     const force = eql(u8, key, "Q");
                     editor.closeBuffer(force) catch |e| log.err(@This(), "close buffer error: {}\n", .{e});
                     if (editor.buffers.items.len == 0) break :main_loop;
-                } else if (editor.mode == .normal and eql(u8, key, "v")) {
-                    try editor.enterMode(.select);
-                } else if (editor.mode == .normal and eql(u8, key, "V")) {
-                    try editor.enterMode(.select_line);
-                } else if (editor.mode == .normal and (eql(u8, key, "o") or eql(u8, key, "O"))) {
+                } else if (buffer.mode == .normal and eql(u8, key, "v")) {
+                    try buffer.enterMode(.select);
+                } else if (buffer.mode == .normal and eql(u8, key, "V")) {
+                    try buffer.enterMode(.select_line);
+                } else if (buffer.mode == .normal and (eql(u8, key, "o") or eql(u8, key, "O"))) {
                     const below = eql(u8, key, "o");
-                    try editor.enterMode(.insert);
+                    try buffer.enterMode(.insert);
                     const row = buffer.cursor.row;
                     const pos: Cursor = .{
                         .row = row,
@@ -322,7 +322,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     var change = try cha.Change.initInsert(allocator, buffer, pos, &.{'\n'});
                     try buffer.appendChange(&change);
                     if (!below) buffer.moveCursor(.{ .row = row });
-                } else if (editor.mode == .normal and eql(u8, key, "J")) {
+                } else if (buffer.mode == .normal and eql(u8, key, "J")) {
                     for (0..@intCast(repeat_or_1)) |_| {
                         if (buffer.cursor.row + 1 < buffer.line_positions.items.len) {
                             const pos: Cursor = .{
@@ -339,36 +339,36 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                         }
                     }
                     try buffer.commitChanges();
-                } else if (editor.mode == .normal and eql(u8, key, "u")) {
+                } else if (buffer.mode == .normal and eql(u8, key, "u")) {
                     try buffer.undo();
-                } else if (editor.mode == .normal and eql(u8, key, "U")) {
+                } else if (buffer.mode == .normal and eql(u8, key, "U")) {
                     try buffer.redo();
-                } else if (editor.mode == .normal and eql(u8, key, "<tab>")) {
+                } else if (buffer.mode == .normal and eql(u8, key, "<tab>")) {
                     if (editor.buffers.items.len > 1) {
                         const path = editor.buffers.items[1].path;
                         editor.openBuffer(path) catch |e| log.err(@This(), "open buffer {s} error: {}\n", .{ path, e });
                     }
-                } else if (editor.mode == .normal and eql(u8, key, ".")) {
+                } else if (buffer.mode == .normal and eql(u8, key, ".")) {
                     try editor.dotRepeat(keys_consumed);
-                } else if (editor.mode == .normal and eql(u8, key, "/")) {
+                } else if (buffer.mode == .normal and eql(u8, key, "/")) {
                     editor.command_line.activate(.find);
-                } else if (editor.mode == .normal and eql(u8, key, "n")) {
+                } else if (buffer.mode == .normal and eql(u8, key, "n")) {
                     if (editor.find_query) |q| try buffer.findNext(q, true);
-                } else if (editor.mode == .normal and eql(u8, key, "N")) {
+                } else if (buffer.mode == .normal and eql(u8, key, "N")) {
                     if (editor.find_query) |q| try buffer.findNext(q, false);
-                } else if (editor.mode == .normal and eql(u8, key, "x")) {
+                } else if (buffer.mode == .normal and eql(u8, key, "x")) {
                     try buffer.findNextDiagnostic(true);
-                } else if (editor.mode == .normal and eql(u8, key, "X")) {
+                } else if (buffer.mode == .normal and eql(u8, key, "X")) {
                     try buffer.findNextDiagnostic(false);
-                } else if (editor.mode == .normal and eql(u8, key, "r") and editor.recording_macro != null) {
+                } else if (buffer.mode == .normal and eql(u8, key, "r") and editor.recording_macro != null) {
                     editor.recordMacro() catch |e| log.err(@This(), "record macro error: {}\n", .{e});
-                } else if (editor.mode == .normal and eql(u8, key, "<c-n>")) {
+                } else if (buffer.mode == .normal and eql(u8, key, "<c-n>")) {
                     editor.pickFile() catch |e| log.err(@This(), "pick file error: {}\n", .{e});
-                } else if (editor.mode == .normal and eql(u8, key, "<c-f>")) {
+                } else if (buffer.mode == .normal and eql(u8, key, "<c-f>")) {
                     editor.findInFiles() catch |e| log.err(@This(), "find in files error: {}\n", .{e});
-                } else if (editor.mode == .normal and eql(u8, key, "<c-e>")) {
+                } else if (buffer.mode == .normal and eql(u8, key, "<c-e>")) {
                     editor.pickBuffer() catch |e| log.err(@This(), "pick buffer error: {}\n", .{e});
-                } else if (editor.mode == .normal and eql(u8, key, "<K>")) {
+                } else if (buffer.mode == .normal and eql(u8, key, "<K>")) {
                     if (editor.hover_contents) |hover| {
                         editor.openScratch(hover) catch |e| log.err(@This(), "open scratch error: {}\n", .{e});
                     } else {
@@ -376,9 +376,9 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     }
 
                     // insert mode
-                } else if (editor.mode == .insert and eql(u8, key, "<delete>")) {
+                } else if (buffer.mode == .insert and eql(u8, key, "<delete>")) {
                     try buffer.changeDeleteChar();
-                } else if (editor.mode == .insert and eql(u8, key, "<backspace>")) {
+                } else if (buffer.mode == .insert and eql(u8, key, "<backspace>")) {
                     try buffer.changeDeletePrevChar();
                 } else if (multiple_key) {
                     keys_consumed = 2;
@@ -387,27 +387,27 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     const multi_key = try std.fmt.allocPrint(allocator, "{s}{f}", .{ key, key2 });
                     defer allocator.free(multi_key);
 
-                    if (editor.mode == .normal and eql(u8, multi_key, " w")) {
+                    if (buffer.mode == .normal and eql(u8, multi_key, " w")) {
                         buffer.write() catch |e| {
                             log.err(@This(), "write buffer error: {}\n", .{e});
                             try editor.sendMessageFmt("write buffer error: {}", .{e});
                         };
-                    } else if (editor.mode == .normal and eql(u8, multi_key, " d")) {
+                    } else if (buffer.mode == .normal and eql(u8, multi_key, " d")) {
                         buffer.goToDefinition() catch |e| log.err(@This(), "go to def LSP error: {}\n", .{e});
-                    } else if (editor.mode == .normal and eql(u8, multi_key, " r")) {
+                    } else if (buffer.mode == .normal and eql(u8, multi_key, " r")) {
                         buffer.findReferences() catch |e| log.err(@This(), "find references LSP error: {}\n", .{e});
-                    } else if (editor.mode == .normal and eql(u8, multi_key, " n")) {
+                    } else if (buffer.mode == .normal and eql(u8, multi_key, " n")) {
                         try buffer.renamePrompt();
-                    } else if (editor.mode == .normal and eql(u8, key, "r") and key2.printable != null) {
+                    } else if (buffer.mode == .normal and eql(u8, key, "r") and key2.printable != null) {
                         const macro_name: u8 = @intCast(key2.printable.?);
                         try editor.startMacro(macro_name);
-                    } else if (editor.mode == .normal and eql(u8, key, "@") and key2.printable != null) {
+                    } else if (buffer.mode == .normal and eql(u8, key, "@") and key2.printable != null) {
                         const macro_name: u8 = @intCast(key2.printable.?);
                         for (0..@intCast(repeat_or_1)) |_| try editor.replayMacro(macro_name, keys_consumed);
                     } else if (normal_or_select and eql(u8, multi_key, "gg")) {
                         buffer.moveCursor(.{ .col = buffer.cursor.col });
                         buffer.centerCursor();
-                    } else if (editor.mode == .normal and eql(u8, multi_key, "gJ")) {
+                    } else if (buffer.mode == .normal and eql(u8, multi_key, "gJ")) {
                         log.warn(@This(), "gJ???\n", .{});
                         for (0..@intCast(repeat_or_1)) |_| {
                             if (buffer.cursor.row + 1 < buffer.line_positions.items.len) {

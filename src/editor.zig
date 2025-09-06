@@ -43,7 +43,6 @@ pub const Editor = struct {
     /// Must be always sorted recent-first
     buffers: std.array_list.Aligned(*buf.Buffer, null) = .empty,
     active_buffer: *buf.Buffer = undefined,
-    mode: Mode,
     dirty: Dirty,
     completion_menu: cmp.CompletionMenu,
     command_line: cmd.CommandLine,
@@ -63,7 +62,6 @@ pub const Editor = struct {
     pub fn init(allocator: Allocator, config: Config) !Editor {
         const editor = Editor{
             .config = config,
-            .mode = .normal,
             .dirty = .{},
             .completion_menu = cmp.CompletionMenu.init(allocator),
             .command_line = cmd.CommandLine.init(allocator),
@@ -141,36 +139,6 @@ pub const Editor = struct {
         try self.buffers.insert(self.allocator, 0, buffer);
         self.active_buffer = buffer;
         main.editor.dirty.draw = true;
-    }
-
-    pub fn enterMode(self: *Editor, mode: Mode) FatalError!void {
-        const buffer = self.active_buffer;
-        self.resetHover();
-
-        if (self.mode == mode) return;
-        if (self.mode == .insert) try buffer.commitChanges();
-
-        switch (mode) {
-            .normal => {
-                buffer.clearSelection();
-                self.completion_menu.reset();
-            },
-            .select => {
-                const end_pos = buffer.cursorToPos(buffer.cursor) + 1;
-                buffer.selection = .{ .start = buffer.cursor, .end = buffer.posToCursor(end_pos) };
-                log.warn(@This(), "selection: {?}\n", .{buffer.selection});
-                self.dirty.draw = true;
-            },
-            .select_line => {
-                buffer.selection = buffer.lineSpan(@intCast(buffer.cursor.row));
-                self.dirty.draw = true;
-            },
-            .insert => buffer.clearSelection(),
-        }
-        if (mode != .normal) self.dotRepeatInside();
-        log.debug(@This(), "mode: {}->{}\n", .{ self.mode, mode });
-        self.mode = mode;
-        self.dirty.cursor = true;
     }
 
     pub fn deinit(self: *Editor) void {
@@ -435,18 +403,19 @@ pub const Editor = struct {
     }
 
     pub fn handleCmd(self: *Editor) !void {
+        const buffer = self.active_buffer;
         switch (self.command_line.command.?) {
             .find => {
                 if (self.find_query) |fq| self.allocator.free(fq);
                 self.find_query = try self.allocator.dupe(u21, self.command_line.content.items);
-                try self.active_buffer.findNext(self.find_query.?, true);
+                try buffer.findNext(self.find_query.?, true);
             },
             .rename => {
-                try self.active_buffer.rename(self.command_line.content.items);
+                try buffer.rename(self.command_line.content.items);
             },
             .pipe => {
-                try self.active_buffer.pipe(self.command_line.content.items);
-                try self.enterMode(.normal);
+                try buffer.pipe(self.command_line.content.items);
+                try buffer.enterMode(.normal);
             },
         }
         self.command_line.close();
@@ -474,16 +443,5 @@ pub const Editor = struct {
         self.active_buffer.cursor = old_cursor;
         self.active_buffer.offset = old_offset;
         self.dirty.draw = true;
-    }
-};
-
-pub const Mode = enum {
-    normal,
-    select,
-    select_line,
-    insert,
-
-    pub fn normalOrSelect(self: Mode) bool {
-        return self == .normal or self == .select or self == .select_line;
     }
 };
