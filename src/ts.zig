@@ -1,10 +1,11 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 
-const core = @import("core.zig");
 const buf = @import("buffer.zig");
 const cha = @import("change.zig");
 const col = @import("color.zig");
+const core = @import("core.zig");
+const SpanFlat = core.SpanFlat;
 const ft = @import("file_type.zig");
 const log = @import("log.zig");
 
@@ -13,8 +14,6 @@ const ts_c = @cImport({
 });
 
 pub const ts = ts_c;
-
-const ByteSpan = core.SpanFlat;
 
 pub fn ParseResult(comptime SpanType: type) type {
     return struct {
@@ -54,7 +53,7 @@ pub fn ParseResult(comptime SpanType: type) type {
                     var capture_name_len: u32 = undefined;
                     const capture_name = ts.ts_query_capture_name_for_id(self.query.?, capture.index, &capture_name_len);
                     const node_type = capture_name[0..capture_name_len];
-                    const span: ByteSpan = .{
+                    const span: SpanFlat = .{
                         .start = ts.ts_node_start_byte(capture.node),
                         .end = ts.ts_node_end_byte(capture.node),
                     };
@@ -118,12 +117,12 @@ pub const State = struct {
 };
 
 pub const AttrsSpan = struct {
-    span: ByteSpan,
+    span: SpanFlat,
     attrs: []const col.Attr,
 
     /// Capture name is a dot-separated list of ts node types, forming hierarchy, e.g. `identifier.type`
     /// @see https://tree-sitter.github.io/tree-sitter/using-parsers/queries/2-operators.html#capturing-nodes
-    pub fn init(span: ByteSpan, capture_name: []const u8) ?AttrsSpan {
+    pub fn init(span: SpanFlat, capture_name: []const u8) ?AttrsSpan {
         return .{
             .span = span,
             .attrs = if (findAttrs(capture_name)) |as| as else return null,
@@ -160,10 +159,10 @@ pub const syntax_highlight = std.StaticStringMap([]const col.Attr).initComptime(
 });
 
 pub const IndentSpanTuple = struct {
-    span: ByteSpan,
+    span: SpanFlat,
     name: []const u8,
 
-    pub fn init(span: ByteSpan, capture_name: []const u8) ?IndentSpanTuple {
+    pub fn init(span: SpanFlat, capture_name: []const u8) ?IndentSpanTuple {
         if (!std.mem.eql(u8, capture_name, "indent.begin")) return null;
         return .{ .span = span, .name = capture_name };
     }

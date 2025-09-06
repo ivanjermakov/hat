@@ -77,7 +77,7 @@ pub const Span = struct {
         };
     }
 
-    pub fn fromByteSpan(buffer: *const buf.Buffer, byte_span: SpanFlat) Span {
+    pub fn fromSpanFlat(buffer: *const buf.Buffer, byte_span: SpanFlat) Span {
         return .{
             .start = buffer.posToCursor(byte_span.start),
             .end = buffer.posToCursor(byte_span.end),
