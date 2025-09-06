@@ -208,7 +208,8 @@ pub const Buffer = struct {
             return;
         }
 
-        const max_col = ter.lineColLength(self.lineContent(@intCast(new_cursor.row)));
+        var max_col = ter.lineColLength(self.lineContent(@intCast(new_cursor.row)));
+        if (max_col > 0 and !self.lineTerminated(@intCast(new_cursor.row))) max_col -= 1;
         var col: i32 = @intCast(@min(new_cursor.col, max_col));
         if (vertical_only) {
             if (self.cursor_desired_col) |desired| {
@@ -410,7 +411,6 @@ pub const Buffer = struct {
 
     pub fn changeSelectionDelete(self: *Buffer) !void {
         if (self.selection) |selection| {
-            try main.editor.enterMode(.normal);
             var change = try cha.Change.initDelete(self.allocator, self, selection);
             try self.appendChange(&change);
         }
@@ -451,11 +451,19 @@ pub const Buffer = struct {
             for (line) |ch| {
                 byte += std.unicode.utf8CodepointSequenceLength(ch) catch unreachable;
             }
-            // new line
-            byte += 1;
-            char += line.len + 1;
+            char += line.len;
+            if (char < self.content.items.len and self.content.items[char] == '\n') {
+                byte += 1;
+                char += 1;
+            }
             try self.line_positions.append(self.allocator, char);
             try self.line_byte_positions.append(self.allocator, byte);
+        }
+        const ps = self.line_positions.items;
+        if (ps.len > 1 and ps[ps.len - 1] == ps[ps.len - 2]) {
+            // remove phantom line
+            _ = self.line_positions.orderedRemove(ps.len - 1);
+            _ = self.line_byte_positions.orderedRemove(self.line_byte_positions.items.len - 1);
         }
         log.trace(@This(), "line positions: {any}\n", .{self.line_positions.items});
         log.trace(@This(), "line byte positions: {any}\n", .{self.line_positions.items});
@@ -543,15 +551,32 @@ pub const Buffer = struct {
         var line_start: usize = 0;
         for (self.line_positions.items) |l_pos| {
             if (l_pos > pos) break;
+            if (i > 0 and l_pos == self.line_positions.items[i - 1]) break;
             line_start = l_pos;
             i += 1;
         }
         return Cursor{ .row = @intCast(i), .col = @intCast(pos - line_start) };
     }
 
+    pub fn lineTerminated(self: *const Buffer, row: usize) bool {
+        return row + 1 < self.line_positions.items.len or self.content.getLast() == '\n';
+    }
+
+    /// Line length at `row` (excl. newline char)
     pub fn lineLength(self: *const Buffer, row: usize) usize {
-        if (row == 0) return self.line_positions.items[row] - 1;
-        return self.line_positions.items[row] - self.line_positions.items[row - 1] - 1;
+        if (row == 0) {
+            if (self.content.items.len == 0) {
+                // empty file
+                return 0;
+            }
+            return self.line_positions.items[row] - 1;
+        }
+        const len = self.line_positions.items[row] - self.line_positions.items[row - 1];
+        if (len == 0 or !self.lineTerminated(row)) {
+            // phantom line
+            return len;
+        }
+        return len - 1;
     }
 
     pub fn lineStart(self: *const Buffer, row: usize) usize {
@@ -676,16 +701,6 @@ pub const Buffer = struct {
         try self.commitChanges();
     }
 
-    pub fn selectChar(self: *Buffer) void {
-        self.selection = .{ .start = self.cursor, .end = self.posToCursor(self.cursorToPos(self.cursor) + 1) };
-        main.editor.dirty.draw = true;
-    }
-
-    pub fn selectLine(self: *Buffer) void {
-        self.selection = self.lineSpan(@intCast(self.cursor.row));
-        main.editor.dirty.draw = true;
-    }
-
     pub fn syncFs(self: *Buffer) !bool {
         if (self.scratch) return false;
         const stat = try std.fs.cwd().statFile(self.path);
@@ -807,7 +822,7 @@ pub const Buffer = struct {
     }
 
     fn applyChange(self: *Buffer, change: *cha.Change) FatalError!void {
-        log.trace(@This(), "apply change {f}\n", .{change});
+        log.trace(@This(), "apply {f}\n", .{change});
         const span = change.old_span;
 
         if (builtin.mode == .Debug) {
@@ -825,7 +840,6 @@ pub const Buffer = struct {
         };
         change.new_byte_span = ByteSpan.fromBufSpan(self, change.new_span.?);
         self.moveCursor(change.new_span.?.end);
-        self.cursor = change.new_span.?.end;
 
         if (self.ts_state) |*ts_state| try ts_state.edit(change);
     }
@@ -1092,9 +1106,7 @@ test "moveCursor" {
 }
 
 test "moveToNextWord" {
-    var buffer = try testSetupScratch(
-        \\one two three
-    );
+    var buffer = try testSetupScratch("one two three\n");
     defer main.editor.deinit();
 
     buffer.moveToNextWord();
@@ -1102,9 +1114,7 @@ test "moveToNextWord" {
 }
 
 test "moveToPrevWord" {
-    var buffer = try testSetupScratch(
-        \\one two three
-    );
+    var buffer = try testSetupScratch("one two three\n");
     defer main.editor.deinit();
 
     buffer.moveCursor(.{ .row = 0, .col = 10 });
@@ -1119,9 +1129,7 @@ test "moveToPrevWord" {
 }
 
 test "moveToWordEnd" {
-    var buffer = try testSetupScratch(
-        \\one two three
-    );
+    var buffer = try testSetupScratch("one two three\n");
     defer main.editor.deinit();
 
     buffer.moveToWordEnd();
@@ -1138,9 +1146,7 @@ test "moveToWordEnd" {
 }
 
 test "moveToTokenEnd" {
-    var buffer = try testSetupScratch(
-        \\one two three
-    );
+    var buffer = try testSetupScratch("one two three\n");
     defer main.editor.deinit();
 
     buffer.moveToTokenEnd();
@@ -1157,10 +1163,7 @@ test "moveToTokenEnd" {
 }
 
 test "changeSelectionDelete same line" {
-    var buffer = try testSetupScratch(
-        \\abc
-        \\
-    );
+    var buffer = try testSetupScratch("abc\n");
     defer main.editor.deinit();
 
     buffer.cursor = .{ .row = 0, .col = 1 };

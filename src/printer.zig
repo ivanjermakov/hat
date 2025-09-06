@@ -35,19 +35,24 @@ pub fn printBuffer(buffer: *buf.Buffer, writer: *std.io.Writer, highlight: ?High
     if (highlight) |hi| {
         const half_term: i32 = @divFloor(@as(i32, @intCast(hi.term_height)), 2);
         start_row = @as(i32, @intCast(hi.highlight_line)) - half_term;
-        end_row = start_row + @as(i32, @intCast(hi.term_height));
+        end_row = @min(end_row, start_row + @as(i32, @intCast(hi.term_height)));
     }
 
     var span_index: usize = 0;
     var row: i32 = start_row;
     while (row < end_row) {
+        if (row < 0) {
+            row += 1;
+            writer.writeAll("\n") catch {};
+            continue;
+        }
         defer {
-            if (row + 1 < buffer.line_positions.items.len) writer.writeAll("\n") catch {};
             last_attrs = null;
             row += 1;
+            writer.writeAll("\x1b[0m") catch {};
+            if (buffer.lineTerminated(@intCast(row))) writer.writeAll("\n") catch {};
         }
-        if (row < 0 or row >= buffer.line_positions.items.len) continue;
-        defer writer.writeAll("\x1b[0m") catch {};
+
         const line = buffer.lineContent(@intCast(row));
         var byte: usize = buffer.lineStart(@intCast(row));
 
@@ -78,6 +83,7 @@ pub fn printBuffer(buffer: *buf.Buffer, writer: *std.io.Writer, highlight: ?High
                 @memcpy(&last_attrs_buf, &attrs_buf);
                 last_attrs = last_attrs_buf[0..attrs.len];
             }
+            std.debug.assert(ch != '\n');
             try uni.unicodeToBytesWrite(writer, &.{ch});
             byte += try std.unicode.utf8CodepointSequenceLength(ch);
         }
@@ -120,8 +126,7 @@ test "printer no ts" {
         "const std = @import(\"std\");\x1b[0m\n" ++
             "pub fn main() !void {\x1b[0m\n" ++
             "    std.debug.print(\"hello!\\n\", .{});\x1b[0m\n" ++
-            "}\x1b[0m\n" ++
-            "\x1b[0m",
+            "}\x1b[0m\n",
         content_writer.written(),
     );
 }
@@ -150,8 +155,7 @@ test "printer no ts highlight" {
             "const std = @import(\"std\");\x1b[0m\n" ++
             "pub fn main() !void {\x1b[0m\n" ++
             "\x1b[48;2;62;62;67m    std.debug.print(\"hello!\\n\", .{});\x1b[0m\n" ++
-            "}\x1b[0m\n" ++
-            "\x1b[0m",
+            "}\x1b[0m\n",
         content_writer.written(),
     );
 }

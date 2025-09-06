@@ -287,6 +287,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     try editor.enterMode(.insert);
                 } else if (normal_or_select and eql(u8, key, "d")) {
                     try buffer.changeSelectionDelete();
+                    try editor.enterMode(.normal);
                     try buffer.commitChanges();
                 } else if (normal_or_select and eql(u8, key, "=")) {
                     try buffer.changeAlignIndent();
