@@ -7,17 +7,17 @@ const buf = @import("buffer.zig");
 const core = @import("core.zig");
 const Cursor = core.Cursor;
 const Span = core.Span;
-const ByteSpan = core.SpanFlat;
+const SpanFlat = core.SpanFlat;
 const lsp = @import("lsp.zig");
 const ts = @import("ts.zig");
 const uni = @import("unicode.zig");
 
 pub const Change = struct {
     old_span: Span,
-    old_byte_span: ByteSpan,
+    old_span_flat: SpanFlat,
     old_text: []const u21,
     new_span: ?Span = null,
-    new_byte_span: ?ByteSpan = null,
+    new_span_flat: ?SpanFlat = null,
     new_text: ?[]const u21 = null,
     allocator: Allocator,
 
@@ -42,7 +42,7 @@ pub const Change = struct {
     ) !Change {
         return .{
             .old_span = span,
-            .old_byte_span = ByteSpan.fromBufSpan(buffer, span),
+            .old_span_flat = SpanFlat.fromBufSpan(buffer, span),
             .old_text = try allocator.dupe(u21, buffer.textAt(span)),
             .new_text = try allocator.dupe(u21, new_text),
             .allocator = allocator,
@@ -90,9 +90,9 @@ pub const Change = struct {
     pub fn invert(self: *const Change) !Change {
         return .{
             .old_span = self.new_span.?,
-            .old_byte_span = self.new_byte_span.?,
+            .old_span_flat = self.new_span_flat.?,
             .new_span = self.old_span,
-            .new_byte_span = self.old_byte_span,
+            .new_span_flat = self.old_span_flat,
             .new_text = try self.allocator.dupe(u21, self.old_text),
             .old_text = try self.allocator.dupe(u21, self.new_text.?),
             .allocator = self.allocator,
@@ -120,9 +120,9 @@ pub const Change = struct {
         const start_point = self.old_span.start.toTs();
         const old_end_point = self.old_span.end.toTs();
         const new_end_point = if (self.new_span) |new_span| new_span.end.toTs() else old_end_point;
-        const start_byte: u32 = @intCast(self.old_byte_span.start);
-        const old_end_byte: u32 = @intCast(self.old_byte_span.end);
-        const new_end_byte: u32 = @intCast(self.new_byte_span.?.end);
+        const start_byte: u32 = @intCast(self.old_span_flat.start);
+        const old_end_byte: u32 = @intCast(self.old_span_flat.end);
+        const new_end_byte: u32 = @intCast(self.new_span_flat.?.end);
         return .{
             .start_byte = start_byte,
             .old_end_byte = old_end_byte,

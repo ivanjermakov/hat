@@ -11,7 +11,7 @@ const clp = @import("clipboard.zig");
 const core = @import("core.zig");
 const Span = core.Span;
 const Cursor = core.Cursor;
-const ByteSpan = core.SpanFlat;
+const SpanFlat = core.SpanFlat;
 const Dimensions = core.Dimensions;
 const FatalError = core.FatalError;
 const dt = @import("datetime.zig");
@@ -398,8 +398,8 @@ pub const Buffer = struct {
     pub fn changeDeleteChar(self: *Buffer) !void {
         const pos = self.cursorToPos(self.cursor);
         if (pos + 1 == self.content.items.len) return;
-        const span: ByteSpan = .{ .start = pos, .end = pos + 1 };
-        var change = try cha.Change.initDelete(self.allocator, self, .fromByteSpan(self, span));
+        const span: SpanFlat = .{ .start = pos, .end = pos + 1 };
+        var change = try cha.Change.initDelete(self.allocator, self, .fromSpanFlat(self, span));
         try self.appendChange(&change);
     }
 
@@ -600,7 +600,7 @@ pub const Buffer = struct {
     }
 
     pub fn rawTextAt(self: *const Buffer, span: Span) []const u8 {
-        const bs = ByteSpan.fromBufSpan(self, span);
+        const bs = SpanFlat.fromBufSpan(self, span);
         return self.content_raw.items[bs.start..bs.end];
     }
 
@@ -770,7 +770,7 @@ pub const Buffer = struct {
             const span = spans[m];
             try main.editor.sendMessageFmt("[{}/{}] {s}", .{ m + 1, spans.len, query_b });
             self.moveCursor(self.posToCursor(span.start));
-            self.selection = .fromByteSpan(self, span);
+            self.selection = .fromSpanFlat(self, span);
         }
     }
 
@@ -811,8 +811,8 @@ pub const Buffer = struct {
         }
     }
 
-    fn find(self: *Buffer, query: []const u8) ![]const ByteSpan {
-        var spans: std.array_list.Aligned(ByteSpan, null) = .empty;
+    fn find(self: *Buffer, query: []const u8) ![]const SpanFlat {
+        var spans: std.array_list.Aligned(SpanFlat, null) = .empty;
         var re = try reg.Regex.from(query, false, self.allocator);
         defer re.deinit();
 
@@ -820,13 +820,13 @@ pub const Buffer = struct {
         defer re.deinitMatchList(&matches);
         for (0..matches.items.len) |i| {
             const match = matches.items[i];
-            try spans.append(self.allocator, ByteSpan.fromRegex(match));
+            try spans.append(self.allocator, SpanFlat.fromRegex(match));
         }
         return spans.toOwnedSlice(self.allocator);
     }
 
     fn fullSpan(self: *Buffer) Span {
-        return .fromByteSpan(self, .{ .start = 0, .end = self.content.items.len });
+        return .fromSpanFlat(self, .{ .start = 0, .end = self.content.items.len });
     }
 
     fn applyChange(self: *Buffer, change: *cha.Change) FatalError!void {
@@ -846,7 +846,7 @@ pub const Buffer = struct {
             .start = span.start,
             .end = self.posToCursor(delete_start + if (change.new_text) |new_text| new_text.len else 0),
         };
-        change.new_byte_span = ByteSpan.fromBufSpan(self, change.new_span.?);
+        change.new_span_flat = SpanFlat.fromBufSpan(self, change.new_span.?);
         self.moveCursor(change.new_span.?.end);
 
         if (self.ts_state) |*ts_state| try ts_state.edit(change);
@@ -967,10 +967,10 @@ fn tokenEnd(line: []const u21, pos: usize) ?usize {
 }
 
 /// Find token span that contains `pos`
-fn tokenSpan(line: []const u21, pos: usize) ?ByteSpan {
+fn tokenSpan(line: []const u21, pos: usize) ?SpanFlat {
     if (!isToken(line[pos])) return null;
     var col = pos;
-    var span: ByteSpan = .{ .start = col, .end = col + 1 };
+    var span: SpanFlat = .{ .start = col, .end = col + 1 };
     while (col < line.len) {
         defer col += 1;
         if (!isToken(line[col])) {
