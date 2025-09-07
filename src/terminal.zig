@@ -214,9 +214,8 @@ pub const Terminal = struct {
                 if (buffer.diagnostics.items.len > 0) {
                     for (buffer.diagnostics.items) |diagnostic| {
                         const span = diagnostic.span;
-                        const in_range = (buffer_row > span.start.row and buffer_row < span.end.col) or
-                            (buffer_row == span.start.row and buffer_col >= span.start.col and buffer_col < span.end.col);
-                        if (in_range) {
+
+                        if (span.inRange(.{ .row = buffer_row, .col = buffer_col })) {
                             try co.attributes.write(co.attributes.diagnostic_error, &attrs_writer);
                             break;
                         }

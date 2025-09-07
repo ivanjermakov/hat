@@ -544,12 +544,12 @@ pub const LspConnection = struct {
             log.debug(@This(), "server log: {s}\n", .{params_typed.value.message});
         } else if (std.mem.eql(u8, notif.method, "textDocument/publishDiagnostics")) {
             const params_typed = try std.json.parseFromValue(types.PublishDiagnosticsParams, arena, notif.params.?, .{});
-            log.debug(@This(), "got {} diagnostics\n", .{params_typed.value.diagnostics.len});
             if (main.editor.findBufferByUri(params_typed.value.uri)) |target| {
                 target.clearDiagnostics();
                 for (params_typed.value.diagnostics) |diagnostic| {
                     try target.diagnostics.append(self.allocator, try dia.Diagnostic.fromLsp(target.allocator, diagnostic));
                 }
+                log.debug(@This(), "got {} diagnostics\n", .{target.diagnostics.items.len});
                 if (target == main.editor.active_buffer) {
                     main.editor.dirty.draw = true;
                 }
