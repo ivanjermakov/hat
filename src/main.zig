@@ -301,6 +301,28 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     buffer.centerCursor();
                 } else if (normal_or_select and eql(u8, key, ":")) {
                     buffer.pipePrompt();
+                } else if (normal_or_select and (eql(u8, key, "*") or eql(u8, key, "#"))) {
+                    const forward = eql(u8, key, "*");
+                    const token: ?[]const u21 = b: {
+                        if (buffer.mode == .normal) {
+                            const line = buffer.lineContent(@intCast(buffer.cursor.row));
+                            if (buf.tokenSpan(line, @intCast(buffer.cursor.col))) |flat_span| {
+                                log.warn(@This(), "flat: {}\n", .{flat_span});
+                                break :b line[flat_span.start..flat_span.end];
+                            } else {
+                                break :b null;
+                            }
+                        } else {
+                            break :b buffer.textAt(buffer.selection.?);
+                        }
+                    };
+                    if (token) |t| {
+                        if (editor.find_query) |fq| editor.allocator.free(fq);
+                        editor.find_query = try editor.allocator.dupe(u21, t);
+                        try buffer.findNext(editor.find_query.?, forward);
+                    } else {
+                        try editor.sendMessage("not a token");
+                    }
 
                     // normal mode
                 } else if (normal_or_select and (eql(u8, key, "q") or eql(u8, key, "Q"))) {

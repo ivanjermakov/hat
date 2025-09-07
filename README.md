@@ -12,7 +12,7 @@ Hat is a **ha**ckable modal **t**ext editor for modern terminals.
 
 - Modal text editing
     * Normal, select, select line, and insert modes
-    * Basic motions (vim's `e` `y` `o` `p` `a` `d` `f` `c` `b` `^` `$` `0` `=` etc.)
+    * Basic motions (vim's `e` `y` `o` `p` `a` `d` `f` `c` `b` `^` `$` `0` `=` `J` `gJ` `*` `#` etc.)
     * Unlimited undo/redo
     * System clipboard copy & paste (using `xclip`)
     * Find in buffer

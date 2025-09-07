@@ -780,6 +780,7 @@ pub const Buffer = struct {
 
     pub fn findNext(self: *Buffer, query: []const u21, forward: bool) FatalError!void {
         const query_b = uni.unicodeToBytes(self.allocator, query) catch unreachable;
+        log.debug(@This(), "find query: {s}\n", .{query_b});
         defer self.allocator.free(query_b);
         const spans = self.find(query_b) catch {
             try main.editor.sendMessageFmt("invalid search: {s}", .{query_b});
@@ -958,6 +959,29 @@ pub fn lineIndentSpaces(line: []const u21) usize {
     return leading_spaces;
 }
 
+/// Find token span that contains `pos`
+pub fn tokenSpan(line: []const u21, pos: usize) ?SpanFlat {
+    if (!isToken(line[pos])) return null;
+    var col = pos;
+    var span: SpanFlat = .{ .start = col, .end = col + 1 };
+    while (col < line.len) {
+        defer col += 1;
+        if (!isToken(line[col])) {
+            span.end = col;
+            break;
+        }
+    }
+    col = pos;
+    while (col > 0) {
+        defer col -= 1;
+        if (!isToken(line[col])) {
+            span.start = col + 1;
+            break;
+        }
+    }
+    return span;
+}
+
 fn nextWordStart(line: []const u21, pos: usize) ?usize {
     if (line.len == 0) return null;
     var col = pos;
@@ -999,29 +1023,6 @@ fn tokenEnd(line: []const u21, pos: usize) ?usize {
         }
     }
     return line.len - 1;
-}
-
-/// Find token span that contains `pos`
-fn tokenSpan(line: []const u21, pos: usize) ?SpanFlat {
-    if (!isToken(line[pos])) return null;
-    var col = pos;
-    var span: SpanFlat = .{ .start = col, .end = col + 1 };
-    while (col < line.len) {
-        defer col += 1;
-        if (!isToken(line[col])) {
-            span.end = col;
-            break;
-        }
-    }
-    col = pos;
-    while (col > 0) {
-        defer col -= 1;
-        if (!isToken(line[col])) {
-            span.start = col + 1;
-            break;
-        }
-    }
-    return span;
 }
 
 const Boundary = enum {
