@@ -1,4 +1,4 @@
-//! Default test runner for unit tests.
+/// Adapted zig/lib/compiler/test_runner.zig
 const std = @import("std");
 const testing = std.testing;
 const assert = std.debug.assert;
@@ -46,11 +46,6 @@ fn mainTerminal() void {
     const stderr = std.fs.File.stderr();
     var stderr_writer = stderr.writer(&.{});
     const log = &stderr_writer.interface;
-
-    var async_frame_buffer: []align(builtin.target.stackAlignment()) u8 = undefined;
-    // TODO this is on the next line (using `undefined` above) because otherwise zig incorrectly
-    // ignores the alignment of the slice.
-    async_frame_buffer = &[_]u8{};
 
     var leaks: usize = 0;
     for (test_fn_list, 0..) |test_fn, i| {

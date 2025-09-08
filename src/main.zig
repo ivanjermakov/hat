@@ -299,7 +299,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     buffer.changeInsertFromClipboard() catch |e| log.err(@This(), "paste from clipboard error: {}\n", .{e});
                 } else if (normal_or_select and eql(u8, key, "z")) {
                     buffer.centerCursor();
-                } else if (normal_or_select and eql(u8, key, ":")) {
+                } else if (normal_or_select and eql(u8, key, "|")) {
                     buffer.pipePrompt();
                 } else if (normal_or_select and (eql(u8, key, "*") or eql(u8, key, "#"))) {
                     const forward = eql(u8, key, "*");
