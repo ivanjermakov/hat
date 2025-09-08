@@ -59,6 +59,7 @@ Hat is a **ha**ckable modal **t**ext editor for modern terminals.
 | ✔️   | Relative line numbers     | [patch/relative-number](/patch/relative-number)       |
 | ✔️   | Auto-indent               | [patch/auto-indent](/patch/auto-indent)               |
 | 🚧   | Surround actions          |                                                       |
+| 🚧   | Case actions              |                                                       |
 | 🚧   | Marks                     |                                                       |
 | 🚧   | Comments                  |                                                       |
 

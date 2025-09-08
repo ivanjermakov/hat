@@ -21,7 +21,7 @@ control
 Some assumptions were made to keep Hat simple:
 
 - Unicode support is limited to what common modern terminal emulators support. In Hat, "character" is a Unicode
-codepoint. So no grapheme clustering, no variation selection, no terminal emulator-specific logic.
+codepoint. So no grapheme clustering, no variation selection, no ZWJs, no terminal emulator-specific logic.
 As long as every buffer byte is displayed and editable, we're ok.
 - Hosting terminal emulator is capable of:
     * [Alternate buffer](https://unix.stackexchange.com/questions/288962/what-does-1049h-and-1h-ansi-escape-sequences-do)
