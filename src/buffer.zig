@@ -438,22 +438,6 @@ pub const Buffer = struct {
         try self.appendChange(&change);
     }
 
-    pub fn changeDeleteChar(self: *Buffer) !void {
-        const pos = self.cursorToPos(self.cursor);
-        if (pos + 1 == self.content.items.len) return;
-        const span: SpanFlat = .{ .start = pos, .end = pos + 1 };
-        var change = try cha.Change.initDelete(self.allocator, self, .fromSpanFlat(self, span));
-        try self.appendChange(&change);
-    }
-
-    pub fn changeDeletePrevChar(self: *Buffer) !void {
-        const pos = self.cursorToPos(self.cursor);
-        if (pos == 0) return;
-        const span: Span = .{ .start = self.posToCursor(pos - 1), .end = self.posToCursor(pos) };
-        var change = try cha.Change.initDelete(self.allocator, self, span);
-        try self.appendChange(&change);
-    }
-
     pub fn changeSelectionDelete(self: *Buffer) !void {
         if (self.selection) |selection| {
             var change = try cha.Change.initDelete(self.allocator, self, selection);

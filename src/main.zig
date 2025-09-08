@@ -8,6 +8,7 @@ const co = @import("color.zig");
 const core = @import("core.zig");
 const Cursor = core.Cursor;
 const Span = core.Span;
+const SpanFlat = core.SpanFlat;
 const FatalError = core.FatalError;
 const edi = @import("editor.zig");
 const env = @import("env.zig");
@@ -399,9 +400,17 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
 
                     // insert mode
                 } else if (buffer.mode == .insert and eql(u8, key, "<delete>")) {
-                    try buffer.changeDeleteChar();
+                    const pos = buffer.cursorToPos(buffer.cursor);
+                    if (pos + 1 == buffer.content.items.len) return;
+                    const span: SpanFlat = .{ .start = pos, .end = pos + 1 };
+                    var change = try cha.Change.initDelete(buffer.allocator, buffer, .fromSpanFlat(buffer, span));
+                    try buffer.appendChange(&change);
                 } else if (buffer.mode == .insert and eql(u8, key, "<backspace>")) {
-                    try buffer.changeDeletePrevChar();
+                    const pos = buffer.cursorToPos(buffer.cursor);
+                    if (pos == 0) return;
+                    const span: SpanFlat = .{ .start = pos - 1, .end = pos };
+                    var change = try cha.Change.initDelete(buffer.allocator, buffer, .fromSpanFlat(buffer, span));
+                    try buffer.appendChange(&change);
                 } else if (multiple_key) {
                     keys_consumed = 2;
                     const key2 = editor.key_queue.items[1];
