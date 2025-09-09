@@ -11,6 +11,7 @@ const edi = @import("editor.zig");
 const log = @import("log.zig");
 const main = @import("main.zig");
 const ter = @import("terminal.zig");
+const ur = @import("uri.zig");
 
 fn e2eSetup() !bool {
     main.std_err_file_writer = main.std_err.writer(&main.std_err_buf);
@@ -75,7 +76,7 @@ fn startEditor() !void {
     main.editor = try edi.Editor.init(allocator, .{});
     defer main.editor.deinit();
 
-    try main.editor.openBuffer("/tmp/hat_e2e.zig");
+    try main.editor.openBuffer(try ur.fromPath(allocator, "/tmp/hat_e2e.zig"));
 
     try main.startEditor(allocator);
     defer main.editor.disconnect() catch {};
@@ -131,6 +132,30 @@ test "e2e lsp go to definition" {
     try setup.tty_in.writeAll(" wq");
 
     setup.handle.join();
+}
+
+test "e2e lsp rename" {
+    if (!try e2eSetup()) return;
+    const setup = try setupEditor();
+
+    sleep(100 * ms);
+    try setup.tty_in.writeAll("w n\x7f\x7f\x7ffoo\n");
+    sleep(100 * ms);
+    try setup.tty_in.writeAll(" wq");
+
+    setup.handle.join();
+
+    const tmp_file = try std.fs.cwd().openFile("/tmp/hat_e2e.zig", .{});
+    defer tmp_file.close();
+    const tmp_file_content = try tmp_file.readToEndAlloc(allocator, std.math.maxInt(usize));
+    defer allocator.free(tmp_file_content);
+    try std.testing.expectEqualStrings(
+        \\const foo = @import("std");
+        \\pub fn main() !void {
+        \\    foo.debug.print("hello!\n", .{});
+        \\}
+        \\
+    , tmp_file_content);
 }
 
 test "e2e update indents" {

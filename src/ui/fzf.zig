@@ -98,7 +98,6 @@ const fzf_cmd_with_preview: []const []const u8 = fzf_command ++ .{
 
 const fzf_command: []const []const u8 = &.{
     "fzf",
-    "--no-tty-default",
     "--cycle",
     "--layout=reverse",
     "--color=dark",

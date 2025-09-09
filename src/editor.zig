@@ -72,11 +72,11 @@ pub const Editor = struct {
         return editor;
     }
 
-    pub fn openBuffer(self: *Editor, path: []const u8) !void {
-        if (self.buffers.items.len > 0 and std.mem.eql(u8, self.active_buffer.path, path)) return;
+    pub fn openBuffer(self: *Editor, uri: []const u8) !void {
+        if (self.buffers.items.len > 0 and std.mem.eql(u8, self.active_buffer.uri, uri)) return;
         defer self.resetHover();
-        if (self.findBufferByPath(path)) |existing| {
-            log.debug(@This(), "opening existing buffer {s}\n", .{path});
+        if (self.findBufferByUri(uri)) |existing| {
+            log.debug(@This(), "opening existing buffer {s}\n", .{uri});
             // reinsert to maintain recent-first order
             const existing_idx = std.mem.indexOfScalar(*buf.Buffer, self.buffers.items, existing).?;
             _ = self.buffers.orderedRemove(existing_idx);
@@ -85,8 +85,8 @@ pub const Editor = struct {
             main.editor.dirty.draw = true;
             return;
         }
-        log.debug(@This(), "opening file at path {s}\n", .{path});
-        const b = try buf.Buffer.init(self.allocator, path);
+        log.debug(@This(), "opening new buffer {s}\n", .{uri});
+        const b = try buf.Buffer.init(self.allocator, uri);
         var buffer = try self.allocator.create(buf.Buffer);
         buffer.* = b;
 
@@ -107,18 +107,9 @@ pub const Editor = struct {
 
             try buffer.lsp_connections.append(self.allocator, conn);
             try conn.buffers.append(self.allocator, buffer);
-            log.debug(@This(), "attached buffer {s} to lsp {s}\n", .{ path, conn.config.name });
+            log.debug(@This(), "attached buffer {s} to lsp {s}\n", .{ uri, conn.config.name });
             if (conn.status == .Initialized) try conn.didOpen(buffer);
         }
-    }
-
-    pub fn findBufferByPath(self: *Editor, path: []const u8) ?*buf.Buffer {
-        for (self.buffers.items) |buffer| {
-            if (std.mem.eql(u8, buffer.path, path)) {
-                return buffer;
-            }
-        }
-        return null;
     }
 
     pub fn findBufferByUri(self: *Editor, uri: []const u8) ?*buf.Buffer {
@@ -181,14 +172,14 @@ pub const Editor = struct {
         const path = try fzf.pickFile(self.allocator);
         defer self.allocator.free(path);
         log.debug(@This(), "picked path: {s}\n", .{path});
-        try self.openBuffer(path);
+        try self.openBuffer(try ur.fromPath(self.allocator, path));
     }
 
     pub fn findInFiles(self: *Editor) !void {
         const find_result = fzf.findInFiles(self.allocator) catch return;
         defer self.allocator.free(find_result.path);
         log.debug(@This(), "find result: {}\n", .{find_result});
-        try self.openBuffer(find_result.path);
+        try self.openBuffer(try ur.fromPath(self.allocator, find_result.path));
         self.active_buffer.moveCursor(find_result.position);
     }
 
@@ -196,7 +187,7 @@ pub const Editor = struct {
         const buf_path = fzf.pickBuffer(self.allocator, self.buffers.items) catch return;
         defer self.allocator.free(buf_path);
         log.debug(@This(), "picked buffer: {s}\n", .{buf_path});
-        try self.openBuffer(buf_path);
+        try self.openBuffer(try ur.fromPath(self.allocator, buf_path));
     }
 
     pub fn updateInput(self: *Editor) !void {
@@ -320,13 +311,13 @@ pub const Editor = struct {
             try self.sendMessage("buffer has unsaved changes");
             return;
         }
-        log.debug(@This(), "closing buffer: {s}\n", .{closing_buf.path});
+        log.debug(@This(), "closing buffer: {s}\n", .{closing_buf.uri});
         defer self.allocator.destroy(closing_buf);
         defer closing_buf.deinit();
         std.debug.assert(closing_buf == self.buffers.items[0]);
         _ = self.buffers.orderedRemove(0);
         if (self.buffers.items.len == 0) return;
-        try self.openBuffer(self.buffers.items[0].path);
+        try self.openBuffer(self.buffers.items[0].uri);
     }
 
     pub fn resetHover(self: *Editor) void {
@@ -430,9 +421,7 @@ pub const Editor = struct {
         while (change_iter.next()) |entry| {
             const change_uri = entry.key_ptr.*;
             const text_edits = entry.value_ptr.*;
-            const path = try ur.toPath(self.allocator, change_uri);
-            defer self.allocator.free(path);
-            try self.openBuffer(path);
+            try self.openBuffer(change_uri);
             const buffer = self.active_buffer;
             try buffer.applyTextEdits(text_edits);
             // TODO: apply another dummy edit that resets cursor position back to `old_cursor`

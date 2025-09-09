@@ -25,6 +25,7 @@ const mut = @import("mutex.zig");
 const per = @import("perf.zig");
 const cha = @import("change.zig");
 const cli = @import("cli.zig");
+const ur = @import("uri.zig");
 
 pub const sleep_ns: u64 = 16 * std.time.ns_per_ms;
 pub const sleep_lsp_ns: u64 = sleep_ns;
@@ -76,7 +77,8 @@ pub fn main() !void {
     sig.registerAll();
 
     if (args.printer) {
-        var buffer = try buf.Buffer.init(allocator, args.path orelse return error.NoPath);
+        const uri = try ur.fromPath(allocator, args.path orelse return error.NoPath);
+        var buffer = try buf.Buffer.init(allocator, uri);
         defer buffer.deinit();
         try pri.printBuffer(
             &buffer,
@@ -92,7 +94,7 @@ pub fn main() !void {
     const path = if (args.path) |path| try allocator.dupe(u8, path) else fzf.pickFile(allocator) catch return;
     defer allocator.free(path);
 
-    editor.openBuffer(path) catch |e| {
+    editor.openBuffer(try ur.fromPath(allocator, path)) catch |e| {
         log.errPrint("open buffer \"{s}\" error: {}\n", .{ path, e });
         return e;
     };

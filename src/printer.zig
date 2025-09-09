@@ -9,6 +9,7 @@ const main = @import("main.zig");
 const ter = @import("terminal.zig");
 const uni = @import("unicode.zig");
 const cli = @import("cli.zig");
+const ur = @import("uri.zig");
 
 pub const HighlightConfig = struct {
     term_height: usize,
@@ -111,7 +112,7 @@ test "printer no ts" {
     log.init(&log_writer, null);
 
     const allocator = std.testing.allocator;
-    var buffer = try buf.Buffer.init(allocator, "/tmp/hat_e2e.txt");
+    var buffer = try buf.Buffer.init(allocator, try ur.fromPath(allocator, "/tmp/hat_e2e.txt"));
     defer buffer.deinit();
     if (buffer.ts_state) |*ts| ts.deinit();
     buffer.ts_state = null;
@@ -139,7 +140,7 @@ test "printer no ts highlight" {
     log.init(&log_writer, null);
 
     const allocator = std.testing.allocator;
-    var buffer = try buf.Buffer.init(allocator, "/tmp/hat_e2e.txt");
+    var buffer = try buf.Buffer.init(allocator, try ur.fromPath(allocator, "/tmp/hat_e2e.txt"));
     defer buffer.deinit();
     if (buffer.ts_state) |*ts| ts.deinit();
     buffer.ts_state = null;

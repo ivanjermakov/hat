@@ -25,7 +25,7 @@ const ter = @import("terminal.zig");
 const ts = @import("ts.zig");
 const dia = @import("ui/diagnostic.zig");
 const uni = @import("unicode.zig");
-const uri = @import("uri.zig");
+const ur = @import("uri.zig");
 
 pub const Mode = enum {
     normal,
@@ -85,21 +85,18 @@ pub const Buffer = struct {
     scratch: bool = false,
     allocator: Allocator,
 
-    pub fn init(allocator: Allocator, path: []const u8) !Buffer {
-        const buf_path = try allocator.dupe(u8, path);
+    pub fn init(allocator: Allocator, uri: []const u8) !Buffer {
+        const buf_path = try allocator.dupe(u8, ur.extractPath(uri) orelse return error.InvalidUri);
         errdefer allocator.free(buf_path);
         const file_ext = std.fs.path.extension(buf_path);
         const file_type = ft.file_type.get(file_ext) orelse ft.plain;
         const file = try std.fs.cwd().openFile(buf_path, .{});
-        const abs_path = std.fs.realpathAlloc(allocator, buf_path) catch null;
-        defer if (abs_path) |a| allocator.free(a);
-        const buf_uri = try uri.fromPath(allocator, abs_path orelse buf_path);
 
         var self = Buffer{
             .path = buf_path,
             .file = file,
             .file_type = file_type,
-            .uri = buf_uri,
+            .uri = uri,
             .allocator = allocator,
         };
 
@@ -118,13 +115,13 @@ pub const Buffer = struct {
     }
 
     pub fn initScratch(allocator: Allocator, content_raw: []const u8) !Buffer {
-        const buf_path = try std.fmt.allocPrint(allocator, "scratch{d:0>2}", .{nextScratchId()});
+        const path = try std.fmt.allocPrint(allocator, "scratch{d:0>2}", .{nextScratchId()});
 
         var self = Buffer{
-            .path = buf_path,
+            .path = path,
             .file = null,
             .file_type = ft.plain,
-            .uri = try uri.fromPath(allocator, buf_path),
+            .uri = try std.fmt.allocPrint(allocator, "scratch://{s}", .{path}),
             .scratch = true,
             .allocator = allocator,
         };
@@ -1066,6 +1063,7 @@ fn testSetupScratch(content: []const u8) !*Buffer {
 
 fn testSetupTmp(content: []const u8) !*Buffer {
     try main.testSetup();
+    const allocator = std.testing.allocator;
 
     const tmp_file_path = "/tmp/hat_write.txt";
     {
@@ -1074,7 +1072,7 @@ fn testSetupTmp(content: []const u8) !*Buffer {
         try tmp_file.writeAll(content);
     }
 
-    try main.editor.openBuffer(tmp_file_path);
+    try main.editor.openBuffer(try ur.fromPath(allocator, tmp_file_path));
     const buffer = main.editor.active_buffer;
 
     try testing.expectEqualStrings("abc", buffer.content_raw.items);
