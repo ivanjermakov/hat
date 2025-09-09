@@ -402,7 +402,11 @@ pub const Editor = struct {
                 try buffer.findNext(self.find_query.?, true);
             },
             .rename => {
-                try buffer.rename(self.command_line.content.items);
+                for (buffer.lsp_connections.items) |conn| {
+                    const new_text_b = try uni.unicodeToBytes(buffer.allocator, self.command_line.content.items);
+                    defer buffer.allocator.free(new_text_b);
+                    try conn.rename(new_text_b);
+                }
             },
             .pipe => {
                 try buffer.pipe(self.command_line.content.items);

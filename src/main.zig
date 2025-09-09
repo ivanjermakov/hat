@@ -303,7 +303,9 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                 } else if (normal_or_select and eql(u8, key, "z")) {
                     buffer.centerCursor();
                 } else if (normal_or_select and eql(u8, key, "|")) {
-                    buffer.pipePrompt();
+                    const cmd = &editor.command_line;
+                    cmd.activate(.pipe);
+                    cmd.cursor = cmd.content.items.len;
                 } else if (normal_or_select and (eql(u8, key, "*") or eql(u8, key, "#"))) {
                     const forward = eql(u8, key, "*");
                     const token: ?[]const u21 = b: {
@@ -396,7 +398,9 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     if (editor.hover_contents) |hover| {
                         editor.openScratch(hover) catch |e| log.err(@This(), "open scratch error: {}\n", .{e});
                     } else {
-                        buffer.showHover() catch |e| log.err(@This(), "show hover LSP error: {}\n", .{e});
+                        for (buffer.lsp_connections.items) |conn| {
+                            conn.hover() catch |e| log.err(@This(), "show hover LSP error: {}\n", .{e});
+                        }
                     }
 
                     // insert mode
@@ -425,9 +429,13 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                             try editor.sendMessageFmt("write buffer error: {}", .{e});
                         };
                     } else if (buffer.mode == .normal and eql(u8, multi_key, " d")) {
-                        buffer.goToDefinition() catch |e| log.err(@This(), "go to def LSP error: {}\n", .{e});
+                        for (buffer.lsp_connections.items) |conn| {
+                            conn.goToDefinition() catch |e| log.err(@This(), "go to def LSP error: {}\n", .{e});
+                        }
                     } else if (buffer.mode == .normal and eql(u8, multi_key, " r")) {
-                        buffer.findReferences() catch |e| log.err(@This(), "find references LSP error: {}\n", .{e});
+                        for (buffer.lsp_connections.items) |conn| {
+                            conn.findReferences() catch |e| log.err(@This(), "find references LSP error: {}\n", .{e});
+                        }
                     } else if (buffer.mode == .normal and eql(u8, multi_key, " n")) {
                         try buffer.renamePrompt();
                     } else if (buffer.mode == .normal and eql(u8, key, "r") and key2.printable != null) {
