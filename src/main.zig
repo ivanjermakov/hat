@@ -310,7 +310,6 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                         if (buffer.mode == .normal) {
                             const line = buffer.lineContent(@intCast(buffer.cursor.row));
                             if (buf.tokenSpan(line, @intCast(buffer.cursor.col))) |flat_span| {
-                                log.warn(@This(), "flat: {}\n", .{flat_span});
                                 break :b line[flat_span.start..flat_span.end];
                             } else {
                                 break :b null;
@@ -393,7 +392,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     editor.findInFiles() catch |e| log.err(@This(), "find in files error: {}\n", .{e});
                 } else if (buffer.mode == .normal and eql(u8, key, "<c-e>")) {
                     editor.pickBuffer() catch |e| log.err(@This(), "pick buffer error: {}\n", .{e});
-                } else if (buffer.mode == .normal and eql(u8, key, "<K>")) {
+                } else if (buffer.mode == .normal and eql(u8, key, "K")) {
                     if (editor.hover_contents) |hover| {
                         editor.openScratch(hover) catch |e| log.err(@This(), "open scratch error: {}\n", .{e});
                     } else {
@@ -441,7 +440,6 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                         buffer.moveCursor(.{ .col = buffer.cursor.col });
                         buffer.centerCursor();
                     } else if (buffer.mode == .normal and eql(u8, multi_key, "gJ")) {
-                        log.warn(@This(), "gJ???\n", .{});
                         for (0..@intCast(repeat_or_1)) |_| {
                             if (buffer.cursor.row + 1 < buffer.line_positions.items.len) {
                                 const pos: Cursor = .{
@@ -465,7 +463,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                 }
 
                 if (log.enabled(.debug)) {
-                    log.debug(@This(), "consuming: {} keys: \"", .{keys_consumed});
+                    log.debug(@This(), "consuming {} keys: \"", .{keys_consumed});
                     for (editor.key_queue.items[0..keys_consumed]) |k| log.errPrint("{f}", .{k});
                     log.errPrint("\"\n", .{});
                 }

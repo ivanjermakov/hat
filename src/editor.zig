@@ -292,7 +292,7 @@ pub const Editor = struct {
     }
 
     pub fn sendMessage(self: *Editor, msg: []const u8) FatalError!void {
-        log.debug(@This(), "message: {s}\n", .{msg});
+        log.info(@This(), "message: {s}\n", .{msg});
         main.editor.dismissMessage();
         try self.messages.append(self.allocator, try self.allocator.dupe(u8, msg));
         self.dirty.draw = true;
