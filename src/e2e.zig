@@ -6,6 +6,7 @@ const File = std.fs.File;
 
 const core = @import("core.zig");
 const Dimensions = core.Dimensions;
+const Cursor = core.Cursor;
 const edi = @import("editor.zig");
 const log = @import("log.zig");
 const main = @import("main.zig");
@@ -115,6 +116,21 @@ test "e2e lsp completion accept" {
         \\}
         \\
     , tmp_file_content);
+}
+
+test "e2e lsp go to definition" {
+    if (!try e2eSetup()) return;
+    const setup = try setupEditor();
+
+    sleep(100 * ms);
+    try setup.tty_in.writeAll("10lj d");
+
+    sleep(100 * ms);
+    const buffer = main.editor.active_buffer;
+    try std.testing.expectEqualDeep(Cursor{ .row = 1, .col = 7 }, buffer.cursor);
+    try setup.tty_in.writeAll(" wq");
+
+    setup.handle.join();
 }
 
 test "e2e update indents" {
