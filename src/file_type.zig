@@ -27,8 +27,6 @@ pub const file_type = std.StaticStringMap(FileTypeConfig).initComptime(.{
     } },
 });
 
-const nvim_ts_path = "$HOME/.local/share/nvim/lazy/nvim-treesitter";
-
 pub const FileTypeConfig = struct {
     name: []const u8,
     ts: ?TsConfig = null,
@@ -81,6 +79,8 @@ pub const TsConfig = struct {
     pub fn indent_query_from_nvim(comptime name: []const u8) []const u8 {
         return nvim_ts_path ++ "/queries/" ++ name ++ "/indents.scm";
     }
+
+    const nvim_ts_path = "$HOME/.local/share/nvim/lazy/nvim-treesitter";
 };
 
 pub const plain: FileTypeConfig = .{ .name = "plain", .ts = null };

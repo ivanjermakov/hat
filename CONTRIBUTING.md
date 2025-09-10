@@ -29,6 +29,9 @@ As long as every buffer byte is displayed and editable, we're ok.
     * [24bit color](https://en.wikipedia.org/wiki/ANSI_escape_code#24-bit)
     * [Underline decorations](https://sw.kovidgoyal.net/kitty/underlines/)
     * Unicode rendering
+- Out of memory error (OOM) would crash the editor. This is great that Zig allows us to handle OOM, but it complicates
+the code too much. Use `core.FatalError` to denote that function's error result can be propagated
+all the way up to `main`.
 
 ## Contributing
 
@@ -55,3 +58,9 @@ git diff upstream/master mypatch
 ### Improving patches
 
 Open a PR with changes in the [`patch`](/patch) directory.
+
+## Code style
+
+- following [Zig style guide](https://ziglang.org/documentation/master/#Style-Guide)
+- line width 120
+- `zig fmt` compliant

@@ -78,6 +78,20 @@ zig build test
 
 ## FAQ
 
+### How to apply patches?
+
+Using `patch(1)` or `git apply`:
+
+```bash
+git apply patch/mypatch/mypatch.diff
+```
+
+Additional flags might help with conflict resolution:
+
+```bash
+git apply --3way patch/mypatch/mypatch.diff
+```
+
 ### How to customize key mappings?
 
 See `src/main.zig`, change or add a new clause with your key mapping:
