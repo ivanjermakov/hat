@@ -14,27 +14,14 @@ const log = @import("log.zig");
 const main = @import("main.zig");
 const fzf = @import("ui/fzf.zig");
 const dia = @import("ui/diagnostic.zig");
-const uri = @import("uri.zig");
+const ur = @import("uri.zig");
 
-const default_stringify_opts = std.json.Stringify.Options{ .emit_null_optional_fields = false };
+pub const lsp_config = [_]LspConfig{};
 
 pub const LspConfig = struct {
     name: []const u8,
     cmd: []const []const u8,
     file_types: []const []const u8,
-};
-
-pub const lsp_config = [_]LspConfig{
-    LspConfig{
-        .name = "typescript-language-server",
-        .cmd = &.{ "typescript-language-server", "--stdio" },
-        .file_types = &.{"typescript"},
-    },
-    LspConfig{
-        .name = "zls",
-        .cmd = &.{ "zls", "--log-level", "debug" },
-        .file_types = &.{"zig"},
-    },
 };
 
 pub fn findLspsByFileType(allocator: Allocator, file_type: []const u8) ![]LspConfig {
@@ -127,7 +114,7 @@ pub const LspConnection = struct {
 
         const cwd = try std.fs.cwd().realpathAlloc(allocator, ".");
         defer allocator.free(cwd);
-        const workspace_uri = try uri.fromPath(allocator, cwd);
+        const workspace_uri = try ur.fromPath(allocator, cwd);
         defer allocator.free(workspace_uri);
         try self.sendRequest("initialize", types.InitializeParams{
             .capabilities = client_capabilities,
@@ -441,7 +428,6 @@ pub const LspConnection = struct {
     }
 
     fn handleDefinitionResponse(self: *LspConnection, arena: Allocator, resp: ?std.json.Value) !void {
-        _ = self;
         if (resp == null or resp.? == .null) return;
         const ResponseType = union(enum) {
             Definition: types.Definition,
@@ -462,9 +448,7 @@ pub const LspConnection = struct {
         };
         if (location) |loc| {
             if (!std.mem.eql(u8, loc.uri, main.editor.active_buffer.uri)) {
-                if (uri.extractPath(loc.uri)) |path| {
-                    try main.editor.openBuffer(path);
-                }
+                try main.editor.openBuffer(try self.allocator.dupe(u8, loc.uri));
             }
             log.debug(@This(), "jump to {}\n", .{loc.range.start});
             const new_cursor = Cursor.fromLsp(loc.range.start);
@@ -484,7 +468,7 @@ pub const LspConnection = struct {
         };
         defer self.allocator.free(pick_result.path);
         log.debug(@This(), "picked reference: {}\n", .{pick_result});
-        try main.editor.openBuffer(pick_result.path);
+        try main.editor.openBuffer(try ur.fromPath(self.allocator, pick_result.path));
         main.editor.active_buffer.moveCursor(pick_result.position);
     }
 
@@ -544,18 +528,20 @@ pub const LspConnection = struct {
             log.debug(@This(), "server log: {s}\n", .{params_typed.value.message});
         } else if (std.mem.eql(u8, notif.method, "textDocument/publishDiagnostics")) {
             const params_typed = try std.json.parseFromValue(types.PublishDiagnosticsParams, arena, notif.params.?, .{});
-            log.debug(@This(), "got {} diagnostics\n", .{params_typed.value.diagnostics.len});
             if (main.editor.findBufferByUri(params_typed.value.uri)) |target| {
                 target.clearDiagnostics();
                 for (params_typed.value.diagnostics) |diagnostic| {
                     try target.diagnostics.append(self.allocator, try dia.Diagnostic.fromLsp(target.allocator, diagnostic));
                 }
+                log.debug(@This(), "got {} diagnostics\n", .{target.diagnostics.items.len});
                 if (target == main.editor.active_buffer) {
                     main.editor.dirty.draw = true;
                 }
             }
         }
     }
+
+    const default_stringify_opts = std.json.Stringify.Options{ .emit_null_optional_fields = false };
 };
 
 var request_id: i64 = 0;
