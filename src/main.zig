@@ -448,8 +448,10 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                         for (buffer.lsp_connections.items) |conn| {
                             conn.findReferences() catch |e| log.err(@This(), "find references LSP error: {}\n", .{e});
                         }
-                    } else if (editor.mode == .normal and eql(u8, multi_key, " c")) {
-                        buffer.codeAction() catch |e| log.err(@This(), "code action LSP error: {}\n", .{e});
+                    } else if (buffer.mode == .normal and eql(u8, multi_key, " c")) {
+                        for (buffer.lsp_connections.items) |conn| {
+                            conn.codeAction() catch |e| log.err(@This(), "code action LSP error: {}\n", .{e});
+                        }
                     } else if (buffer.mode == .normal and eql(u8, multi_key, " n")) {
                         try buffer.renamePrompt();
                     } else if (buffer.mode == .normal and eql(u8, key, "r") and key2.printable != null) {
