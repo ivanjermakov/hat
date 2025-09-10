@@ -78,6 +78,20 @@ zig build test
 
 ## FAQ
 
+### How to apply patches?
+
+Using `patch(1)` or `git apply`:
+
+```bash
+git apply patch/mypatch/mypatch.diff
+```
+
+Additional flags might help with conflict resolution:
+
+```bash
+git apply --3way patch/mypatch/mypatch.diff
+```
+
 ### How to customize key mappings?
 
 See `src/main.zig`, change or add a new clause with your key mapping:
@@ -140,3 +154,7 @@ Hat spawns `fzf` with piped input and handles output as selected item.
 - If some custom data is needed, expand the `Editor` struct, similar to `Editor.completion_menu`
 - To make it performant, make sure to update it only when necessary, using `Editor.dirty` flags
 - When layout changes are needed, update `Terminal.computeLayout` accordingly
+
+### How to add a new command?
+
+See `Command` in `command_line.zig` and `Editor.handleCmd`. Add a new value and implement the handler.
