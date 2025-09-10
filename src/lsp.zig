@@ -18,7 +18,18 @@ const dia = @import("ui/diagnostic.zig");
 const act = @import("ui/code_action.zig");
 const ur = @import("uri.zig");
 
-pub const lsp_config = [_]LspConfig{};
+pub const lsp_config = [_]LspConfig{
+    LspConfig{
+        .name = "typescript-language-server",
+        .cmd = &.{ "typescript-language-server", "--stdio" },
+        .file_types = &.{"typescript"},
+    },
+    LspConfig{
+        .name = "zls",
+        .cmd = &.{ "zls", "--log-level", "debug" },
+        .file_types = &.{"zig"},
+    },
+};
 
 pub const LspConfig = struct {
     name: []const u8,

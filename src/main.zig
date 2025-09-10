@@ -462,22 +462,26 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                             log.err(@This(), "write buffer error: {}\n", .{e});
                             try editor.sendMessageFmt("write buffer error: {}", .{e});
                         };
-                    } else if (editor.mode == .normal and eql(u8, multi_key, " d")) {
+                    } else if (buffer.mode == .normal and eql(u8, multi_key, " d")) {
                         for (buffer.lsp_connections.items) |conn| {
                             conn.goToDefinition() catch |e| log.err(@This(), "go to def LSP error: {}\n", .{e});
                         }
-                    } else if (editor.mode == .normal and eql(u8, multi_key, " r")) {
+                    } else if (buffer.mode == .normal and eql(u8, multi_key, " r")) {
                         for (buffer.lsp_connections.items) |conn| {
                             conn.findReferences() catch |e| log.err(@This(), "find references LSP error: {}\n", .{e});
                         }
-                    } else if (editor.mode == .normal and eql(u8, multi_key, " n")) {
+                    } else if (buffer.mode == .normal and eql(u8, multi_key, " n")) {
                         try buffer.renamePrompt();
-                    } else if (editor.mode == .normal and eql(u8, multi_key, " l")) {
+                    } else if (buffer.mode == .normal and eql(u8, multi_key, " l")) {
                         for (buffer.lsp_connections.items) |conn| {
                             conn.format() catch |e| log.err(@This(), "format LSP error: {}", .{e});
                         }
-                    } else if (editor.mode == .normal and eql(u8, multi_key, " f")) {
+                    } else if (buffer.mode == .normal and eql(u8, multi_key, " f")) {
                         try buffer.findSymbols();
+                    } else if (buffer.mode == .normal and eql(u8, multi_key, " c")) {
+                        for (buffer.lsp_connections.items) |conn| {
+                            conn.codeAction() catch |e| log.err(@This(), "code action LSP error: {}", .{e});
+                        }
                     } else if (buffer.mode == .normal and eql(u8, key, "r") and key2.printable != null) {
                         const macro_name: u8 = @intCast(key2.printable.?);
                         try editor.startMacro(macro_name);
@@ -565,15 +569,17 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                 // redraw next frame to clear invalid highlights
                 editor.dirty.draw = true;
             }
-            buffer.highlight() catch |e| log.err(@This(), "highlight LSP error: {}\n", .{e});
-            term.updateCursor() catch |e| log.err(@This(), "update cursor error: {}\n", .{e});
 
             if (buffer.highlights.items.len > 0) {
                 buffer.highlights.clearRetainingCapacity();
                 // redraw next frame to clear invalid highlights
                 editor.dirty.draw = true;
             }
-            buffer.highlight() catch |e| log.err(@This(), "highlight LSP error: {}\n", .{e});
+            for (buffer.lsp_connections.items) |conn| {
+                conn.highlight() catch |e| log.err(@This(), "highlight LSP error: {}\n", .{e});
+            }
+
+            term.updateCursor() catch |e| log.err(@This(), "update cursor error: {}\n", .{e});
         }
         perf.draw = timer.lap();
 
