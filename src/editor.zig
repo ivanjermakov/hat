@@ -62,7 +62,6 @@ pub const Editor = struct {
     /// Must be always sorted recent-first
     buffers: std.array_list.Aligned(*buf.Buffer, null) = .empty,
     active_buffer: *buf.Buffer = undefined,
-    mode: Mode,
     dirty: Dirty,
     completion_menu: cmp.CompletionMenu,
     command_line: cmd.CommandLine,
@@ -83,7 +82,6 @@ pub const Editor = struct {
     pub fn init(allocator: Allocator, config: Config) !Editor {
         const editor = Editor{
             .config = config,
-            .mode = .normal,
             .dirty = .{},
             .completion_menu = cmp.CompletionMenu.init(allocator),
             .command_line = cmd.CommandLine.init(allocator),
@@ -94,11 +92,11 @@ pub const Editor = struct {
         return editor;
     }
 
-    pub fn openBuffer(self: *Editor, path: []const u8) !void {
-        if (self.buffers.items.len > 0 and std.mem.eql(u8, self.active_buffer.path, path)) return;
+    pub fn openBuffer(self: *Editor, uri: []const u8) !void {
+        if (self.buffers.items.len > 0 and std.mem.eql(u8, self.active_buffer.uri, uri)) return;
         defer self.resetHover();
-        if (self.findBufferByPath(path)) |existing| {
-            log.debug(@This(), "opening existing buffer {s}\n", .{path});
+        if (self.findBufferByUri(uri)) |existing| {
+            log.debug(@This(), "opening existing buffer {s}\n", .{uri});
             // reinsert to maintain recent-first order
             const existing_idx = std.mem.indexOfScalar(*buf.Buffer, self.buffers.items, existing).?;
             _ = self.buffers.orderedRemove(existing_idx);
@@ -107,8 +105,8 @@ pub const Editor = struct {
             main.editor.dirty.draw = true;
             return;
         }
-        log.debug(@This(), "opening file at path {s}\n", .{path});
-        const b = try buf.Buffer.init(self.allocator, path);
+        log.debug(@This(), "opening new buffer {s}\n", .{uri});
+        const b = try buf.Buffer.init(self.allocator, uri);
         var buffer = try self.allocator.create(buf.Buffer);
         buffer.* = b;
 
@@ -129,18 +127,9 @@ pub const Editor = struct {
 
             try buffer.lsp_connections.append(self.allocator, conn);
             try conn.buffers.append(self.allocator, buffer);
-            log.debug(@This(), "attached buffer {s} to lsp {s}\n", .{ path, conn.config.name });
+            log.debug(@This(), "attached buffer {s} to lsp {s}\n", .{ uri, conn.config.name });
             if (conn.status == .Initialized) try conn.didOpen(buffer);
         }
-    }
-
-    pub fn findBufferByPath(self: *Editor, path: []const u8) ?*buf.Buffer {
-        for (self.buffers.items) |buffer| {
-            if (std.mem.eql(u8, buffer.path, path)) {
-                return buffer;
-            }
-        }
-        return null;
     }
 
     pub fn findBufferByUri(self: *Editor, uri: []const u8) ?*buf.Buffer {
@@ -161,37 +150,6 @@ pub const Editor = struct {
         try self.buffers.insert(self.allocator, 0, buffer);
         self.active_buffer = buffer;
         main.editor.dirty.draw = true;
-    }
-
-    pub fn enterMode(self: *Editor, mode: Mode) FatalError!void {
-        const buffer = self.active_buffer;
-        self.resetHover();
-        self.resetCodeActions();
-
-        if (self.mode == mode) return;
-        if (self.mode == .insert) try buffer.commitChanges();
-
-        switch (mode) {
-            .normal => {
-                buffer.clearSelection();
-                self.completion_menu.reset();
-            },
-            .select => {
-                const end_pos = buffer.cursorToPos(buffer.cursor) + 1;
-                buffer.selection = .{ .start = buffer.cursor, .end = buffer.posToCursor(end_pos) };
-                log.warn(@This(), "selection: {?}\n", .{buffer.selection});
-                self.dirty.draw = true;
-            },
-            .select_line => {
-                buffer.selection = buffer.lineSpan(@intCast(buffer.cursor.row));
-                self.dirty.draw = true;
-            },
-            .insert => buffer.clearSelection(),
-        }
-        if (mode != .normal) self.dotRepeatInside();
-        log.debug(@This(), "mode: {}->{}\n", .{ self.mode, mode });
-        self.mode = mode;
-        self.dirty.cursor = true;
     }
 
     pub fn deinit(self: *Editor) void {
@@ -235,14 +193,14 @@ pub const Editor = struct {
         const path = try fzf.pickFile(self.allocator);
         defer self.allocator.free(path);
         log.debug(@This(), "picked path: {s}\n", .{path});
-        try self.openBuffer(path);
+        try self.openBuffer(try ur.fromPath(self.allocator, path));
     }
 
     pub fn findInFiles(self: *Editor) !void {
         const find_result = fzf.findInFiles(self.allocator) catch return;
         defer self.allocator.free(find_result.path);
         log.debug(@This(), "find result: {}\n", .{find_result});
-        try self.openBuffer(find_result.path);
+        try self.openBuffer(try ur.fromPath(self.allocator, find_result.path));
         self.active_buffer.moveCursor(find_result.position);
     }
 
@@ -250,7 +208,7 @@ pub const Editor = struct {
         const buf_path = fzf.pickBuffer(self.allocator, self.buffers.items) catch return;
         defer self.allocator.free(buf_path);
         log.debug(@This(), "picked buffer: {s}\n", .{buf_path});
-        try self.openBuffer(buf_path);
+        try self.openBuffer(try ur.fromPath(self.allocator, buf_path));
     }
 
     pub fn updateInput(self: *Editor) !void {
@@ -355,7 +313,7 @@ pub const Editor = struct {
     }
 
     pub fn sendMessage(self: *Editor, msg: []const u8) FatalError!void {
-        log.debug(@This(), "message: {s}\n", .{msg});
+        log.info(@This(), "message: {s}\n", .{msg});
         main.editor.dismissMessage();
         try self.messages.append(self.allocator, try self.allocator.dupe(u8, msg));
         self.dirty.draw = true;
@@ -374,13 +332,13 @@ pub const Editor = struct {
             try self.sendMessage("buffer has unsaved changes");
             return;
         }
-        log.debug(@This(), "closing buffer: {s}\n", .{closing_buf.path});
+        log.debug(@This(), "closing buffer: {s}\n", .{closing_buf.uri});
         defer self.allocator.destroy(closing_buf);
         defer closing_buf.deinit();
         std.debug.assert(closing_buf == self.buffers.items[0]);
         _ = self.buffers.orderedRemove(0);
         if (self.buffers.items.len == 0) return;
-        try self.openBuffer(self.buffers.items[0].path);
+        try self.openBuffer(self.buffers.items[0].uri);
     }
 
     pub fn resetHover(self: *Editor) void {
@@ -466,18 +424,23 @@ pub const Editor = struct {
     }
 
     pub fn handleCmd(self: *Editor) !void {
+        const buffer = self.active_buffer;
         switch (self.command_line.command.?) {
             .find => {
                 if (self.find_query) |fq| self.allocator.free(fq);
                 self.find_query = try self.allocator.dupe(u21, self.command_line.content.items);
-                try self.active_buffer.findNext(self.find_query.?, true);
+                try buffer.findNext(self.find_query.?, true);
             },
             .rename => {
-                try self.active_buffer.rename(self.command_line.content.items);
+                for (buffer.lsp_connections.items) |conn| {
+                    const new_text_b = try uni.unicodeToBytes(buffer.allocator, self.command_line.content.items);
+                    defer buffer.allocator.free(new_text_b);
+                    try conn.rename(new_text_b);
+                }
             },
             .pipe => {
-                try self.active_buffer.pipe(self.command_line.content.items);
-                try self.enterMode(.normal);
+                try buffer.pipe(self.command_line.content.items);
+                try buffer.enterMode(.normal);
             },
         }
         self.command_line.close();
@@ -492,9 +455,7 @@ pub const Editor = struct {
         while (change_iter.next()) |entry| {
             const change_uri = entry.key_ptr.*;
             const text_edits = entry.value_ptr.*;
-            const path = try ur.toPath(self.allocator, change_uri);
-            defer self.allocator.free(path);
-            try self.openBuffer(path);
+            try self.openBuffer(change_uri);
             const buffer = self.active_buffer;
             try buffer.applyTextEdits(text_edits);
             // TODO: apply another dummy edit that resets cursor position back to `old_cursor`
@@ -505,16 +466,5 @@ pub const Editor = struct {
         self.active_buffer.cursor = old_cursor;
         self.active_buffer.offset = old_offset;
         self.dirty.draw = true;
-    }
-};
-
-pub const Mode = enum {
-    normal,
-    select,
-    select_line,
-    insert,
-
-    pub fn normalOrSelect(self: Mode) bool {
-        return self == .normal or self == .select or self == .select_line;
     }
 };

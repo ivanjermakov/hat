@@ -7,10 +7,6 @@ const log = @import("log.zig");
 const main = @import("main.zig");
 const ts = @import("ts.zig");
 
-const nvim_runtime_path = "$HOME/.local/share/nvim";
-const nvim_ts_path = nvim_runtime_path ++ "/lazy/nvim-treesitter";
-const nvim_aerial_path = nvim_runtime_path ++ "/lazy/aerial.nvim";
-
 pub const file_type = std.StaticStringMap(FileTypeConfig).initComptime(.{
     .{ ".c", FileTypeConfig{
         .name = "c",
@@ -35,7 +31,10 @@ pub const file_type = std.StaticStringMap(FileTypeConfig).initComptime(.{
 pub const FileTypeConfig = struct {
     name: []const u8,
     ts: ?TsConfig = null,
+    /// Number of spaces corresponding to a single indentation level
     indent_spaces: usize = 4,
+    /// Display width of a tab character in terminal cells
+    tab_width: usize = 4,
 };
 
 pub const TsConfig = struct {
@@ -87,6 +86,9 @@ pub const TsConfig = struct {
     pub fn symbol_query_from_aerial(comptime name: []const u8) []const u8 {
         return nvim_aerial_path ++ "/queries/" ++ name ++ "/aerial.scm";
     }
+
+    const nvim_ts_path = "$HOME/.local/share/nvim/lazy/nvim-treesitter";
+    const nvim_aerial_path = "$HOME/.local/share/nvim/lazy/aerial.nvim";
 };
 
 pub const plain: FileTypeConfig = .{ .name = "plain", .ts = null };

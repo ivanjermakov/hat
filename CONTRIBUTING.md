@@ -21,7 +21,7 @@ control
 Some assumptions were made to keep Hat simple:
 
 - Unicode support is limited to what common modern terminal emulators support. In Hat, "character" is a Unicode
-codepoint. So no grapheme clustering, no variation selection, no terminal emulator-specific logic.
+codepoint. So no grapheme clustering, no variation selection, no ZWJs, no terminal emulator-specific logic.
 As long as every buffer byte is displayed and editable, we're ok.
 - Hosting terminal emulator is capable of:
     * [Alternate buffer](https://unix.stackexchange.com/questions/288962/what-does-1049h-and-1h-ansi-escape-sequences-do)
@@ -29,6 +29,9 @@ As long as every buffer byte is displayed and editable, we're ok.
     * [24bit color](https://en.wikipedia.org/wiki/ANSI_escape_code#24-bit)
     * [Underline decorations](https://sw.kovidgoyal.net/kitty/underlines/)
     * Unicode rendering
+- Out of memory error (OOM) would crash the editor. This is great that Zig allows us to handle OOM, but it complicates
+the code too much. Use `core.FatalError` to denote that function's error result can be propagated
+all the way up to `main`.
 
 ## Contributing
 
@@ -55,3 +58,9 @@ git diff upstream/master mypatch
 ### Improving patches
 
 Open a PR with changes in the [`patch`](/patch) directory.
+
+## Code style
+
+- following [Zig style guide](https://ziglang.org/documentation/master/#Style-Guide)
+- line width 120
+- `zig fmt` compliant
