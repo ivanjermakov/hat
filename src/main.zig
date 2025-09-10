@@ -545,6 +545,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
             buffer.version += 1;
             buffer.clearDiagnostics();
             try buffer.reparse();
+            buffer.updateGitHunks() catch |e| log.err(@This(), "git hunk update error: {}", .{e});
             perf.parse = timer.lap();
             for (buffer.lsp_connections.items) |conn| {
                 conn.didChange(editor.active_buffer) catch |e| log.err(@This(), "did change LSP error: {}\n", .{e});

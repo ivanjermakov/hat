@@ -153,7 +153,6 @@ pub const Buffer = struct {
         };
         if (self.ts_state) |*ts_state| try ts_state.reparse(self.content_raw.items);
         try self.updateLinePositions();
-        self.updateGitHunks() catch |e| log.err(@This(), "git hunk update error: {}", .{e});
     }
 
     pub fn updateContent(self: *Buffer) FatalError!void {
