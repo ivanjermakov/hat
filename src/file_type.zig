@@ -32,7 +32,10 @@ const nvim_ts_path = "$HOME/.local/share/nvim/lazy/nvim-treesitter";
 pub const FileTypeConfig = struct {
     name: []const u8,
     ts: ?TsConfig = null,
+    /// Number of spaces corresponding to a single indentation level
     indent_spaces: usize = 4,
+    /// Display width of a tab character in terminal cells
+    tab_width: usize = 4,
 };
 
 pub const TsConfig = struct {

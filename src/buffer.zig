@@ -250,7 +250,7 @@ pub const Buffer = struct {
             return;
         }
 
-        var max_col = ter.lineColLength(self.lineContent(@intCast(new_cursor.row)));
+        var max_col = ter.lineColLength(self, self.lineContent(@intCast(new_cursor.row)));
         if (max_col > 0 and !self.lineTerminated(@intCast(new_cursor.row))) max_col -= 1;
         var col: i32 = @intCast(@min(new_cursor.col, max_col));
         if (vertical_only) {
