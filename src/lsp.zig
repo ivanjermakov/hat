@@ -16,25 +16,12 @@ const fzf = @import("ui/fzf.zig");
 const dia = @import("ui/diagnostic.zig");
 const ur = @import("uri.zig");
 
-const default_stringify_opts = std.json.Stringify.Options{ .emit_null_optional_fields = false };
+pub const lsp_config = [_]LspConfig{};
 
 pub const LspConfig = struct {
     name: []const u8,
     cmd: []const []const u8,
     file_types: []const []const u8,
-};
-
-pub const lsp_config = [_]LspConfig{
-    LspConfig{
-        .name = "typescript-language-server",
-        .cmd = &.{ "typescript-language-server", "--stdio" },
-        .file_types = &.{"typescript"},
-    },
-    LspConfig{
-        .name = "zls",
-        .cmd = &.{ "zls", "--log-level", "debug" },
-        .file_types = &.{"zig"},
-    },
 };
 
 pub fn findLspsByFileType(allocator: Allocator, file_type: []const u8) ![]LspConfig {
@@ -553,6 +540,8 @@ pub const LspConnection = struct {
             }
         }
     }
+
+    const default_stringify_opts = std.json.Stringify.Options{ .emit_null_optional_fields = false };
 };
 
 var request_id: i64 = 0;
