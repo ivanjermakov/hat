@@ -187,7 +187,7 @@ pub const Terminal = struct {
             for (0..line.len + 1) |i| {
                 const ch = if (i == line.len) ' ' else line[i];
                 _ = attrs_writer.consumeAll();
-                const buffer_col = @as(i32, @intCast(area_col)) + buffer.offset.col;
+                const buffer_col: i32 = buffer.offset.col + @as(i32, @intCast(i));
 
                 if (area_col >= @as(i32, @intCast(area.dims.width))) break;
                 if (buffer.ts_state) |ts_state| {
