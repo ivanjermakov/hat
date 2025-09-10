@@ -7,25 +7,7 @@ const log = @import("log.zig");
 const main = @import("main.zig");
 const ts = @import("ts.zig");
 
-pub const file_type = std.StaticStringMap(FileTypeConfig).initComptime(.{
-    .{ ".c", FileTypeConfig{
-        .name = "c",
-        .ts = TsConfig.from_nvim("c"),
-    } },
-    .{ ".ts", FileTypeConfig{
-        .name = "typescript",
-        .ts = .{
-            .lib_path = TsConfig.lib_path_from_nvim("typescript"),
-            .lib_symbol = "tree_sitter_typescript",
-            .highlight_query = TsConfig.highlight_query_from_nvim("ecma"),
-            .indent_query = TsConfig.highlight_query_from_nvim("ecma"),
-        },
-    } },
-    .{ ".zig", FileTypeConfig{
-        .name = "zig",
-        .ts = TsConfig.from_nvim("zig"),
-    } },
-});
+pub const file_type = std.StaticStringMap(FileTypeConfig).initComptime(.{});
 
 pub const FileTypeConfig = struct {
     name: []const u8,
