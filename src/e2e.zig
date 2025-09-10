@@ -6,15 +6,17 @@ const File = std.fs.File;
 
 const core = @import("core.zig");
 const Dimensions = core.Dimensions;
+const Cursor = core.Cursor;
 const edi = @import("editor.zig");
 const log = @import("log.zig");
 const main = @import("main.zig");
 const ter = @import("terminal.zig");
+const ur = @import("uri.zig");
 
 fn e2eSetup() !bool {
     main.std_err_file_writer = main.std_err.writer(&main.std_err_buf);
     log.log_writer = &main.std_err_file_writer.interface;
-    log.init(log.log_writer, null);
+    log.init(log.log_writer, .info);
     if (e2eSkip()) return false;
     try createTmpFiles();
     return true;
@@ -74,7 +76,7 @@ fn startEditor() !void {
     main.editor = try edi.Editor.init(allocator, .{});
     defer main.editor.deinit();
 
-    try main.editor.openBuffer("/tmp/hat_e2e.zig");
+    try main.editor.openBuffer(try ur.fromPath(allocator, "/tmp/hat_e2e.zig"));
 
     try main.startEditor(allocator);
     defer main.editor.disconnect() catch {};
@@ -83,8 +85,6 @@ fn startEditor() !void {
 test "e2e open quit" {
     if (!try e2eSetup()) return;
     const setup = try setupEditor();
-
-    log.init(main.std_err_writer, null);
 
     sleep(100 * ms);
     try setup.tty_in.writeAll("q");
@@ -115,6 +115,60 @@ test "e2e lsp completion accept" {
         \\}
         \\
     , tmp_file_content);
+}
+
+test "e2e lsp go to definition" {
+    if (!try e2eSetup()) return;
+    const setup = try setupEditor();
+
+    sleep(100 * ms);
+    try setup.tty_in.writeAll("10lj d");
+
+    sleep(100 * ms);
+    const buffer = main.editor.active_buffer;
+    try std.testing.expectEqualDeep(Cursor{ .row = 1, .col = 7 }, buffer.cursor);
+    try setup.tty_in.writeAll(" wq");
+
+    setup.handle.join();
+}
+
+test "e2e lsp rename" {
+    if (!try e2eSetup()) return;
+    const setup = try setupEditor();
+
+    sleep(100 * ms);
+    try setup.tty_in.writeAll("w n\x7f\x7f\x7ffoo\n");
+    sleep(100 * ms);
+    try setup.tty_in.writeAll(" wq");
+
+    setup.handle.join();
+
+    const tmp_file = try std.fs.cwd().openFile("/tmp/hat_e2e.zig", .{});
+    defer tmp_file.close();
+    const tmp_file_content = try tmp_file.readToEndAlloc(allocator, std.math.maxInt(usize));
+    defer allocator.free(tmp_file_content);
+    try std.testing.expectEqualStrings(
+        \\const foo = @import("std");
+        \\pub fn main() !void {
+        \\    foo.debug.print("hello!\n", .{});
+        \\}
+        \\
+    , tmp_file_content);
+}
+
+test "e2e lsp hover" {
+    if (!try e2eSetup()) return;
+    const setup = try setupEditor();
+
+    sleep(200 * ms);
+    try setup.tty_in.writeAll("14l2jK");
+
+    sleep(200 * ms);
+    try std.testing.expect(main.editor.hover_contents != null);
+    try std.testing.expect(main.editor.hover_contents.?.len > 0);
+    try setup.tty_in.writeAll("q");
+
+    setup.handle.join();
 }
 
 test "e2e update indents" {
@@ -173,7 +227,6 @@ test "e2e marco record replay count" {
 
 test "e2e dot repeat" {
     if (!try e2eSetup()) return;
-    log.init(log.log_writer, null);
     const setup = try setupEditor();
 
     sleep(100 * ms);
@@ -201,4 +254,43 @@ test "e2e dot repeat" {
         \\}
         \\
     , tmp_file_content);
+}
+
+test "e2e line join" {
+    if (!try e2eSetup()) return;
+    const setup = try setupEditor();
+
+    sleep(100 * ms);
+    try setup.tty_in.writeAll("JgJ wq");
+
+    setup.handle.join();
+
+    const tmp_file = try std.fs.cwd().openFile("/tmp/hat_e2e.zig", .{});
+    defer tmp_file.close();
+    const tmp_file_content = try tmp_file.readToEndAlloc(allocator, std.math.maxInt(usize));
+    defer allocator.free(tmp_file_content);
+    try std.testing.expectEqualStrings(
+        \\const std = @import("std"); pub fn main() !void {    std.debug.print("hello!\n", .{});
+        \\}
+        \\
+    , tmp_file_content);
+}
+
+test "e2e find token" {
+    if (!try e2eSetup()) return;
+    const setup = try setupEditor();
+
+    sleep(100 * ms);
+    try setup.tty_in.writeAll("w*");
+
+    sleep(100 * ms);
+    const buffer = main.editor.active_buffer;
+    try std.testing.expectEqualDeep(Cursor{ .row = 0, .col = 21 }, buffer.cursor);
+    try setup.tty_in.writeAll("#");
+
+    sleep(100 * ms);
+    try std.testing.expectEqualDeep(Cursor{ .row = 0, .col = 6 }, buffer.cursor);
+    try setup.tty_in.writeAll("q");
+
+    setup.handle.join();
 }

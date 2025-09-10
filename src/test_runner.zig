@@ -1,4 +1,4 @@
-//! Default test runner for unit tests.
+/// Adapted zig/lib/compiler/test_runner.zig
 const std = @import("std");
 const testing = std.testing;
 const assert = std.debug.assert;
@@ -39,18 +39,9 @@ fn mainTerminal() void {
     var ok_count: usize = 0;
     var skip_count: usize = 0;
     var fail_count: usize = 0;
-    const root_node = std.Progress.start(.{
-        .root_name = "Test",
-        .estimated_total_items = test_fn_list.len,
-    });
     const stderr = std.fs.File.stderr();
     var stderr_writer = stderr.writer(&.{});
     const log = &stderr_writer.interface;
-
-    var async_frame_buffer: []align(builtin.target.stackAlignment()) u8 = undefined;
-    // TODO this is on the next line (using `undefined` above) because otherwise zig incorrectly
-    // ignores the alignment of the slice.
-    async_frame_buffer = &[_]u8{};
 
     var leaks: usize = 0;
     for (test_fn_list, 0..) |test_fn, i| {
@@ -61,31 +52,24 @@ fn mainTerminal() void {
             }
         }
 
-        const test_node = root_node.start(test_fn.name, 0);
-        log.print("{d}/{d} {s}...", .{ i + 1, test_fn_list.len, test_fn.name }) catch {};
+        log.print("[{d}/{d}] {s}...", .{ i + 1, test_fn_list.len, test_fn.name }) catch {};
         if (test_fn.func()) |_| {
             ok_count += 1;
-            test_node.end();
             log.print("{f}ok{f}\n", .{ AnsiColor.green, AnsiColor.reset }) catch {};
         } else |err| switch (err) {
             error.SkipZigTest => {
                 skip_count += 1;
-                log.print("{d}/{d} {s}...SKIP\n", .{ i + 1, test_fn_list.len, test_fn.name }) catch {};
-                test_node.end();
+                log.print("{f}skip{f}\n", .{ AnsiColor.yellow, AnsiColor.reset }) catch {};
             },
             else => {
                 fail_count += 1;
-                log.print("{d}/{d} {s}...FAIL ({s})\n", .{
-                    i + 1, test_fn_list.len, test_fn.name, @errorName(err),
-                }) catch {};
+                log.print("{f}fail{f}\n", .{ AnsiColor.red, AnsiColor.reset }) catch {};
                 if (@errorReturnTrace()) |trace| {
                     log.print("{f}\n", .{trace.*}) catch {};
                 }
-                test_node.end();
             },
         }
     }
-    root_node.end();
     if (ok_count == test_fn_list.len) {
         log.print("All {d} tests {f}passed{f}.\n", .{ ok_count, AnsiColor.green, AnsiColor.reset }) catch {};
     } else {

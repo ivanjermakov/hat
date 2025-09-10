@@ -1,5 +1,5 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index c3c8474..1377070 100644
+index 943fa47..4cb8da7 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
 @@ -24,12 +24,15 @@ const main = @import("main.zig");
@@ -43,7 +43,7 @@ index c3c8474..1377070 100644
          self.allocator.free(self.path);
  
          if (self.ts_state) |*ts_state| ts_state.deinit();
-@@ -502,6 +510,31 @@ pub const Buffer = struct {
+@@ -508,6 +516,31 @@ pub const Buffer = struct {
          }
      }
  
@@ -105,19 +105,6 @@ index f6ee63d..5f4dd32 100644
  
      pub fn write(attrs: []const Attr, writer: *std.io.Writer) !void {
          for (attrs) |attr| {
-diff --git a/src/editor.zig b/src/editor.zig
-index a7b9259..e87fdfb 100644
---- a/src/editor.zig
-+++ b/src/editor.zig
-@@ -143,7 +143,7 @@ pub const Editor = struct {
-         main.editor.dirty.draw = true;
-     }
- 
--    pub fn enterMode(self: *Editor, mode: Mode) FatalError!void {
-+    pub fn enterMode(self: *Editor, mode: Mode) !void {
-         self.resetHover();
- 
-         if (self.mode == mode) return;
 diff --git a/src/git.zig b/src/git.zig
 new file mode 100644
 index 0000000..75687c7
@@ -267,10 +254,10 @@ index 0000000..75687c7
 +    try std.testing.expectEqualDeep(hunks[1], Hunk{ .type = .delete, .line = 37, .len = 0 });
 +}
 diff --git a/src/main.zig b/src/main.zig
-index 69bf3f9..52a0d87 100644
+index 0a3a82d..9fa7ec2 100644
 --- a/src/main.zig
 +++ b/src/main.zig
-@@ -38,6 +38,7 @@ pub var std_err_writer: *std.io.Writer = undefined;
+@@ -39,6 +39,7 @@ pub var std_err_writer: *std.io.Writer = undefined;
  
  pub var tty_in: std.fs.File = undefined;
  
@@ -278,7 +265,7 @@ index 69bf3f9..52a0d87 100644
  pub var editor: edi.Editor = undefined;
  pub var term: ter.Terminal = undefined;
  
-@@ -410,6 +411,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+@@ -459,6 +460,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
              buffer.version += 1;
              buffer.clearDiagnostics();
              try buffer.reparse();
