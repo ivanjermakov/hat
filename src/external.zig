@@ -13,8 +13,8 @@ pub fn runExternalWait(
 ) ![]const u8 {
     if (log.enabled(.debug)) {
         log.debug(@This(), "running command:", .{});
-        for (cmd) |c| std.debug.print(" \"{s}\"", .{c});
-        std.debug.print("\n", .{});
+        for (cmd) |c| log.errPrint(" \"{s}\"", .{c});
+        log.errPrint("\n", .{});
     }
     var child = std.process.Child.init(cmd, allocator);
     if (input != null) child.stdin_behavior = .Pipe;
