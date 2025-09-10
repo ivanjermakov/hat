@@ -25,7 +25,22 @@ const ter = @import("terminal.zig");
 const ts = @import("ts.zig");
 const dia = @import("ui/diagnostic.zig");
 const uni = @import("unicode.zig");
-const uri = @import("uri.zig");
+const ur = @import("uri.zig");
+
+pub const Mode = enum {
+    normal,
+    select,
+    select_line,
+    insert,
+
+    pub fn isNormalOrSelect(self: Mode) bool {
+        return self == .normal or self.isSelect();
+    }
+
+    pub fn isSelect(self: Mode) bool {
+        return self == .select or self == .select_line;
+    }
+};
 
 pub const Buffer = struct {
     path: []const u8,
@@ -37,6 +52,7 @@ pub const Buffer = struct {
     file_type: ft.FileTypeConfig,
     content: std.array_list.Aligned(u21, null) = .empty,
     content_raw: std.array_list.Aligned(u8, null) = .empty,
+    mode: Mode = .normal,
     ts_state: ?ts.State = null,
     selection: ?Span = null,
     diagnostics: std.array_list.Aligned(dia.Diagnostic, null) = .empty,
@@ -69,21 +85,18 @@ pub const Buffer = struct {
     scratch: bool = false,
     allocator: Allocator,
 
-    pub fn init(allocator: Allocator, path: []const u8) !Buffer {
-        const buf_path = try allocator.dupe(u8, path);
+    pub fn init(allocator: Allocator, uri: []const u8) !Buffer {
+        const buf_path = try allocator.dupe(u8, ur.extractPath(uri) orelse return error.InvalidUri);
         errdefer allocator.free(buf_path);
         const file_ext = std.fs.path.extension(buf_path);
         const file_type = ft.file_type.get(file_ext) orelse ft.plain;
         const file = try std.fs.cwd().openFile(buf_path, .{});
-        const abs_path = std.fs.realpathAlloc(allocator, buf_path) catch null;
-        defer if (abs_path) |a| allocator.free(a);
-        const buf_uri = try uri.fromPath(allocator, abs_path orelse buf_path);
 
         var self = Buffer{
             .path = buf_path,
             .file = file,
             .file_type = file_type,
-            .uri = buf_uri,
+            .uri = uri,
             .allocator = allocator,
         };
 
@@ -102,13 +115,13 @@ pub const Buffer = struct {
     }
 
     pub fn initScratch(allocator: Allocator, content_raw: []const u8) !Buffer {
-        const buf_path = try std.fmt.allocPrint(allocator, "scratch{d:0>2}", .{nextScratchId()});
+        const path = try std.fmt.allocPrint(allocator, "scratch{d:0>2}", .{nextScratchId()});
 
         var self = Buffer{
-            .path = buf_path,
+            .path = path,
             .file = null,
             .file_type = ft.plain,
-            .uri = try uri.fromPath(allocator, buf_path),
+            .uri = try std.fmt.allocPrint(allocator, "scratch://{s}", .{path}),
             .scratch = true,
             .allocator = allocator,
         };
@@ -172,6 +185,35 @@ pub const Buffer = struct {
         if (self.file) |f| f.close();
     }
 
+    pub fn enterMode(self: *Buffer, mode: Mode) FatalError!void {
+        main.editor.resetHover();
+
+        if (self.mode == mode) return;
+        if (self.mode == .insert) try self.commitChanges();
+
+        switch (mode) {
+            .normal => {
+                self.clearSelection();
+                main.editor.completion_menu.reset();
+            },
+            .select => {
+                const end_pos = self.cursorToPos(self.cursor) + 1;
+                self.selection = .{ .start = self.cursor, .end = self.posToCursor(end_pos) };
+                log.warn(@This(), "selection: {?}\n", .{self.selection});
+                main.editor.dirty.draw = true;
+            },
+            .select_line => {
+                self.selection = self.lineSpan(@intCast(self.cursor.row));
+                main.editor.dirty.draw = true;
+            },
+            .insert => self.clearSelection(),
+        }
+        if (mode != .normal) main.editor.dotRepeatInside();
+        log.debug(@This(), "mode: {}->{}\n", .{ self.mode, mode });
+        self.mode = mode;
+        main.editor.dirty.cursor = true;
+    }
+
     pub fn write(self: *Buffer) !void {
         try self.updateRaw();
 
@@ -208,7 +250,7 @@ pub const Buffer = struct {
             return;
         }
 
-        var max_col = ter.lineColLength(self.lineContent(@intCast(new_cursor.row)));
+        var max_col = ter.lineColLength(self, self.lineContent(@intCast(new_cursor.row)));
         if (max_col > 0 and !self.lineTerminated(@intCast(new_cursor.row))) max_col -= 1;
         var col: i32 = @intCast(@min(new_cursor.col, max_col));
         if (vertical_only) {
@@ -226,7 +268,7 @@ pub const Buffer = struct {
         };
         self.scrollForCursor(self.cursor);
 
-        switch (main.editor.mode) {
+        switch (self.mode) {
             .select => {
                 const selection = &self.selection.?;
                 // temporary make selection span inclusive to simplify cursor search
@@ -390,22 +432,6 @@ pub const Buffer = struct {
 
     pub fn changeInsertText(self: *Buffer, text: []const u21) FatalError!void {
         var change = try cha.Change.initInsert(self.allocator, self, self.cursor, text);
-        try self.appendChange(&change);
-    }
-
-    pub fn changeDeleteChar(self: *Buffer) !void {
-        const pos = self.cursorToPos(self.cursor);
-        if (pos + 1 == self.content.items.len) return;
-        const span: SpanFlat = .{ .start = pos, .end = pos + 1 };
-        var change = try cha.Change.initDelete(self.allocator, self, .fromSpanFlat(self, span));
-        try self.appendChange(&change);
-    }
-
-    pub fn changeDeletePrevChar(self: *Buffer) !void {
-        const pos = self.cursorToPos(self.cursor);
-        if (pos == 0) return;
-        const span: Span = .{ .start = self.posToCursor(pos - 1), .end = self.posToCursor(pos) };
-        var change = try cha.Change.initDelete(self.allocator, self, span);
         try self.appendChange(&change);
     }
 
@@ -618,45 +644,12 @@ pub const Buffer = struct {
         return self.content_raw.items[bs.start..bs.end];
     }
 
-    pub fn goToDefinition(self: *Buffer) !void {
-        for (self.lsp_connections.items) |conn| {
-            try conn.goToDefinition();
-        }
-    }
-
-    pub fn findReferences(self: *Buffer) !void {
-        for (self.lsp_connections.items) |conn| {
-            try conn.findReferences();
-        }
-    }
-
-    pub fn showHover(self: *Buffer) !void {
-        for (self.lsp_connections.items) |conn| {
-            try conn.hover();
-        }
-    }
-
     pub fn renamePrompt(self: *Buffer) !void {
         const cmd = &main.editor.command_line;
         const line = self.lineContent(@intCast(self.cursor.row));
         const name_span = tokenSpan(line, @intCast(self.cursor.col)) orelse return;
         cmd.activate(.rename);
         try cmd.content.appendSlice(self.allocator, line[name_span.start..name_span.end]);
-        cmd.cursor = cmd.content.items.len;
-    }
-
-    pub fn rename(self: *Buffer, new_text: []const u21) !void {
-        for (self.lsp_connections.items) |conn| {
-            const new_text_b = try uni.unicodeToBytes(self.allocator, new_text);
-            defer self.allocator.free(new_text_b);
-            try conn.rename(new_text_b);
-        }
-    }
-
-    pub fn pipePrompt(self: *Buffer) void {
-        _ = self;
-        const cmd = &main.editor.command_line;
-        cmd.activate(.pipe);
         cmd.cursor = cmd.content.items.len;
     }
 
@@ -701,14 +694,12 @@ pub const Buffer = struct {
     pub fn copySelectionToClipboard(self: *Buffer) !void {
         if (self.selection) |selection| {
             try clp.write(self.allocator, self.rawTextAt(selection));
-            try main.editor.enterMode(.normal);
+            try self.enterMode(.normal);
         }
     }
 
     pub fn changeInsertFromClipboard(self: *Buffer) !void {
-        if (main.editor.mode == .select or main.editor.mode == .select_line) {
-            try self.changeSelectionDelete();
-        }
+        if (self.mode.isSelect()) try self.changeSelectionDelete();
         const text = try clp.read(self.allocator);
         defer self.allocator.free(text);
         const text_uni = try uni.unicodeFromBytes(self.allocator, text);
@@ -753,6 +744,7 @@ pub const Buffer = struct {
 
     pub fn findNext(self: *Buffer, query: []const u21, forward: bool) FatalError!void {
         const query_b = uni.unicodeToBytes(self.allocator, query) catch unreachable;
+        log.debug(@This(), "find query: {s}\n", .{query_b});
         defer self.allocator.free(query_b);
         const spans = self.find(query_b) catch {
             try main.editor.sendMessageFmt("invalid search: {s}", .{query_b});
@@ -931,6 +923,29 @@ pub fn lineIndentSpaces(line: []const u21) usize {
     return leading_spaces;
 }
 
+/// Find token span that contains `pos`
+pub fn tokenSpan(line: []const u21, pos: usize) ?SpanFlat {
+    if (!isToken(line[pos])) return null;
+    var col = pos;
+    var span: SpanFlat = .{ .start = col, .end = col + 1 };
+    while (col < line.len) {
+        defer col += 1;
+        if (!isToken(line[col])) {
+            span.end = col;
+            break;
+        }
+    }
+    col = pos;
+    while (col > 0) {
+        defer col -= 1;
+        if (!isToken(line[col])) {
+            span.start = col + 1;
+            break;
+        }
+    }
+    return span;
+}
+
 fn nextWordStart(line: []const u21, pos: usize) ?usize {
     if (line.len == 0) return null;
     var col = pos;
@@ -972,29 +987,6 @@ fn tokenEnd(line: []const u21, pos: usize) ?usize {
         }
     }
     return line.len - 1;
-}
-
-/// Find token span that contains `pos`
-fn tokenSpan(line: []const u21, pos: usize) ?SpanFlat {
-    if (!isToken(line[pos])) return null;
-    var col = pos;
-    var span: SpanFlat = .{ .start = col, .end = col + 1 };
-    while (col < line.len) {
-        defer col += 1;
-        if (!isToken(line[col])) {
-            span.end = col;
-            break;
-        }
-    }
-    col = pos;
-    while (col > 0) {
-        defer col -= 1;
-        if (!isToken(line[col])) {
-            span.start = col + 1;
-            break;
-        }
-    }
-    return span;
 }
 
 const Boundary = enum {
@@ -1054,6 +1046,7 @@ fn testSetupScratch(content: []const u8) !*Buffer {
 
 fn testSetupTmp(content: []const u8) !*Buffer {
     try main.testSetup();
+    const allocator = std.testing.allocator;
 
     const tmp_file_path = "/tmp/hat_write.txt";
     {
@@ -1062,7 +1055,7 @@ fn testSetupTmp(content: []const u8) !*Buffer {
         try tmp_file.writeAll(content);
     }
 
-    try main.editor.openBuffer(tmp_file_path);
+    try main.editor.openBuffer(try ur.fromPath(allocator, tmp_file_path));
     const buffer = main.editor.active_buffer;
 
     try testing.expectEqualStrings("abc", buffer.content_raw.items);
@@ -1183,7 +1176,7 @@ test "changeSelectionDelete same line" {
     defer main.editor.deinit();
 
     buffer.cursor = .{ .row = 0, .col = 1 };
-    try main.editor.enterMode(.select);
+    try buffer.enterMode(.select);
     try buffer.changeSelectionDelete();
 
     try buffer.commitChanges();
@@ -1199,7 +1192,7 @@ test "delete selection line to end" {
     defer main.editor.deinit();
 
     buffer.moveCursor(.{ .row = 0, .col = 1 });
-    try main.editor.enterMode(.select);
+    try buffer.enterMode(.select);
     buffer.moveCursor(.{ .row = 0, .col = 3 });
     try buffer.changeSelectionDelete();
 
@@ -1217,7 +1210,7 @@ test "delete selection multiple lines" {
     defer main.editor.deinit();
 
     buffer.moveCursor(.{ .row = 0, .col = 1 });
-    try main.editor.enterMode(.select_line);
+    try buffer.enterMode(.select_line);
     buffer.moveCursor(Cursor{ .row = 1, .col = 2 });
 
     try testing.expectEqualDeep(
@@ -1240,7 +1233,7 @@ test "line delete selection" {
     defer main.editor.deinit();
 
     buffer.moveCursor(.{ .row = 0, .col = 1 });
-    try main.editor.enterMode(.select);
+    try buffer.enterMode(.select);
     buffer.moveCursor(Cursor{ .row = 2, .col = 2 });
 
     try testing.expectEqual(Cursor{ .row = 0, .col = 1 }, buffer.selection.?.start);
