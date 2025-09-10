@@ -1,5 +1,5 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index c3c8474..c29de33 100644
+index 943fa47..0a99a47 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
 @@ -67,6 +67,7 @@ pub const Buffer = struct {
@@ -18,7 +18,7 @@ index c3c8474..c29de33 100644
  
          for (self.history.items) |*i| {
              for (i.items) |*c| c.deinit();
-@@ -363,7 +365,7 @@ pub const Buffer = struct {
+@@ -364,7 +366,7 @@ pub const Buffer = struct {
          main.editor.dirty.completion = true;
      }
  
@@ -27,7 +27,7 @@ index c3c8474..c29de33 100644
          if (self.uncommitted_changes.items.len == 0) {
              log.debug(@This(), "no changes to commit\n", .{});
              return;
-@@ -604,6 +606,12 @@ pub const Buffer = struct {
+@@ -620,6 +622,12 @@ pub const Buffer = struct {
          }
      }
  
@@ -118,10 +118,10 @@ index bd45888..0ad93ff 100644
          log.trace(@This(), "notification: {s}\n", .{notif.method});
          if (std.mem.eql(u8, notif.method, "window/logMessage")) {
 diff --git a/src/main.zig b/src/main.zig
-index 69bf3f9..16dd837 100644
+index 0a3a82d..6a44d83 100644
 --- a/src/main.zig
 +++ b/src/main.zig
-@@ -427,6 +427,14 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+@@ -476,6 +476,14 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
              term.draw() catch |e| log.err(@This(), "draw error: {}\n", .{e});
          } else if (editor.dirty.cursor) {
              editor.dirty.cursor = false;

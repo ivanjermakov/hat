@@ -100,9 +100,9 @@ pub const CompletionMenu = struct {
                 log.debug(@This(), "menu:", .{});
                 for (self.display_items.items) |i| {
                     const item = self.completion_items.items[i];
-                    std.debug.print(" {s}", .{item.label});
+                    log.errPrint(" {s}", .{item.label});
                 }
-                std.debug.print("\n", .{});
+                log.errPrint("\n", .{});
             }
         }
         main.editor.dirty.draw = true;

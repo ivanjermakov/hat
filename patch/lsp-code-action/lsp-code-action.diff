@@ -1,5 +1,5 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index c3c8474..8d4dd07 100644
+index 943fa47..7041d48 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
 @@ -23,9 +23,10 @@ const lsp = @import("lsp.zig");
@@ -14,7 +14,7 @@ index c3c8474..8d4dd07 100644
  
  pub const Buffer = struct {
      path: []const u8,
-@@ -269,6 +270,7 @@ pub const Buffer = struct {
+@@ -270,6 +271,7 @@ pub const Buffer = struct {
  
          main.editor.dirty.cursor = true;
          main.editor.resetHover();
@@ -22,7 +22,7 @@ index c3c8474..8d4dd07 100644
      }
  
      pub fn centerCursor(self: *Buffer) void {
-@@ -604,6 +606,18 @@ pub const Buffer = struct {
+@@ -620,6 +622,18 @@ pub const Buffer = struct {
          }
      }
  
@@ -42,7 +42,7 @@ index c3c8474..8d4dd07 100644
          const cmd = &main.editor.command_line;
          const line = self.lineContent(@intCast(self.cursor.row));
 diff --git a/src/editor.zig b/src/editor.zig
-index a7b9259..5a2dcb1 100644
+index 8e614f0..102e214 100644
 --- a/src/editor.zig
 +++ b/src/editor.zig
 @@ -13,6 +13,7 @@ const main = @import("main.zig");
@@ -61,15 +61,15 @@ index a7b9259..5a2dcb1 100644
      key_queue: std.array_list.Aligned(inp.Key, null) = .empty,
      dot_repeat_input: std.array_list.Aligned(inp.Key, null) = .empty,
      dot_repeat_input_uncommitted: std.array_list.Aligned(inp.Key, null) = .empty,
-@@ -145,6 +147,7 @@ pub const Editor = struct {
- 
+@@ -146,6 +148,7 @@ pub const Editor = struct {
      pub fn enterMode(self: *Editor, mode: Mode) FatalError!void {
+         const buffer = self.active_buffer;
          self.resetHover();
 +        self.resetCodeActions();
  
          if (self.mode == mode) return;
-         if (self.mode == .insert) try self.active_buffer.commitChanges();
-@@ -186,6 +189,7 @@ pub const Editor = struct {
+         if (self.mode == .insert) try buffer.commitChanges();
+@@ -195,6 +198,7 @@ pub const Editor = struct {
          self.messages.deinit(self.allocator);
  
          self.resetHover();
@@ -77,7 +77,7 @@ index a7b9259..5a2dcb1 100644
  
          self.key_queue.deinit(self.allocator);
          self.dot_repeat_input.deinit(self.allocator);
-@@ -360,6 +364,15 @@ pub const Editor = struct {
+@@ -369,6 +373,15 @@ pub const Editor = struct {
          }
      }
  
@@ -164,10 +164,10 @@ index bd45888..fe2ca81 100644
          log.trace(@This(), "notification: {s}\n", .{notif.method});
          if (std.mem.eql(u8, notif.method, "window/logMessage")) {
 diff --git a/src/main.zig b/src/main.zig
-index 69bf3f9..d01208a 100644
+index 0a3a82d..f75a4f1 100644
 --- a/src/main.zig
 +++ b/src/main.zig
-@@ -161,6 +161,14 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+@@ -164,6 +164,14 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                  const cmd_active = editor.command_line.command != null;
                  var repeat_or_1: i32 = 1;
                  if (repeat_count) |rc| repeat_or_1 = @intCast(rc);
@@ -182,7 +182,7 @@ index 69bf3f9..d01208a 100644
  
                  // command line menu
                  if (cmd_active) {
-@@ -188,6 +196,10 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+@@ -191,6 +199,10 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                  } else if (cmp_menu_active and eql(u8, key, "\n")) {
                      editor.completion_menu.accept() catch |e| log.err(@This(), "cmp accept error: {}\n", .{e});
  
@@ -193,7 +193,7 @@ index 69bf3f9..d01208a 100644
                      // text insertion
                  } else if (editor.mode == .insert and editor.key_queue.items[0].printable != null) {
                      var printable: std.array_list.Aligned(u21, null) = .empty;
-@@ -348,6 +360,8 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+@@ -396,6 +408,8 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                          buffer.goToDefinition() catch |e| log.err(@This(), "go to def LSP error: {}\n", .{e});
                      } else if (editor.mode == .normal and eql(u8, multi_key, " r")) {
                          buffer.findReferences() catch |e| log.err(@This(), "find references LSP error: {}\n", .{e});
@@ -202,16 +202,6 @@ index 69bf3f9..d01208a 100644
                      } else if (editor.mode == .normal and eql(u8, multi_key, " n")) {
                          try buffer.renamePrompt();
                      } else if (editor.mode == .normal and eql(u8, key, "r") and key2.printable != null) {
-@@ -356,6 +370,9 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
-                     } else if (editor.mode == .normal and eql(u8, key, "@") and key2.printable != null) {
-                         const macro_name: u8 = @intCast(key2.printable.?);
-                         for (0..@intCast(repeat_or_1)) |_| try editor.replayMacro(macro_name, keys_consumed);
-+                    } else if (normal_or_select and eql(u8, multi_key, "gi")) {
-+                        buffer.moveCursor(.{ .col = buffer.cursor.col });
-+                        buffer.centerCursor();
-                     } else if (normal_or_select and eql(u8, multi_key, "gk")) {
-                         buffer.moveCursor(.{ .col = buffer.cursor.col });
-                         buffer.centerCursor();
 diff --git a/src/terminal.zig b/src/terminal.zig
 index dab7c9b..7d2baa1 100644
 --- a/src/terminal.zig

@@ -16,6 +16,7 @@ const main = @import("main.zig");
 const cmd = @import("ui/command_line.zig");
 const cmp = @import("ui/completion_menu.zig");
 const uni = @import("unicode.zig");
+const ft = @import("file_type.zig");
 
 const c = @cImport({
     @cInclude("termios.h");
@@ -98,7 +99,7 @@ pub const Terminal = struct {
             .applyOffset(buffer.offset.negate())
             .applyOffset(layout.buffer.pos));
 
-        try self.writer.writeAll(switch (main.editor.mode) {
+        try self.writer.writeAll(switch (buffer.mode) {
             .normal => cursor_type.steady_block,
             .select, .select_line => cursor_type.steady_underline,
             .insert => cursor_type.steady_bar,
@@ -187,7 +188,7 @@ pub const Terminal = struct {
             for (0..line.len + 1) |i| {
                 const ch = if (i == line.len) ' ' else line[i];
                 _ = attrs_writer.consumeAll();
-                const buffer_col = @as(i32, @intCast(area_col)) + buffer.offset.col;
+                const buffer_col: i32 = buffer.offset.col + @as(i32, @intCast(i));
 
                 if (area_col >= @as(i32, @intCast(area.dims.width))) break;
                 if (buffer.ts_state) |ts_state| {
@@ -214,9 +215,8 @@ pub const Terminal = struct {
                 if (buffer.diagnostics.items.len > 0) {
                     for (buffer.diagnostics.items) |diagnostic| {
                         const span = diagnostic.span;
-                        const in_range = (buffer_row > span.start.row and buffer_row < span.end.col) or
-                            (buffer_row == span.start.row and buffer_col >= span.start.col and buffer_col < span.end.col);
-                        if (in_range) {
+
+                        if (span.inRange(.{ .row = buffer_row, .col = buffer_col })) {
                             try co.attributes.write(co.attributes.diagnostic_error, &attrs_writer);
                             break;
                         }
@@ -231,10 +231,10 @@ pub const Terminal = struct {
                     last_attrs = last_attrs_buf[0..attrs.len];
                 }
 
-                try self.writeChar(ch);
+                try writeChar(self.writer, buffer.file_type, ch);
 
                 byte += try std.unicode.utf8CodepointSequenceLength(ch);
-                const col_width = colWidth(ch);
+                const col_width = colWidth(buffer.file_type, ch);
                 area_col += @intCast(col_width);
                 if (col_width > 1) try self.moveCursor(.{ .row = @intCast(term_row), .col = area.pos.col + area_col });
             }
@@ -246,11 +246,11 @@ pub const Terminal = struct {
 
     fn drawCompletionMenu(self: *Terminal, cmp_menu: *cmp.CompletionMenu) !void {
         const max_width = 30;
+        const buffer = main.editor.active_buffer;
 
-        if (main.editor.mode != .insert) return;
+        if (buffer.mode != .insert) return;
         if (cmp_menu.display_items.items.len == 0) return;
 
-        const buffer = main.editor.active_buffer;
         const replace_range = cmp_menu.replace_range.?;
         const menu_pos = (Cursor{
             .row = @intCast(replace_range.start.line),
@@ -384,17 +384,6 @@ pub const Terminal = struct {
         }
         try self.resetAttributes();
         try self.moveCursor(.{ .row = @intCast(last_row), .col = @intCast(prefix.len + command_line.cursor) });
-    }
-
-    /// Some codepoints need special treatment before writing to terminal
-    fn writeChar(self: *Terminal, ch: u21) !void {
-        switch (ch) {
-            // @see https://www.compart.com/en/unicode/U+2400
-            0x00...0x09, 0x0B...0x1F => try uni.unicodeToBytesWrite(self.writer, &.{ch + 0x2400}),
-            0x7F => try uni.unicodeToBytesWrite(self.writer, &.{0x2421}),
-            0x80...0xA0 => try self.writer.print("<{X:0>2}>", .{ch}),
-            else => try uni.unicodeToBytesWrite(self.writer, &.{ch}),
-        }
     }
 };
 
@@ -587,11 +576,24 @@ pub fn getKeys(allocator: Allocator, codes: []const u8) ![]inp.Key {
     return try keys.toOwnedSlice(allocator);
 }
 
+/// Some codepoints need special treatment before writing to terminal
+pub fn writeChar(writer: *std.io.Writer, config: ft.FileTypeConfig, ch: u21) !void {
+    switch (ch) {
+        // @see https://www.compart.com/en/unicode/U+2400
+        0x00...0x08, 0x0B...0x1F => try uni.unicodeToBytesWrite(writer, &.{ch + 0x2400}),
+        0x09 => for (0..config.tab_width) |_| try writer.writeByte(' '),
+        0x7F => try uni.unicodeToBytesWrite(writer, &.{0x2421}),
+        0x80...0xA0 => try writer.print("<{X:0>2}>", .{ch}),
+        else => try uni.unicodeToBytesWrite(writer, &.{ch}),
+    }
+}
+
 /// Display with in term columns of a written codepoint
-/// Has to be coherent with `Buffer.writeChar`
-pub fn colWidth(ch: u21) usize {
+/// Has to be coherent with `Terminal.writeChar`
+pub fn colWidth(config: ft.FileTypeConfig, ch: u21) usize {
     return switch (ch) {
-        0x00...0x7F => 1,
+        0x09 => config.tab_width,
+        0x00...0x08, 0x0A...0x7F => 1,
         0x80...0xA0 => 4,
         else => @max(1, uni.colWidth(ch) orelse 1),
     };
@@ -601,15 +603,15 @@ pub fn cursorTermCol(buffer: *const buf.Buffer, cursor: Cursor) usize {
     const line = buffer.lineContent(@intCast(cursor.row));
     var col: usize = 0;
     for (0..@intCast(cursor.col)) |char_idx| {
-        col += colWidth(line[char_idx]);
+        col += colWidth(buffer.file_type, line[char_idx]);
     }
     return col;
 }
 
 /// Length of a line in term columns
-pub fn lineColLength(line: []const u21) usize {
+pub fn lineColLength(buffer: *buf.Buffer, line: []const u21) usize {
     var len: usize = 0;
-    for (line) |ch| len += colWidth(ch);
+    for (line) |ch| len += colWidth(buffer.file_type, ch);
     return len;
 }
 
@@ -668,9 +670,10 @@ test "getKeys" {
 }
 
 test "colWidth" {
-    try std.testing.expectEqual(1, colWidth('a'));
-    try std.testing.expectEqual(4, colWidth('\x80'));
-    try std.testing.expectEqual(2, colWidth('🚧'));
-    try std.testing.expectEqual(2, colWidth('✔'));
-    try std.testing.expectEqual(1, colWidth('\u{FE0F}'));
+    const config = ft.FileTypeConfig{ .name = "test" };
+    try std.testing.expectEqual(1, colWidth(config, 'a'));
+    try std.testing.expectEqual(4, colWidth(config, '\x80'));
+    try std.testing.expectEqual(2, colWidth(config, '🚧'));
+    try std.testing.expectEqual(2, colWidth(config, '✔'));
+    try std.testing.expectEqual(1, colWidth(config, '\u{FE0F}'));
 }
