@@ -522,7 +522,9 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                 // redraw next frame to clear invalid highlights
                 editor.dirty.draw = true;
             }
-            buffer.highlight() catch |e| log.err(@This(), "highlight LSP error: {}", .{e});
+            for (buffer.lsp_connections.items) |conn| {
+                conn.highlight() catch |e| log.err(@This(), "highlight LSP error: {}", .{e});
+            }
             term.updateCursor() catch |e| log.err(@This(), "update cursor error: {}\n", .{e});
         }
         perf.draw = timer.lap();
