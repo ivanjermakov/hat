@@ -14,6 +14,10 @@ pub const usage =
     \\                        the middle of the terminal
     \\  -h, --help          Print this help message
     \\  -v, --version       Print version info and exit
+    \\
+    \\Arguments:
+    \\  [file]              Path to a file to be open in a buffer
+    \\                      "-" is a special case to read from stdin instead
 ;
 
 pub const Args = struct {
