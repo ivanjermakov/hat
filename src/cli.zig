@@ -7,7 +7,6 @@ pub const usage =
     \\  hat [options] [file]
     \\
     \\Options:
-    \\  -r, --readonly      Open buffer in read-only mode
     \\  -p, --printer       Printer mode: print [file] to stdout and exit
     \\  --highlight-line=R  Printer mode: highlight line R (1-based index)
     \\  --term-height=H     Printer mode: speicfy terminal height in rows
@@ -22,7 +21,6 @@ pub const Args = struct {
     help: bool = false,
     version: bool = false,
     printer: bool = false,
-    read_only: bool = false,
     highlight_line: ?usize = null,
     term_height: ?usize = null,
 
@@ -40,10 +38,6 @@ pub const Args = struct {
                 continue;
             } else if (eql(u8, arg, "-p") or eql(u8, arg, "--printer")) {
                 args.printer = true;
-                args.read_only = true;
-                continue;
-            } else if (eql(u8, arg, "-r") or eql(u8, arg, "--readonly")) {
-                args.read_only = true;
                 continue;
             } else if (std.mem.startsWith(u8, arg, "--highlight-line=")) {
                 const val = arg[17..];
