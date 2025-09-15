@@ -573,6 +573,7 @@ pub const Buffer = struct {
     }
 
     pub fn indentEmptyLine(self: *Buffer) FatalError!void {
+        if (self.ts_state == null) return;
         std.debug.assert(self.cursor.col == 0);
         if (self.lineLength(@intCast(self.cursor.row)) != 0) return;
         try self.updateIndents();
