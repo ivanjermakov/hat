@@ -16,7 +16,7 @@ const ur = @import("uri.zig");
 fn e2eSetup() !bool {
     main.std_err_file_writer = main.std_err.writer(&main.std_err_buf);
     log.log_writer = &main.std_err_file_writer.interface;
-    log.init(log.log_writer, .info);
+    log.init(log.log_writer, .debug);
     if (e2eSkip()) return false;
     try createTmpFiles();
     return true;
@@ -136,7 +136,7 @@ test "e2e lsp rename" {
     if (!try e2eSetup()) return;
     const setup = try setupEditor();
 
-    sleep(100 * ms);
+    sleep(200 * ms);
     try setup.tty_in.writeAll("w n\x7f\x7f\x7ffoo\n");
     sleep(100 * ms);
     try setup.tty_in.writeAll(" wq");
@@ -161,9 +161,11 @@ test "e2e lsp hover" {
     const setup = try setupEditor();
 
     sleep(200 * ms);
-    try setup.tty_in.writeAll("14l2jK");
+    try setup.tty_in.writeAll("14l2j");
+    sleep(100 * ms);
+    try setup.tty_in.writeAll("K");
 
-    sleep(200 * ms);
+    sleep(100 * ms);
     try std.testing.expect(main.editor.hover_contents != null);
     try std.testing.expect(main.editor.hover_contents.?.len > 0);
     try setup.tty_in.writeAll("q");
@@ -293,4 +295,26 @@ test "e2e find token" {
     try setup.tty_in.writeAll("q");
 
     setup.handle.join();
+}
+
+test "e2e backspace delete" {
+    if (!try e2eSetup()) return;
+    const setup = try setupEditor();
+
+    sleep(100 * ms);
+    try setup.tty_in.writeAll("wi\x7f\x1b[3~\x1b wq");
+
+    setup.handle.join();
+
+    const tmp_file = try std.fs.cwd().openFile("/tmp/hat_e2e.zig", .{});
+    defer tmp_file.close();
+    const tmp_file_content = try tmp_file.readToEndAlloc(allocator, std.math.maxInt(usize));
+    defer allocator.free(tmp_file_content);
+    try std.testing.expectEqualStrings(
+        \\consttd = @import("std");
+        \\pub fn main() !void {
+        \\    std.debug.print("hello!\n", .{});
+        \\}
+        \\
+    , tmp_file_content);
 }
