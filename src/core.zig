@@ -1,9 +1,8 @@
 const std = @import("std");
 
-const reg = @import("regex");
-
 const buf = @import("buffer.zig");
 const lsp = @import("lsp.zig");
+const reg = @import("regex.zig");
 const ts = @import("ts.zig");
 
 pub const Cursor = struct {

@@ -6,10 +6,10 @@ When enabled, every `Buffer.commitChanges` will be followed by write to disk.
 
 ## Usage
 
-Initialize editor with `.autosave` field.
+Configure autosave fields in `config` in `editor.zig`:
 
 ```zig
-editor = try edi.Editor.init(allocator, .{ .autosave = true });
+.autosave = true,
 ```
 
 Autosaving everything might not be a good idea, I recommend only performing autosave if file is within git root.

@@ -1,7 +1,7 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 
-const reg = @import("regex");
+const reg = @import("regex.zig");
 
 /// Given string str, expand env variables
 /// Variable is a sequence in format of /\$[A-Z0-Z]+/

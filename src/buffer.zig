@@ -4,8 +4,6 @@ const assert = std.debug.assert;
 const Allocator = std.mem.Allocator;
 const builtin = @import("builtin");
 
-const reg = @import("regex");
-
 const cha = @import("change.zig");
 const clp = @import("clipboard.zig");
 const core = @import("core.zig");
@@ -21,9 +19,11 @@ const ft = @import("file_type.zig");
 const log = @import("log.zig");
 const lsp = @import("lsp.zig");
 const main = @import("main.zig");
+const reg = @import("regex.zig");
 const ter = @import("terminal.zig");
 const ts = @import("ts.zig");
 const dia = @import("ui/diagnostic.zig");
+const fzf = @import("ui/fzf.zig");
 const uni = @import("unicode.zig");
 const ur = @import("uri.zig");
 
@@ -421,7 +421,7 @@ pub const Buffer = struct {
 
         main.editor.dotRepeatCommitReady();
 
-        if (main.editor.config.autosave) {
+        if (edi.config.autosave) {
             log.debug(@This(), "autosave {s}\n", .{self.path});
             self.write() catch |e| log.err(@This(), "write buffer error: {}", .{e});
         }
@@ -544,7 +544,7 @@ pub const Buffer = struct {
             }
             self.history_index = if (h_idx > 0) h_idx - 1 else null;
 
-            if (main.editor.config.autosave) {
+            if (edi.config.autosave) {
                 self.write() catch |e| log.err(@This(), "write buffer error: {}", .{e});
                 log.debug(@This(), "autosave {s}\n", .{self.path});
             }
@@ -564,7 +564,7 @@ pub const Buffer = struct {
         }
         self.history_index = redo_idx;
 
-        if (main.editor.config.autosave) {
+        if (edi.config.autosave) {
             self.write() catch |e| log.err(@This(), "write buffer error: {}", .{e});
             log.debug(@This(), "autosave {s}\n", .{self.path});
         }
