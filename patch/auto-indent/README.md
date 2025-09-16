@@ -9,11 +9,9 @@ Adds editor options:
 
 ## Usage
 
-Initialize editor with auto-indent fields:
+Configure auto-indent fields in `config` in `editor.zig`:
 
 ```zig
-editor = try edi.Editor.init(allocator, .{
-    .indent_newline = true,
-    .reindent_block_end = true,
-});
+.indent_newline = true,
+.reindent_block_end = true,
 ```
