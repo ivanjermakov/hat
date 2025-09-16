@@ -17,6 +17,24 @@ const fzf = @import("ui/fzf.zig");
 const uni = @import("unicode.zig");
 const ur = @import("uri.zig");
 
+pub const config = Config{
+    .end_of_buffer_char = null,
+    .indent_newline = false,
+    .reindent_block_end = false,
+};
+
+pub const Config = struct {
+    /// Char to denote terminal lines after end of buffer
+    /// See vim's :h fillchars -> eob
+    end_of_buffer_char: ?u8,
+    /// In buffers with TS indent support, autoindent inserted newline
+    indent_newline: bool,
+    /// In buffers with TS indent support, reindent current line upon insertion of one of `reindent_block_end_chars`
+    reindent_block_end: bool,
+
+    pub const reindent_block_end_chars: []const u21 = &.{ '}', ']', ')' };
+};
+
 pub const Dirty = struct {
     input: bool = false,
     draw: bool = false,
@@ -31,20 +49,7 @@ pub const DotRepeat = enum {
     executing,
 };
 
-pub const Config = struct {
-    /// Char to denote terminal lines after end of buffer
-    /// See vim's :h fillchars -> eob
-    end_of_buffer_char: ?u8 = null,
-    /// In buffers with TS indent support, autoindent inserted newline
-    indent_newline: bool = false,
-    /// In buffers with TS indent support, reindent current line upon insertion of one of `reindent_block_end_chars`
-    reindent_block_end: bool = false,
-
-    pub const reindent_block_end_chars: []const u21 = &.{ '}', ']', ')' };
-};
-
 pub const Editor = struct {
-    config: Config = .{},
     /// List of buffers
     /// Must be always sorted recent-first
     buffers: std.array_list.Aligned(*buf.Buffer, null) = .empty,
@@ -65,9 +70,8 @@ pub const Editor = struct {
     macros: std.AutoHashMap(u8, std.array_list.Aligned(inp.Key, null)),
     allocator: Allocator,
 
-    pub fn init(allocator: Allocator, config: Config) !Editor {
+    pub fn init(allocator: Allocator) !Editor {
         const editor = Editor{
-            .config = config,
             .dirty = .{},
             .completion_menu = cmp.CompletionMenu.init(allocator),
             .command_line = cmd.CommandLine.init(allocator),

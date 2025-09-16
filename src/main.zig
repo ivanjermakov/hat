@@ -90,8 +90,11 @@ pub fn main() !void {
         return;
     }
 
-    editor = try edi.Editor.init(allocator, .{});
+    editor = try edi.Editor.init(allocator);
     defer editor.deinit();
+
+    term = try ter.Terminal.init(allocator, &std_out_writer.interface, try ter.terminalSize());
+    defer term.deinit();
 
     const path = if (args.path) |path| try allocator.dupe(u8, path) else fzf.pickFile(allocator) catch return;
     defer allocator.free(path);
@@ -109,9 +112,6 @@ pub fn main() !void {
             return e;
         };
     }
-
-    term = try ter.Terminal.init(allocator, &std_out_writer.interface, try ter.terminalSize());
-    defer term.deinit();
 
     try startEditor(allocator);
     defer editor.disconnect() catch {};
@@ -216,11 +216,11 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                         if (next_key != null and next_key.?.printable != null) {
                             try printable.append(allocator, next_key.?.printable.?);
                             keys_consumed += 1;
-                            if (editor.config.indent_newline and keys_consumed == 1 and next_key.?.printable == '\n') {
+                            if (edi.config.indent_newline and keys_consumed == 1 and next_key.?.printable == '\n') {
                                 try buffer.changeInsertText(try printable.toOwnedSlice(allocator));
                                 try buffer.indentEmptyLine();
                             }
-                            if (editor.config.reindent_block_end and
+                            if (edi.config.reindent_block_end and
                                 std.mem.containsAtLeastScalar(u21, edi.Config.reindent_block_end_chars, 1, next_key.?.printable.?))
                             {
                                 try buffer.changeInsertText(try printable.toOwnedSlice(allocator));
@@ -370,7 +370,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     var change = try cha.Change.initInsert(allocator, buffer, pos, &.{'\n'});
                     try buffer.appendChange(&change);
                     if (!below) buffer.moveCursor(.{ .row = row });
-                    if (editor.config.indent_newline) {
+                    if (edi.config.indent_newline) {
                         try buffer.indentEmptyLine();
                     }
                 } else if (buffer.mode == .normal and eql(u8, key, "J")) {
@@ -579,7 +579,7 @@ comptime {
 pub fn testSetup() !void {
     const allocator = std.testing.allocator;
     log.level = .@"error";
-    editor = try edi.Editor.init(allocator, .{});
+    editor = try edi.Editor.init(allocator);
     var writer = std.io.Writer.Discarding.init(&std_out_buf).writer;
     term = ter.Terminal{
         .writer = &writer,
