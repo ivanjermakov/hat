@@ -1,14 +1,13 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 
-const reg = @import("regex");
-
 const buf = @import("buffer.zig");
 const core = @import("core.zig");
 const Cursor = core.Cursor;
 const Span = core.Span;
 const SpanFlat = core.SpanFlat;
 const lsp = @import("lsp.zig");
+const reg = @import("regex.zig");
 const ts = @import("ts.zig");
 const uni = @import("unicode.zig");
 
