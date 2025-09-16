@@ -436,7 +436,7 @@ pub const Buffer = struct {
 
         main.editor.dotRepeatCommitReady();
 
-        if (main.editor.config.autosave and self.git_root != null) {
+        if (edi.config.autosave and self.git_root != null) {
             log.debug(@This(), "autosave {s}\n", .{self.path});
             self.write() catch |e| log.err(@This(), "write buffer error: {}", .{e});
         }
@@ -602,7 +602,7 @@ pub const Buffer = struct {
             }
             self.history_index = if (h_idx > 0) h_idx - 1 else null;
 
-            if (main.editor.config.autosave and self.git_root != null) {
+            if (edi.config.autosave and self.git_root != null) {
                 self.write() catch |e| log.err(@This(), "write buffer error: {}", .{e});
                 log.debug(@This(), "autosave {s}\n", .{self.path});
             }
@@ -622,7 +622,7 @@ pub const Buffer = struct {
         }
         self.history_index = redo_idx;
 
-        if (main.editor.config.autosave and self.git_root != null) {
+        if (edi.config.autosave and self.git_root != null) {
             self.write() catch |e| log.err(@This(), "write buffer error: {}", .{e});
             log.debug(@This(), "autosave {s}\n", .{self.path});
         }

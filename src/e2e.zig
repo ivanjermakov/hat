@@ -73,7 +73,7 @@ fn startEditor() !void {
     main.term = try ter.Terminal.init(allocator, &main.std_out_writer.interface, term_size);
     defer main.term.deinit();
 
-    main.editor = try edi.Editor.init(allocator, .{});
+    main.editor = try edi.Editor.init(allocator);
     defer main.editor.deinit();
 
     try main.editor.openBuffer(try ur.fromPath(allocator, "/tmp/hat_e2e.zig"));
