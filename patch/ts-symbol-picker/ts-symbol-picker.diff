@@ -1,20 +1,19 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index 943fa47..7a56794 100644
+index 0f31b8e..6cb719a 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
-@@ -23,9 +23,10 @@ const lsp = @import("lsp.zig");
+@@ -23,8 +23,9 @@ const lsp = @import("lsp.zig");
  const main = @import("main.zig");
  const ter = @import("terminal.zig");
  const ts = @import("ts.zig");
 -const dia = @import("ui/diagnostic.zig");
  const uni = @import("unicode.zig");
- const uri = @import("uri.zig");
 +const dia = @import("ui/diagnostic.zig");
 +const fzf = @import("ui/fzf.zig");
+ const ur = @import("uri.zig");
  
- pub const Buffer = struct {
-     path: []const u8,
-@@ -364,7 +365,7 @@ pub const Buffer = struct {
+ pub const Mode = enum {
+@@ -406,7 +407,7 @@ pub const Buffer = struct {
          main.editor.dirty.completion = true;
      }
  
@@ -23,8 +22,8 @@ index 943fa47..7a56794 100644
          if (self.uncommitted_changes.items.len == 0) {
              log.debug(@This(), "no changes to commit\n", .{});
              return;
-@@ -614,6 +615,27 @@ pub const Buffer = struct {
-         }
+@@ -628,6 +629,27 @@ pub const Buffer = struct {
+         return self.content_raw.items[bs.start..bs.end];
      }
  
 +    pub fn findSymbols(self: *Buffer) !void {
@@ -48,9 +47,9 @@ index 943fa47..7a56794 100644
 +        }
 +    }
 +
-     pub fn showHover(self: *Buffer) !void {
-         for (self.lsp_connections.items) |conn| {
-             try conn.hover();
+     pub fn renamePrompt(self: *Buffer) !void {
+         const cmd = &main.editor.command_line;
+         const line = self.lineContent(@intCast(self.cursor.row));
 diff --git a/src/core.zig b/src/core.zig
 index 31baf8a..b7d5982 100644
 --- a/src/core.zig
@@ -68,29 +67,10 @@ index 31baf8a..b7d5982 100644
          return .{
              .start = buffer.cursorToPos(span.start),
 diff --git a/src/file_type.zig b/src/file_type.zig
-index 9ae77c4..de1b233 100644
+index 0048f51..281d36f 100644
 --- a/src/file_type.zig
 +++ b/src/file_type.zig
-@@ -19,6 +19,7 @@ pub const file_type = std.StaticStringMap(FileTypeConfig).initComptime(.{
-             .lib_symbol = "tree_sitter_typescript",
-             .highlight_query = TsConfig.highlight_query_from_nvim("ecma"),
-             .indent_query = TsConfig.highlight_query_from_nvim("ecma"),
-+            .symbol_query = TsConfig.symbol_query_from_aerial("ecma"),
-         },
-     } },
-     .{ ".zig", FileTypeConfig{
-@@ -27,7 +28,9 @@ pub const file_type = std.StaticStringMap(FileTypeConfig).initComptime(.{
-     } },
- });
- 
--const nvim_ts_path = "$HOME/.local/share/nvim/lazy/nvim-treesitter";
-+const nvim_runtime_path = "$HOME/.local/share/nvim";
-+const nvim_ts_path = nvim_runtime_path ++ "/lazy/nvim-treesitter";
-+const nvim_aerial_path = nvim_runtime_path ++ "/lazy/aerial.nvim";
- 
- pub const FileTypeConfig = struct {
-     name: []const u8,
-@@ -40,6 +43,7 @@ pub const TsConfig = struct {
+@@ -23,6 +23,7 @@ pub const TsConfig = struct {
      lib_symbol: []const u8,
      highlight_query: []const u8,
      indent_query: []const u8,
@@ -98,7 +78,7 @@ index 9ae77c4..de1b233 100644
  
      pub fn from_nvim(comptime name: []const u8) TsConfig {
          return .{
-@@ -47,6 +51,7 @@ pub const TsConfig = struct {
+@@ -30,6 +31,7 @@ pub const TsConfig = struct {
              .lib_symbol = "tree_sitter_" ++ name,
              .highlight_query = highlight_query_from_nvim(name),
              .indent_query = indent_query_from_nvim(name),
@@ -106,32 +86,32 @@ index 9ae77c4..de1b233 100644
          };
      }
  
-@@ -78,6 +83,10 @@ pub const TsConfig = struct {
-     pub fn indent_query_from_nvim(comptime name: []const u8) []const u8 {
+@@ -62,7 +64,12 @@ pub const TsConfig = struct {
          return nvim_ts_path ++ "/queries/" ++ name ++ "/indents.scm";
      }
-+
+ 
 +    pub fn symbol_query_from_aerial(comptime name: []const u8) []const u8 {
 +        return nvim_aerial_path ++ "/queries/" ++ name ++ "/aerial.scm";
 +    }
++
+     const nvim_ts_path = "$HOME/.local/share/nvim/lazy/nvim-treesitter";
++    const nvim_aerial_path = "$HOME/.local/share/nvim/lazy/aerial.nvim";
  };
  
  pub const plain: FileTypeConfig = .{ .name = "plain", .ts = null };
 diff --git a/src/main.zig b/src/main.zig
-index 0a3a82d..b22c0e7 100644
+index 066118d..538cb13 100644
 --- a/src/main.zig
 +++ b/src/main.zig
-@@ -398,7 +398,9 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
-                         buffer.findReferences() catch |e| log.err(@This(), "find references LSP error: {}\n", .{e});
-                     } else if (editor.mode == .normal and eql(u8, multi_key, " n")) {
+@@ -438,6 +438,8 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+                         }
+                     } else if (buffer.mode == .normal and eql(u8, multi_key, " n")) {
                          try buffer.renamePrompt();
--                    } else if (editor.mode == .normal and eql(u8, key, "r") and key2.printable != null) {
-+                    } else if (editor.mode == .normal and eql(u8, multi_key, " f")) {
++                    } else if (buffer.mode == .normal and eql(u8, multi_key, " f")) {
 +                        try buffer.findSymbols();
-+                    } else if (editor.mode == .normal and eql(u8, key, "r") and editor.key_queue.items[1].printable != null) {
+                     } else if (buffer.mode == .normal and eql(u8, key, "r") and key2.printable != null) {
                          const macro_name: u8 = @intCast(key2.printable.?);
                          try editor.startMacro(macro_name);
-                     } else if (editor.mode == .normal and eql(u8, key, "@") and key2.printable != null) {
 diff --git a/src/ts.zig b/src/ts.zig
 index 1c63d02..fa110d5 100644
 --- a/src/ts.zig

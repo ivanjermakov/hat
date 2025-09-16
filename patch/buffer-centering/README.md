@@ -8,10 +8,10 @@ centered within the terminal
 
 ## Usage
 
-Initialize editor with `.centering_width` field.
+Configure fields in `config` in `editor.zig`:
 
 ```zig
-editor = try edi.Editor.init(allocator, .{ .centering_width = 140 });
+.centering_width = 140,
 ```
 
 ## Screenshots
