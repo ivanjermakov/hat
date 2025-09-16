@@ -94,6 +94,9 @@ pub fn main() !void {
     editor = try edi.Editor.init(allocator);
     defer editor.deinit();
 
+    term = try ter.Terminal.init(allocator, &std_out_writer.interface, try ter.terminalSize());
+    defer term.deinit();
+
     const path = if (args.path) |path| try allocator.dupe(u8, path) else fzf.pickFile(allocator) catch return;
     defer allocator.free(path);
 
@@ -110,9 +113,6 @@ pub fn main() !void {
             return e;
         };
     }
-
-    term = try ter.Terminal.init(allocator, &std_out_writer.interface, try ter.terminalSize());
-    defer term.deinit();
 
     try startEditor(allocator);
     defer editor.disconnect() catch {};
