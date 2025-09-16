@@ -17,6 +17,23 @@ const fzf = @import("ui/fzf.zig");
 const uni = @import("unicode.zig");
 const ur = @import("uri.zig");
 
+pub const config = Config{
+    .end_of_buffer_char = null,
+    .number_line_mode = .absolute,
+};
+
+pub const Config = struct {
+    /// Char to denote terminal lines after end of buffer
+    /// See vim's :h fillchars -> eob
+    end_of_buffer_char: ?u8,
+    number_line_mode: NumberLineMode,
+};
+
+pub const NumberLineMode = enum {
+    absolute,
+    relative,
+};
+
 pub const Dirty = struct {
     input: bool = false,
     draw: bool = false,
@@ -31,20 +48,7 @@ pub const DotRepeat = enum {
     executing,
 };
 
-pub const Config = struct {
-    /// Char to denote terminal lines after end of buffer
-    /// See vim's :h fillchars -> eob
-    end_of_buffer_char: ?u8 = null,
-    number_line_mode: NumberLineMode = .absolute,
-};
-
-pub const NumberLineMode = enum {
-    absolute,
-    relative,
-};
-
 pub const Editor = struct {
-    config: Config = .{},
     /// List of buffers
     /// Must be always sorted recent-first
     buffers: std.array_list.Aligned(*buf.Buffer, null) = .empty,
@@ -65,9 +69,8 @@ pub const Editor = struct {
     macros: std.AutoHashMap(u8, std.array_list.Aligned(inp.Key, null)),
     allocator: Allocator,
 
-    pub fn init(allocator: Allocator, config: Config) !Editor {
+    pub fn init(allocator: Allocator) !Editor {
         const editor = Editor{
-            .config = config,
             .dirty = .{},
             .completion_menu = cmp.CompletionMenu.init(allocator),
             .command_line = cmd.CommandLine.init(allocator),

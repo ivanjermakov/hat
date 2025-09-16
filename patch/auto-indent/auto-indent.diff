@@ -1,8 +1,8 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index 943fa47..6c98256 100644
+index 0f31b8e..b490463 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
-@@ -508,6 +508,22 @@ pub const Buffer = struct {
+@@ -534,6 +534,22 @@ pub const Buffer = struct {
          }
      }
  
@@ -26,7 +26,7 @@ index 943fa47..6c98256 100644
          log.debug(@This(), "undo: {?}/{}\n", .{ self.history_index, self.history.items.len });
          if (self.history_index) |h_idx| {
 diff --git a/src/editor.zig b/src/editor.zig
-index 8e614f0..4656115 100644
+index 4ba3924..186f66f 100644
 --- a/src/editor.zig
 +++ b/src/editor.zig
 @@ -35,6 +35,12 @@ pub const Config = struct {
@@ -43,10 +43,10 @@ index 8e614f0..4656115 100644
  
  pub const Editor = struct {
 diff --git a/src/main.zig b/src/main.zig
-index 0a3a82d..79f9e40 100644
+index 066118d..65da54a 100644
 --- a/src/main.zig
 +++ b/src/main.zig
-@@ -202,6 +202,17 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+@@ -205,6 +205,17 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                          if (next_key != null and next_key.?.printable != null) {
                              try printable.append(allocator, next_key.?.printable.?);
                              keys_consumed += 1;
@@ -64,13 +64,13 @@ index 0a3a82d..79f9e40 100644
                          } else {
                              break;
                          }
-@@ -322,6 +333,9 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+@@ -348,6 +359,9 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                      var change = try cha.Change.initInsert(allocator, buffer, pos, &.{'\n'});
                      try buffer.appendChange(&change);
                      if (!below) buffer.moveCursor(.{ .row = row });
 +                    if (editor.config.indent_newline) {
 +                        try buffer.indentEmptyLine();
 +                    }
-                 } else if (editor.mode == .normal and eql(u8, key, "J")) {
+                 } else if (buffer.mode == .normal and eql(u8, key, "J")) {
                      for (0..@intCast(repeat_or_1)) |_| {
                          if (buffer.cursor.row + 1 < buffer.line_positions.items.len) {

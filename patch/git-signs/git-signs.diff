@@ -1,15 +1,16 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index 943fa47..4cb8da7 100644
+index 0f31b8e..1adc363 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
-@@ -24,12 +24,15 @@ const main = @import("main.zig");
+@@ -24,6 +24,7 @@ const main = @import("main.zig");
  const ter = @import("terminal.zig");
  const ts = @import("ts.zig");
  const dia = @import("ui/diagnostic.zig");
 +const git = @import("git.zig");
  const uni = @import("unicode.zig");
- const uri = @import("uri.zig");
+ const ur = @import("uri.zig");
  
+@@ -45,6 +46,8 @@ pub const Mode = enum {
  pub const Buffer = struct {
      path: []const u8,
      uri: []const u8,
@@ -18,23 +19,22 @@ index 943fa47..4cb8da7 100644
      file: ?std.fs.File,
      stat: ?std.fs.File.Stat = null,
      /// Incremented on every content change
-@@ -78,12 +81,15 @@ pub const Buffer = struct {
-         const abs_path = std.fs.realpathAlloc(allocator, buf_path) catch null;
-         defer if (abs_path) |a| allocator.free(a);
-         const buf_uri = try uri.fromPath(allocator, abs_path orelse buf_path);
+@@ -91,12 +94,14 @@ pub const Buffer = struct {
+         const file_ext = std.fs.path.extension(buf_path);
+         const file_type = ft.file_type.get(file_ext) orelse ft.plain;
+         const file = try std.fs.cwd().openFile(buf_path, .{});
 +        const git_root = git.gitRoot(allocator, buf_path) catch null;
-+        log.debug(@This(), "git root: {?s}\n", .{git_root});
  
          var self = Buffer{
              .path = buf_path,
              .file = file,
              .file_type = file_type,
-             .uri = buf_uri,
+             .uri = uri,
 +            .git_root = git_root,
              .allocator = allocator,
          };
  
-@@ -144,6 +150,8 @@ pub const Buffer = struct {
+@@ -157,6 +162,8 @@ pub const Buffer = struct {
          self.lsp_connections.deinit(self.allocator);
  
          self.allocator.free(self.uri);
@@ -43,7 +43,7 @@ index 943fa47..4cb8da7 100644
          self.allocator.free(self.path);
  
          if (self.ts_state) |*ts_state| ts_state.deinit();
-@@ -508,6 +516,31 @@ pub const Buffer = struct {
+@@ -534,6 +541,31 @@ pub const Buffer = struct {
          }
      }
  
@@ -254,10 +254,10 @@ index 0000000..75687c7
 +    try std.testing.expectEqualDeep(hunks[1], Hunk{ .type = .delete, .line = 37, .len = 0 });
 +}
 diff --git a/src/main.zig b/src/main.zig
-index 0a3a82d..9fa7ec2 100644
+index 066118d..e2aed94 100644
 --- a/src/main.zig
 +++ b/src/main.zig
-@@ -39,6 +39,7 @@ pub var std_err_writer: *std.io.Writer = undefined;
+@@ -41,6 +41,7 @@ pub var std_err_writer: *std.io.Writer = undefined;
  
  pub var tty_in: std.fs.File = undefined;
  
@@ -265,7 +265,7 @@ index 0a3a82d..9fa7ec2 100644
  pub var editor: edi.Editor = undefined;
  pub var term: ter.Terminal = undefined;
  
-@@ -459,6 +460,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+@@ -498,6 +499,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
              buffer.version += 1;
              buffer.clearDiagnostics();
              try buffer.reparse();
@@ -274,10 +274,10 @@ index 0a3a82d..9fa7ec2 100644
              for (buffer.lsp_connections.items) |conn| {
                  conn.didChange(editor.active_buffer) catch |e| log.err(@This(), "did change LSP error: {}\n", .{e});
 diff --git a/src/terminal.zig b/src/terminal.zig
-index dab7c9b..a401116 100644
+index f18974d..aeca3aa 100644
 --- a/src/terminal.zig
 +++ b/src/terminal.zig
-@@ -152,6 +152,38 @@ pub const Terminal = struct {
+@@ -153,6 +153,38 @@ pub const Terminal = struct {
                  );
              }
          }
@@ -316,7 +316,7 @@ index dab7c9b..a401116 100644
      }
  
      fn drawBuffer(self: *Terminal, buffer: *buf.Buffer, area: Area) !void {
-@@ -410,7 +442,7 @@ pub fn terminalSize() !Dimensions {
+@@ -399,7 +431,7 @@ pub fn terminalSize() !Dimensions {
  }
  
  pub fn computeLayout(term_dims: Dimensions) Layout {

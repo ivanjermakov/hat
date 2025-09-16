@@ -1,5 +1,5 @@
 diff --git a/src/editor.zig b/src/editor.zig
-index 8e614f0..ab799c5 100644
+index 4ba3924..fdff787 100644
 --- a/src/editor.zig
 +++ b/src/editor.zig
 @@ -35,6 +35,12 @@ pub const Config = struct {
@@ -16,10 +16,10 @@ index 8e614f0..ab799c5 100644
  
  pub const Editor = struct {
 diff --git a/src/terminal.zig b/src/terminal.zig
-index dab7c9b..1339138 100644
+index f18974d..9434afb 100644
 --- a/src/terminal.zig
 +++ b/src/terminal.zig
-@@ -138,18 +138,40 @@ pub const Terminal = struct {
+@@ -139,18 +139,40 @@ pub const Terminal = struct {
      fn drawNumberLine(self: *Terminal, buffer: *buf.Buffer, area: Area) !void {
          try co.attributes.write(co.attributes.number_line, self.writer);
          defer self.resetAttributes() catch {};
