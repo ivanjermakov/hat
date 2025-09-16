@@ -1,8 +1,8 @@
 diff --git a/src/core.zig b/src/core.zig
-index 31baf8a..ac12f8e 100644
+index 046dce8..d859dee 100644
 --- a/src/core.zig
 +++ b/src/core.zig
-@@ -102,6 +102,7 @@ pub const SpanFlat = struct {
+@@ -101,6 +101,7 @@ pub const SpanFlat = struct {
  };
  
  pub const Layout = struct {
@@ -11,30 +11,37 @@ index 31baf8a..ac12f8e 100644
      buffer: Area,
  };
 diff --git a/src/editor.zig b/src/editor.zig
-index 4ba3924..d63c4a0 100644
+index 9e47642..bee1d42 100644
 --- a/src/editor.zig
 +++ b/src/editor.zig
-@@ -35,6 +35,11 @@ pub const Config = struct {
+@@ -19,12 +19,18 @@ const ur = @import("uri.zig");
+ 
+ pub const config = Config{
+     .end_of_buffer_char = null,
++    .centering_width = null,
+ };
+ 
+ pub const Config = struct {
      /// Char to denote terminal lines after end of buffer
      /// See vim's :h fillchars -> eob
-     end_of_buffer_char: ?u8 = null,
+     end_of_buffer_char: ?u8,
 +    /// Imaginary width of a buffer that should be aligned (padded on the left).
 +    /// `null` means "no centering".
 +    /// If >`term_width`, padding is 0,
 +    /// If <`term_width`, left padding is `(term_width-centering_width)/2`
-+    centering_width: ?usize = null,
++    centering_width: ?usize,
  };
  
- pub const Editor = struct {
+ pub const Dirty = struct {
 diff --git a/src/terminal.zig b/src/terminal.zig
-index f18974d..31eea83 100644
+index 99cd154..8b3bc17 100644
 --- a/src/terminal.zig
 +++ b/src/terminal.zig
-@@ -400,20 +400,32 @@ pub fn terminalSize() !Dimensions {
+@@ -401,20 +401,32 @@ pub fn terminalSize() !Dimensions {
  
  pub fn computeLayout(term_dims: Dimensions) Layout {
      const number_line_width = 5;
-+    const padding_width = if (main.editor.config.centering_width) |cw|
++    const padding_width = if (edi.config.centering_width) |cw|
 +        if (term_dims.width > cw) @divFloor(term_dims.width - cw, 2) else 0
 +    else
 +        0;
