@@ -3,6 +3,7 @@ const posix = std.posix;
 const Allocator = std.mem.Allocator;
 
 const buf = @import("buffer.zig");
+const edi = @import("editor.zig");
 const co = @import("color.zig");
 const core = @import("core.zig");
 const Dimensions = core.Dimensions;
@@ -143,7 +144,7 @@ pub const Terminal = struct {
             const buffer_row = @as(i32, @intCast(term_row)) + buffer.offset.row;
             try self.moveCursor(.{ .row = @intCast(term_row), .col = area.pos.col });
             if (buffer_row < 0 or buffer_row >= buffer.line_positions.items.len) {
-                if (main.editor.config.end_of_buffer_char) |ch| _ = try self.writer.writeAll(&.{ch});
+                if (edi.config.end_of_buffer_char) |ch| _ = try self.writer.writeAll(&.{ch});
             } else {
                 try self.writer.printInt(
                     @as(usize, @intCast(buffer_row + 1)),
@@ -400,7 +401,7 @@ pub fn terminalSize() !Dimensions {
 
 pub fn computeLayout(term_dims: Dimensions) Layout {
     const number_line_width = 5;
-    const padding_width = if (main.editor.config.centering_width) |cw|
+    const padding_width = if (edi.config.centering_width) |cw|
         if (term_dims.width > cw) @divFloor(term_dims.width - cw, 2) else 0
     else
         0;

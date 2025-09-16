@@ -17,6 +17,22 @@ const fzf = @import("ui/fzf.zig");
 const uni = @import("unicode.zig");
 const ur = @import("uri.zig");
 
+pub const config = Config{
+    .end_of_buffer_char = null,
+    .centering_width = null,
+};
+
+pub const Config = struct {
+    /// Char to denote terminal lines after end of buffer
+    /// See vim's :h fillchars -> eob
+    end_of_buffer_char: ?u8,
+    /// Imaginary width of a buffer that should be aligned (padded on the left).
+    /// `null` means "no centering".
+    /// If >`term_width`, padding is 0,
+    /// If <`term_width`, left padding is `(term_width-centering_width)/2`
+    centering_width: ?usize,
+};
+
 pub const Dirty = struct {
     input: bool = false,
     draw: bool = false,
@@ -31,19 +47,7 @@ pub const DotRepeat = enum {
     executing,
 };
 
-pub const Config = struct {
-    /// Char to denote terminal lines after end of buffer
-    /// See vim's :h fillchars -> eob
-    end_of_buffer_char: ?u8 = null,
-    /// Imaginary width of a buffer that should be aligned (padded on the left).
-    /// `null` means "no centering".
-    /// If >`term_width`, padding is 0,
-    /// If <`term_width`, left padding is `(term_width-centering_width)/2`
-    centering_width: ?usize = null,
-};
-
 pub const Editor = struct {
-    config: Config = .{},
     /// List of buffers
     /// Must be always sorted recent-first
     buffers: std.array_list.Aligned(*buf.Buffer, null) = .empty,
@@ -64,9 +68,8 @@ pub const Editor = struct {
     macros: std.AutoHashMap(u8, std.array_list.Aligned(inp.Key, null)),
     allocator: Allocator,
 
-    pub fn init(allocator: Allocator, config: Config) !Editor {
+    pub fn init(allocator: Allocator) !Editor {
         const editor = Editor{
-            .config = config,
             .dirty = .{},
             .completion_menu = cmp.CompletionMenu.init(allocator),
             .command_line = cmd.CommandLine.init(allocator),
