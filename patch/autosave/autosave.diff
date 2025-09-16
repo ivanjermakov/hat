@@ -1,8 +1,8 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index 943fa47..94e21e7 100644
+index 0f31b8e..6316d83 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
-@@ -181,14 +181,6 @@ pub const Buffer = struct {
+@@ -223,14 +223,6 @@ pub const Buffer = struct {
          _ = try self.syncFs();
  
          self.file_history_index = self.history_index;
@@ -17,7 +17,7 @@ index 943fa47..94e21e7 100644
      }
  
      pub fn moveCursor(self: *Buffer, new_cursor: Cursor) void {
-@@ -386,6 +378,11 @@ pub const Buffer = struct {
+@@ -428,6 +420,11 @@ pub const Buffer = struct {
          self.history_index = self.history.items.len - 1;
  
          main.editor.dotRepeatCommitReady();
@@ -29,7 +29,7 @@ index 943fa47..94e21e7 100644
      }
  
      pub fn changeInsertText(self: *Buffer, text: []const u21) FatalError!void {
-@@ -520,6 +517,11 @@ pub const Buffer = struct {
+@@ -546,6 +543,11 @@ pub const Buffer = struct {
                  self.moveCursor(inv_change.new_span.?.start);
              }
              self.history_index = if (h_idx > 0) h_idx - 1 else null;
@@ -41,7 +41,7 @@ index 943fa47..94e21e7 100644
          }
      }
  
-@@ -535,6 +537,11 @@ pub const Buffer = struct {
+@@ -561,6 +563,11 @@ pub const Buffer = struct {
              self.moveCursor(change.new_span.?.start);
          }
          self.history_index = redo_idx;
@@ -54,7 +54,7 @@ index 943fa47..94e21e7 100644
  
      pub fn textAt(self: *const Buffer, span: Span) []const u21 {
 diff --git a/src/editor.zig b/src/editor.zig
-index 8e614f0..685ae18 100644
+index 4ba3924..eea4a4b 100644
 --- a/src/editor.zig
 +++ b/src/editor.zig
 @@ -32,6 +32,7 @@ pub const DotRepeat = enum {

@@ -137,9 +137,9 @@ pub const LspConnection = struct {
     }
 
     pub fn disconnect(self: *LspConnection) !void {
-        self.status = .Disconnecting;
         try self.sendRequest("shutdown", null);
         try self.sendNotification("exit", null);
+        self.status = .Disconnecting;
     }
 
     pub fn update(self: *LspConnection) !void {
@@ -383,6 +383,10 @@ pub const LspConnection = struct {
         comptime method: []const u8,
         params: (types.getRequestMetadata(method).?.Params orelse ?void),
     ) !void {
+        if (!std.mem.eql(u8, method, "initialize") and self.status != .Initialized) {
+            log.warn(@This(), "bad connection status: {}\n", .{self.status});
+            return;
+        }
         const request: lsp.TypedJsonRPCRequest(@TypeOf(params)) = .{
             .id = nextRequestId(),
             .method = method,
@@ -401,6 +405,10 @@ pub const LspConnection = struct {
         comptime method: []const u8,
         params: (types.getNotificationMetadata(method).?.Params orelse ?void),
     ) !void {
+        if (self.status != .Initialized) {
+            log.warn(@This(), "bad connection status: {}\n", .{self.status});
+            return;
+        }
         const request: lsp.TypedJsonRPCNotification(@TypeOf(params)) = .{
             .method = method,
             .params = params,
@@ -418,6 +426,10 @@ pub const LspConnection = struct {
         id: lsp.JsonRPCMessage.ID,
         result: types.getRequestMetadata(method).?.Result,
     ) !void {
+        if (self.status != .Initialized) {
+            log.warn(@This(), "bad connection status: {}\n", .{self.status});
+            return;
+        }
         const request: lsp.TypedJsonRPCResponse(@TypeOf(result)) = .{
             .id = id,
             .result_or_error = .{ .result = result },
@@ -434,8 +446,8 @@ pub const LspConnection = struct {
         if (resp == null or resp.? == .null) return;
         self.server_init = try std.json.parseFromValue(types.InitializeResult, self.allocator, resp.?, .{});
         log.debug(@This(), "server capabilities: {f}\n", .{std.json.fmt(self.server_init.?.value.capabilities, .{})});
-        try self.sendNotification("initialized", .{});
         self.status = .Initialized;
+        try self.sendNotification("initialized", .{});
         for (self.buffers.items) |buffer| {
             try self.didOpen(buffer);
         }
