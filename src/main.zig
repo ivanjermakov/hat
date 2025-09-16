@@ -90,7 +90,7 @@ pub fn main() !void {
         return;
     }
 
-    editor = try edi.Editor.init(allocator, .{});
+    editor = try edi.Editor.init(allocator);
     defer editor.deinit();
 
     const path = if (args.path) |path| try allocator.dupe(u8, path) else fzf.pickFile(allocator) catch return;
@@ -565,7 +565,7 @@ comptime {
 pub fn testSetup() !void {
     const allocator = std.testing.allocator;
     log.level = .@"error";
-    editor = try edi.Editor.init(allocator, .{});
+    editor = try edi.Editor.init(allocator);
     var writer = std.io.Writer.Discarding.init(&std_out_buf).writer;
     term = ter.Terminal{
         .writer = &writer,
