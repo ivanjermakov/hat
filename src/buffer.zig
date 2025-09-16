@@ -460,7 +460,7 @@ pub const Buffer = struct {
         try self.updateIndents();
         if (self.selection) |selection| {
             const start: usize = @intCast(selection.start.row);
-            const end: usize = @intCast(selection.end.row + 1);
+            const end: usize = @intCast(if (self.mode == .select_line) selection.end.row else selection.end.row + 1);
             for (start..end) |row| {
                 try self.lineAlignIndent(@intCast(row));
             }
