@@ -30,6 +30,8 @@ const ur = @import("uri.zig");
 pub const sleep_ns: u64 = 16 * std.time.ns_per_ms;
 pub const sleep_lsp_ns: u64 = sleep_ns;
 
+pub var std_in = std.fs.File.stdin();
+
 pub var std_out_buf: [2 << 14]u8 = undefined;
 pub var std_out = std.fs.File.stdout();
 pub var std_out_writer: std.fs.File.Writer = undefined;
@@ -89,16 +91,25 @@ pub fn main() !void {
         return;
     }
 
-    editor = try edi.Editor.init(allocator, .{});
+    editor = try edi.Editor.init(allocator);
     defer editor.deinit();
 
     const path = if (args.path) |path| try allocator.dupe(u8, path) else fzf.pickFile(allocator) catch return;
     defer allocator.free(path);
 
-    editor.openBuffer(try ur.fromPath(allocator, path)) catch |e| {
-        log.errPrint("open buffer \"{s}\" error: {}\n", .{ path, e });
-        return e;
-    };
+    if (std.mem.eql(u8, path, "-")) {
+        const stdin = try std_in.readToEndAlloc(allocator, std.math.maxInt(usize));
+        defer allocator.free(stdin);
+        editor.openScratch(stdin) catch |e| {
+            log.errPrint("open \"{s}\" error: {}\n", .{ path, e });
+            return e;
+        };
+    } else {
+        editor.openBuffer(try ur.fromPath(allocator, path)) catch |e| {
+            log.errPrint("open \"{s}\" error: {}\n", .{ path, e });
+            return e;
+        };
+    }
 
     term = try ter.Terminal.init(allocator, &std_out_writer.interface, try ter.terminalSize());
     defer term.deinit();
@@ -556,7 +567,7 @@ comptime {
 pub fn testSetup() !void {
     const allocator = std.testing.allocator;
     log.level = .@"error";
-    editor = try edi.Editor.init(allocator, .{});
+    editor = try edi.Editor.init(allocator);
     var writer = std.io.Writer.Discarding.init(&std_out_buf).writer;
     term = ter.Terminal{
         .writer = &writer,

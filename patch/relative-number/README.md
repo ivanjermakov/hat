@@ -7,8 +7,8 @@ Similar to Vim's [`relativenumber`](https://vimhelp.org/options.txt.html#%27rela
 
 # Usage
 
-Initialize editor with `.number_line_mode = .relative`.
+Configure fields in `config` in `editor.zig`:
 
 ```zig
-editor = try edi.Editor.init(allocator, .{ .number_line_moe = .relative });
+.number_line_moe = .relative,
 ```
