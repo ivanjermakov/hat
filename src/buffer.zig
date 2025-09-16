@@ -452,7 +452,7 @@ pub const Buffer = struct {
                 try self.lineAlignIndent(@intCast(row));
             }
         } else {
-            try self.lineAlignIndent(self.cursor.row);
+            try self.lineAlignIndent(@intCast(self.cursor.row));
         }
     }
 
@@ -867,16 +867,17 @@ pub const Buffer = struct {
         );
     }
 
-    fn lineAlignIndent(self: *Buffer, row: i32) !void {
+    fn lineAlignIndent(self: *Buffer, row: usize) !void {
+        if (row == 0) return;
         const old_cursor = self.cursor;
-        const line = self.lineContent(@intCast(row));
-        const correct_indent: usize = self.indents.items[@intCast(row)];
+        const line = self.lineContent(row);
+        const correct_indent: usize = self.indents.items[row - 1];
         const correct_indent_spaces = correct_indent * self.file_type.indent_spaces;
         const current_indent_spaces: usize = lineIndentSpaces(line);
         if (correct_indent_spaces == current_indent_spaces) return;
         const span = Span{
-            .start = .{ .row = row, .col = 0 },
-            .end = .{ .row = row, .col = @intCast(current_indent_spaces) },
+            .start = .{ .row = @intCast(row), .col = 0 },
+            .end = .{ .row = @intCast(row), .col = @intCast(current_indent_spaces) },
         };
         const new_text = try self.allocator.alloc(u21, correct_indent_spaces);
         defer self.allocator.free(new_text);
