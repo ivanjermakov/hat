@@ -26,6 +26,10 @@ pub const file_type = std.StaticStringMap(FileTypeConfig).initComptime(.{
         .name = "zig",
         .ts = TsConfig.from_nvim("zig"),
     } },
+    .{ ".md", FileTypeConfig{
+        .name = "markdown",
+        .ts = TsConfig.from_nvim("markdown"),
+    } },
 });
 
 pub const FileTypeConfig = struct {
