@@ -108,8 +108,7 @@ test "printer no ts" {
     try createTmpFiles();
 
     main.std_err_file_writer = main.std_err.writer(&main.std_err_buf);
-    var log_writer = main.std_err_file_writer.interface;
-    log.init(&log_writer, null);
+    log.log_writer = &main.std_err_file_writer.interface;
 
     const allocator = std.testing.allocator;
     var buffer = try buf.Buffer.init(allocator, try ur.fromPath(allocator, "/tmp/hat_e2e.txt"));
@@ -136,8 +135,7 @@ test "printer no ts highlight" {
     try createTmpFiles();
 
     main.std_err_file_writer = main.std_err.writer(&main.std_err_buf);
-    var log_writer = main.std_err_file_writer.interface;
-    log.init(&log_writer, null);
+    log.log_writer = &main.std_err_file_writer.interface;
 
     const allocator = std.testing.allocator;
     var buffer = try buf.Buffer.init(allocator, try ur.fromPath(allocator, "/tmp/hat_e2e.txt"));

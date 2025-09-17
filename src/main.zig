@@ -58,7 +58,8 @@ pub fn main() !void {
     std_err_writer = &std_err_file_writer.interface;
     tty_in = try std.fs.cwd().openFile("/dev/tty", .{});
 
-    log.init(std_err_writer, null);
+    log.level = log.levelEnv() orelse .none;
+    log.log_writer = std_err_writer;
     log.info(@This(), "hat started, pid: {}\n", .{std.c.getpid()});
 
     const args = cli.Args.parse(allocator) catch |e| {

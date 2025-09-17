@@ -77,24 +77,15 @@ pub fn enabled(lvl: Level) bool {
     return @intFromEnum(lvl) <= @intFromEnum(level);
 }
 
-pub fn init(writer: ?*std.io.Writer, target_level: ?Level) void {
-    if (writer) |w| log_writer = w;
-
-    if (target_level) |tl| {
-        level = tl;
-    } else {
-        if (std.posix.getenv(log_level_var)) |level_var| {
-            inline for (std.meta.fields(Level)) |l| {
-                if (std.mem.eql(u8, l.name, level_var)) {
-                    level = @enumFromInt(l.value);
-                    break;
-                }
+pub fn levelEnv() ?Level {
+    if (std.posix.getenv(log_level_var)) |level_var| {
+        inline for (std.meta.fields(Level)) |l| {
+            if (std.mem.eql(u8, l.name, level_var)) {
+                return @enumFromInt(l.value);
             }
-        } else {
-            level = .none;
         }
     }
-    info(@This(), "logging enabled, level: {f}\n", .{level});
+    return null;
 }
 
 fn log(comptime caller: type, comptime lvl: Level, comptime fmt: []const u8, args: anytype) void {
