@@ -340,6 +340,25 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                         try editor.sendMessage("not a token");
                     }
 
+                    // select mode
+                } else if (buffer.mode.isSelect() and eql(u8, key, "o")) {
+                    const sel = buffer.selection.?;
+                    const pos = b: switch (buffer.mode) {
+                        .select => {
+                            break :b if (std.meta.eql(sel.start, buffer.cursor))
+                                buffer.posToCursor(buffer.cursorToPos(sel.end) - 1)
+                            else
+                                sel.start;
+                        },
+                        .select_line => {
+                            const row = if (sel.start.row == buffer.cursor.row) sel.end.row - 1 else sel.start.row;
+                            break :b Cursor{ .row = row, .col = buffer.cursor.col };
+                        },
+                        else => unreachable,
+                    };
+                    buffer.moveCursor(pos);
+                    buffer.selection = sel;
+
                     // normal mode
                 } else if (normal_or_select and (eql(u8, key, "q") or eql(u8, key, "Q"))) {
                     const force = eql(u8, key, "Q");
