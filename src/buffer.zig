@@ -939,10 +939,9 @@ pub const Buffer = struct {
     }
 
     fn lineAlignIndent(self: *Buffer, row: usize) !void {
-        if (row == 0) return;
         const old_cursor = self.cursor;
         const line = self.lineContent(row);
-        const correct_indent: usize = self.indents.items[row - 1];
+        const correct_indent: usize = if (row == 0) 0 else self.indents.items[row - 1];
         const correct_indent_spaces = correct_indent * self.file_type.indent_spaces;
         const current_indent_spaces: usize = lineIndentSpaces(line);
         if (correct_indent_spaces == current_indent_spaces) return;
@@ -1132,7 +1131,7 @@ fn testSetupTmp(content: []const u8) !*Buffer {
         try tmp_file.writeAll(content);
     }
 
-    try main.editor.openBuffer(try ur.fromPath(allocator, tmp_file_path));
+    try main.editor.openBuffer(try ur.fromRelativePath(allocator, tmp_file_path));
     const buffer = main.editor.active_buffer;
 
     try testing.expectEqualStrings("abc", buffer.content_raw.items);
