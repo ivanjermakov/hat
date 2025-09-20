@@ -28,6 +28,15 @@ pub const lsp_config = [_]LspConfig{
         .name = "zls",
         .cmd = &.{ "zls", "--log-level", "debug" },
         .file_types = &.{"zig"},
+        .settings =
+        \\{
+        \\    "enable_build_on_save": true,
+        \\    "build_on_save_step": "check",
+        \\    "enable_snippets": false,
+        \\    "enable_argument_placeholders": false,
+        \\    "warn_style": true
+        \\}
+        ,
     },
 };
 
