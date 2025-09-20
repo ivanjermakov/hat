@@ -21,8 +21,8 @@ pub fn fromPath(allocator: Allocator, path: []const u8) ![]const u8 {
     return try std.fmt.allocPrint(allocator, "file://{s}", .{path});
 }
 
-pub fn cwd(allocator: Allocator) ![]const u8 {
-    const abs_cwd = try std.fs.cwd().realpathAlloc(allocator, ".");
-    defer allocator.free(abs_cwd);
-    return fromPath(allocator, abs_cwd);
+pub fn fromRelativePath(allocator: Allocator, path: []const u8) ![]const u8 {
+    const abs = try std.fs.cwd().realpathAlloc(allocator, path);
+    defer allocator.free(abs);
+    return try fromPath(allocator, abs);
 }

@@ -80,7 +80,7 @@ pub fn main() !void {
     sig.registerAll();
 
     if (args.printer) {
-        const uri = try ur.fromPath(allocator, args.path orelse return error.NoPath);
+        const uri = try ur.fromRelativePath(allocator, args.path orelse return error.NoPath);
         var buffer = try buf.Buffer.init(allocator, uri);
         defer buffer.deinit();
         try pri.printBuffer(
@@ -108,7 +108,7 @@ pub fn main() !void {
             return e;
         };
     } else {
-        editor.openBuffer(try ur.fromPath(allocator, path)) catch |e| {
+        editor.openBuffer(try ur.fromRelativePath(allocator, path)) catch |e| {
             log.errPrint("open \"{s}\" error: {}\n", .{ path, e });
             return e;
         };

@@ -1040,7 +1040,7 @@ fn testSetupTmp(content: []const u8) !*Buffer {
         try tmp_file.writeAll(content);
     }
 
-    try main.editor.openBuffer(try ur.fromPath(allocator, tmp_file_path));
+    try main.editor.openBuffer(try ur.fromRelativePath(allocator, tmp_file_path));
     const buffer = main.editor.active_buffer;
 
     try testing.expectEqualStrings("abc", buffer.content_raw.items);

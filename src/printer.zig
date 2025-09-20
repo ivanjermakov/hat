@@ -111,7 +111,7 @@ test "printer no ts" {
     log.log_writer = &main.std_err_file_writer.interface;
 
     const allocator = std.testing.allocator;
-    var buffer = try buf.Buffer.init(allocator, try ur.fromPath(allocator, "/tmp/hat_e2e.txt"));
+    var buffer = try buf.Buffer.init(allocator, try ur.fromRelativePath(allocator, "/tmp/hat_e2e.txt"));
     defer buffer.deinit();
     if (buffer.ts_state) |*ts| ts.deinit();
     buffer.ts_state = null;
@@ -138,7 +138,7 @@ test "printer no ts highlight" {
     log.log_writer = &main.std_err_file_writer.interface;
 
     const allocator = std.testing.allocator;
-    var buffer = try buf.Buffer.init(allocator, try ur.fromPath(allocator, "/tmp/hat_e2e.txt"));
+    var buffer = try buf.Buffer.init(allocator, try ur.fromRelativePath(allocator, "/tmp/hat_e2e.txt"));
     defer buffer.deinit();
     if (buffer.ts_state) |*ts| ts.deinit();
     buffer.ts_state = null;

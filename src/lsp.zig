@@ -493,7 +493,7 @@ pub const LspConnection = struct {
         };
         defer self.allocator.free(pick_result.path);
         log.debug(@This(), "picked reference: {}\n", .{pick_result});
-        try main.editor.openBuffer(try ur.fromPath(self.allocator, pick_result.path));
+        try main.editor.openBuffer(try ur.fromRelativePath(self.allocator, pick_result.path));
         main.editor.active_buffer.moveCursor(pick_result.position);
     }
 
