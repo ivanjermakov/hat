@@ -77,7 +77,7 @@ pub const State = struct {
         const language = try ts_conf.loadLanguage(allocator);
         const highlight_query = if (ts_conf.highlight_query) |q| try ft.TsConfig.loadQuery(allocator, q) else null;
         defer if (highlight_query) |q| allocator.free(q);
-        const indent_query = if (ts_conf.highlight_query) |q| try ft.TsConfig.loadQuery(allocator, q) else null;
+        const indent_query = if (ts_conf.indent_query) |q| try ft.TsConfig.loadQuery(allocator, q) else null;
         defer if (indent_query) |q| allocator.free(q);
         const symbol_query = if (ts_conf.symbol_query) |q| try ft.TsConfig.loadQuery(allocator, q) else null;
         defer if (symbol_query) |q| allocator.free(q);
