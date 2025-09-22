@@ -496,7 +496,8 @@ pub const Buffer = struct {
     }
 
     pub fn updateIndents(self: *Buffer) FatalError!void {
-        const spans = if (self.ts_state) |ts_state| ts_state.indent.spans.items else return;
+        const ts_state = if (self.ts_state) |ts_state| ts_state else return;
+        const spans = if (ts_state.indent) |i| i.spans.items else return;
         try self.reparse();
         self.indents.clearRetainingCapacity();
 
