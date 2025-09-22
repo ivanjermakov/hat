@@ -44,8 +44,8 @@ pub const FileTypeConfig = struct {
 pub const TsConfig = struct {
     lib_path: []const u8,
     lib_symbol: []const u8,
-    highlight_query: []const u8,
-    indent_query: []const u8,
+    highlight_query: ?[]const u8,
+    indent_query: ?[]const u8,
     symbol_query: ?[]const u8,
 
     pub fn from_nvim(comptime name: []const u8) TsConfig {
