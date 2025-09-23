@@ -1,12 +1,19 @@
 diff --git a/src/editor.zig b/src/editor.zig
-index 4ba3924..fdff787 100644
+index 9e47642..b792a53 100644
 --- a/src/editor.zig
 +++ b/src/editor.zig
-@@ -35,6 +35,12 @@ pub const Config = struct {
+@@ -19,12 +19,19 @@ const ur = @import("uri.zig");
+ 
+ pub const config = Config{
+     .end_of_buffer_char = null,
++    .number_line_mode = .absolute,
+ };
+ 
+ pub const Config = struct {
      /// Char to denote terminal lines after end of buffer
      /// See vim's :h fillchars -> eob
-     end_of_buffer_char: ?u8 = null,
-+    number_line_mode: NumberLineMode = .absolute,
+     end_of_buffer_char: ?u8,
++    number_line_mode: NumberLineMode,
 +};
 +
 +pub const NumberLineMode = enum {
@@ -14,12 +21,12 @@ index 4ba3924..fdff787 100644
 +    relative,
  };
  
- pub const Editor = struct {
+ pub const Dirty = struct {
 diff --git a/src/terminal.zig b/src/terminal.zig
-index f18974d..9434afb 100644
+index 99cd154..f6fc289 100644
 --- a/src/terminal.zig
 +++ b/src/terminal.zig
-@@ -139,18 +139,40 @@ pub const Terminal = struct {
+@@ -140,18 +140,40 @@ pub const Terminal = struct {
      fn drawNumberLine(self: *Terminal, buffer: *buf.Buffer, area: Area) !void {
          try co.attributes.write(co.attributes.number_line, self.writer);
          defer self.resetAttributes() catch {};
@@ -28,7 +35,7 @@ index f18974d..9434afb 100644
              const buffer_row = @as(i32, @intCast(term_row)) + buffer.offset.row;
              try self.moveCursor(.{ .row = @intCast(term_row), .col = area.pos.col });
              if (buffer_row < 0 or buffer_row >= buffer.line_positions.items.len) {
-                 if (main.editor.config.end_of_buffer_char) |ch| _ = try self.writer.writeAll(&.{ch});
+                 if (edi.config.end_of_buffer_char) |ch| _ = try self.writer.writeAll(&.{ch});
              } else {
 -                try self.writer.printInt(
 -                    @as(usize, @intCast(buffer_row + 1)),
@@ -36,7 +43,7 @@ index f18974d..9434afb 100644
 -                    .lower,
 -                    .{ .width = area.dims.width - 1, .alignment = .right },
 -                );
-+                switch (main.editor.config.number_line_mode) {
++                switch (edi.config.number_line_mode) {
 +                    .absolute => {
 +                        try self.writer.printInt(
 +                            @as(usize, @intCast(buffer_row + 1)),
