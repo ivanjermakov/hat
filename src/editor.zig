@@ -92,6 +92,8 @@ pub const Editor = struct {
         var buffer = try self.allocator.create(buf.Buffer);
         buffer.* = b;
 
+        try buffer.updateGitHunks();
+
         try self.buffers.insert(self.allocator, 0, buffer);
         self.active_buffer = buffer;
         main.editor.dirty.draw = true;

@@ -116,7 +116,6 @@ pub const Buffer = struct {
             self.ts_state = try ts.State.init(allocator, ts_conf);
         }
         try self.reparse();
-        try self.updateGitHunks();
         return self;
     }
 
