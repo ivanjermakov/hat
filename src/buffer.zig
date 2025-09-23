@@ -89,10 +89,12 @@ pub const Buffer = struct {
     allocator: Allocator,
 
     pub fn init(allocator: Allocator, uri: []const u8) !Buffer {
-        const buf_path = try allocator.dupe(u8, ur.extractPath(uri) orelse return error.InvalidUri);
+        const buf_path = try ur.toPath(allocator, uri);
+        log.debug(@This(), "file path: {s}\n", .{buf_path});
         errdefer allocator.free(buf_path);
         const file_ext = std.fs.path.extension(buf_path);
         const file_type = ft.file_type.get(file_ext) orelse ft.plain;
+        log.debug(@This(), "file type: {s}\n", .{file_type.name});
         const file = try std.fs.cwd().openFile(buf_path, .{});
         const git_root = git.gitRoot(allocator, buf_path) catch null;
 
@@ -113,7 +115,11 @@ pub const Buffer = struct {
         try self.updateContent();
         try self.updateLinePositions();
         if (self.file_type.ts) |ts_conf| {
-            self.ts_state = try ts.State.init(allocator, ts_conf);
+            self.ts_state = ts.State.init(allocator, ts_conf) catch |e| b: {
+                log.err(@This(), "failed to init TsState: {}\n", .{e});
+                if (@errorReturnTrace()) |trace| log.errPrint("{f}\n", .{trace.*});
+                break :b null;
+            };
         }
         try self.reparse();
         return self;
@@ -135,7 +141,11 @@ pub const Buffer = struct {
         try self.updateContent();
         try self.updateLinePositions();
         if (self.file_type.ts) |ts_conf| {
-            self.ts_state = try ts.State.init(allocator, ts_conf);
+            self.ts_state = ts.State.init(allocator, ts_conf) catch |e| b: {
+                log.err(@This(), "failed to init TsState: {}\n", .{e});
+                if (@errorReturnTrace()) |trace| log.errPrint("{f}\n", .{trace.*});
+                break :b null;
+            };
         }
         try self.reparse();
         return self;
@@ -454,7 +464,7 @@ pub const Buffer = struct {
         try self.updateIndents();
         if (self.selection) |selection| {
             const start: usize = @intCast(selection.start.row);
-            const end: usize = @intCast(selection.end.row + 1);
+            const end: usize = @intCast(if (self.mode == .select_line) selection.end.row else selection.end.row + 1);
             for (start..end) |row| {
                 try self.lineAlignIndent(@intCast(row));
             }
@@ -503,7 +513,8 @@ pub const Buffer = struct {
     }
 
     pub fn updateIndents(self: *Buffer) FatalError!void {
-        const spans = if (self.ts_state) |ts_state| ts_state.indent.spans.items else return;
+        const ts_state = if (self.ts_state) |ts_state| ts_state else return;
+        const spans = if (ts_state.indent) |i| i.spans.items else return;
         try self.reparse();
         self.indents.clearRetainingCapacity();
 
@@ -683,7 +694,8 @@ pub const Buffer = struct {
         defer self.allocator.free(in_b);
 
         var exit_code: u8 = undefined;
-        const out_b = ext.runExternalWait(self.allocator, &.{ "sh", "-c", command_b }, in_b, &exit_code) catch |e| {
+        const opts = ext.RunOptions{ .input = in_b, .exit_code = &exit_code };
+        const out_b = ext.runExternalWait(self.allocator, &.{ "sh", "-c", command_b }, opts) catch |e| {
             log.err(@This(), "{}\n", .{e});
             if (@errorReturnTrace()) |trace| log.errPrint("{f}\n", .{trace.*});
             return;
@@ -879,10 +891,9 @@ pub const Buffer = struct {
     }
 
     fn lineAlignIndent(self: *Buffer, row: usize) !void {
-        if (row == 0) return;
         const old_cursor = self.cursor;
         const line = self.lineContent(row);
-        const correct_indent: usize = self.indents.items[row - 1];
+        const correct_indent: usize = if (row == 0) 0 else self.indents.items[row - 1];
         const correct_indent_spaces = correct_indent * self.file_type.indent_spaces;
         const current_indent_spaces: usize = lineIndentSpaces(line);
         if (correct_indent_spaces == current_indent_spaces) return;
@@ -1072,7 +1083,7 @@ fn testSetupTmp(content: []const u8) !*Buffer {
         try tmp_file.writeAll(content);
     }
 
-    try main.editor.openBuffer(try ur.fromPath(allocator, tmp_file_path));
+    try main.editor.openBuffer(try ur.fromRelativePath(allocator, tmp_file_path));
     const buffer = main.editor.active_buffer;
 
     try testing.expectEqualStrings("abc", buffer.content_raw.items);

@@ -176,14 +176,14 @@ pub const Editor = struct {
         const path = try fzf.pickFile(self.allocator);
         defer self.allocator.free(path);
         log.debug(@This(), "picked path: {s}\n", .{path});
-        try self.openBuffer(try ur.fromPath(self.allocator, path));
+        try self.openBuffer(try ur.fromRelativePath(self.allocator, path));
     }
 
     pub fn findInFiles(self: *Editor) !void {
         const find_result = fzf.findInFiles(self.allocator) catch return;
         defer self.allocator.free(find_result.path);
         log.debug(@This(), "find result: {}\n", .{find_result});
-        try self.openBuffer(try ur.fromPath(self.allocator, find_result.path));
+        try self.openBuffer(try ur.fromRelativePath(self.allocator, find_result.path));
         self.active_buffer.moveCursor(find_result.position);
     }
 
@@ -191,7 +191,7 @@ pub const Editor = struct {
         const buf_path = fzf.pickBuffer(self.allocator, self.buffers.items) catch return;
         defer self.allocator.free(buf_path);
         log.debug(@This(), "picked buffer: {s}\n", .{buf_path});
-        try self.openBuffer(try ur.fromPath(self.allocator, buf_path));
+        try self.openBuffer(try ur.fromRelativePath(self.allocator, buf_path));
     }
 
     pub fn updateInput(self: *Editor) !void {
