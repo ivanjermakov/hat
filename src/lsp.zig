@@ -22,7 +22,7 @@ pub const lsp_config = [_]LspConfig{
     LspConfig{
         .name = "typescript-language-server",
         .cmd = &.{ "typescript-language-server", "--stdio" },
-        .file_types = &.{"typescript"},
+        .file_types = &.{"typescript", "tsx"},
     },
     LspConfig{
         .name = "zls",
