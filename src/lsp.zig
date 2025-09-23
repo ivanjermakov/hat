@@ -22,7 +22,7 @@ pub const lsp_config = [_]LspConfig{
     LspConfig{
         .name = "typescript-language-server",
         .cmd = &.{ "typescript-language-server", "--stdio" },
-        .file_types = &.{"typescript", "tsx"},
+        .file_types = &.{ "typescript", "tsx" },
     },
     LspConfig{
         .name = "zls",
@@ -48,6 +48,7 @@ pub const lsp_config = [_]LspConfig{
         \\        "validate": true
         \\    }
         \\}
+        ,
     },
 };
 
@@ -119,6 +120,7 @@ pub const LspConnection = struct {
                     .completionItem = .{
                         .insertReplaceSupport = true,
                         .documentationFormat = &.{ .plaintext, .markdown },
+                        .snippetSupport = true,
                     },
                 },
                 .hover = .{
