@@ -125,7 +125,6 @@ pub const Buffer = struct {
             };
         }
         try self.reparse();
-        try self.updateGitHunks();
         return self;
     }
 
