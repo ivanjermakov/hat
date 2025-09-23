@@ -551,7 +551,7 @@ pub const Buffer = struct {
         if (self.lineLength(@intCast(self.cursor.row)) != 0) return;
         try self.updateIndents();
 
-        const correct_indent: usize = self.indents.items[@intCast(self.cursor.row)];
+        const correct_indent: usize = if (self.cursor.row == 0) 0 else self.indents.items[@intCast(self.cursor.row - 1)];
         const correct_indent_spaces = correct_indent * self.file_type.indent_spaces;
         if (correct_indent_spaces > 0) {
             const indent_text = try self.allocator.alloc(u21, correct_indent_spaces);
