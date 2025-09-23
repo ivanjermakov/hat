@@ -433,6 +433,20 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                             conn.hover() catch |e| log.err(@This(), "show hover LSP error: {}\n", .{e});
                         }
                     }
+                } else if (buffer.mode == .normal and (eql(u8, key, "D") or eql(u8, key, "C"))) {
+                    const span: Span = .{
+                        .start = buffer.cursor,
+                        .end = buffer.posToCursor(buffer.lineStart(@intCast(buffer.cursor.row + 1)) - 1),
+                    };
+                    if (!std.meta.eql(span.start, span.end)) {
+                        var change = try cha.Change.initDelete(buffer.allocator, buffer, span);
+                        try buffer.appendChange(&change);
+                        if (eql(u8, key, "D")) {
+                            try buffer.commitChanges();
+                        } else {
+                            try buffer.enterMode(.insert);
+                        }
+                    }
 
                     // insert mode
                 } else if (buffer.mode == .insert and eql(u8, key, "<delete>")) {
