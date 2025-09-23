@@ -168,14 +168,13 @@ pub const AttrsSpan = struct {
     ///   * check `identifier`
     ///   * null
     pub fn findAttrs(capture_name: []const u8) ?[]const col.Attr {
-        const full = syntax_highlight.get(capture_name);
-        if (full) |a| return a;
+        if (node_highlights_exact.get(capture_name)) |a| return a;
         if (!std.mem.containsAtLeastScalar(u8, capture_name, 1, '.')) return null;
 
         for (0..capture_name.len) |i| {
             const from_end = capture_name.len - i - 1;
             if (capture_name[from_end] == '.') {
-                const as = syntax_highlight.get(capture_name[0..from_end]);
+                const as = node_highlights.get(capture_name[0..from_end]);
                 if (as) |a| return a;
             }
         }
@@ -183,12 +182,16 @@ pub const AttrsSpan = struct {
     }
 };
 
-pub const syntax_highlight = std.StaticStringMap([]const col.Attr).initComptime(.{
+pub const node_highlights = std.StaticStringMap([]const col.Attr).initComptime(.{
     .{ "keyword", col.attributes.keyword },
     .{ "string", col.attributes.string },
     .{ "number", col.attributes.literal },
     .{ "boolean", col.attributes.literal },
     .{ "comment", col.attributes.comment },
+});
+
+pub const node_highlights_exact = std.StaticStringMap([]const col.Attr).initComptime(.{
+    .{ "tag", col.attributes.keyword },
 });
 
 pub const IndentSpanTuple = struct {
