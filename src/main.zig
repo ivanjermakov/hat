@@ -427,8 +427,8 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     try buffer.redo();
                 } else if (buffer.mode == .normal and eql(u8, key, "<tab>")) {
                     if (editor.buffers.items.len > 1) {
-                        const path = editor.buffers.items[1].path;
-                        editor.openBuffer(path) catch |e| log.err(@This(), "open buffer {s} error: {}\n", .{ path, e });
+                        const uri = editor.buffers.items[1].uri;
+                        editor.openBuffer(uri) catch |e| log.err(@This(), "open buffer {s} error: {}\n", .{ uri, e });
                     }
                 } else if (buffer.mode == .normal and eql(u8, key, ".")) {
                     try editor.dotRepeat(keys_consumed);
