@@ -753,7 +753,8 @@ pub const Buffer = struct {
         defer self.allocator.free(in_b);
 
         var exit_code: u8 = undefined;
-        const out_b = ext.runExternalWait(self.allocator, &.{ "sh", "-c", command_b }, in_b, &exit_code) catch |e| {
+        const opts = ext.RunOptions{ .input = in_b, .exit_code = &exit_code };
+        const out_b = ext.runExternalWait(self.allocator, &.{ "sh", "-c", command_b }, opts) catch |e| {
             log.err(@This(), "{}\n", .{e});
             if (@errorReturnTrace()) |trace| log.errPrint("{f}\n", .{trace.*});
             return;

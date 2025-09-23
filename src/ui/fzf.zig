@@ -12,11 +12,11 @@ const lsp = @import("../lsp.zig");
 const uri = @import("../uri.zig");
 
 pub fn pickFile(allocator: Allocator) ![]const u8 {
-    const files = try ext.runExternalWait(allocator, &.{ "rg", "--files" }, null, null);
+    const files = try ext.runExternalWait(allocator, &.{ "rg", "--files" }, .{});
     defer allocator.free(files);
 
     const cmd = fzf_command ++ .{ "--preview", "hat --printer {}" };
-    const out = try ext.runExternalWait(allocator, cmd, files, null);
+    const out = try ext.runExternalWait(allocator, cmd, .{ .input = files });
     defer allocator.free(out);
     if (out.len == 0) return error.EmptyOut;
     return try allocator.dupe(u8, std.mem.trim(u8, out, "\n"));
@@ -46,7 +46,7 @@ pub fn findInFiles(allocator: Allocator) !FindResult {
         "--bind",
         std.fmt.comptimePrint("change:reload:sleep 0.1; {s} || true", .{rg_cmd}),
     };
-    const out = try ext.runExternalWait(allocator, cmd, null, null);
+    const out = try ext.runExternalWait(allocator, cmd, .{});
     defer allocator.free(out);
     if (out.len == 0) return error.EmptyOut;
     return .init(allocator, out);
@@ -62,7 +62,7 @@ pub fn pickBuffer(allocator: Allocator, buffers: []const *buf.Buffer) ![]const u
         );
     }
 
-    const out = try ext.runExternalWait(allocator, fzf_cmd_with_preview, bufs.written(), null);
+    const out = try ext.runExternalWait(allocator, fzf_cmd_with_preview, .{ .input = bufs.written() });
     defer allocator.free(out);
     if (out.len == 0) return error.EmptyOut;
     var iter = std.mem.splitScalar(u8, out, ':');
@@ -84,7 +84,7 @@ pub fn pickLspLocation(allocator: Allocator, locations: []const lsp.types.Locati
     const bufs_str = try bufs.toOwnedSlice();
     defer allocator.free(bufs_str);
 
-    const out = try ext.runExternalWait(allocator, fzf_cmd_with_preview, bufs_str, null);
+    const out = try ext.runExternalWait(allocator, fzf_cmd_with_preview, .{ .input = bufs_str });
     defer allocator.free(out);
     if (out.len == 0) return error.EmptyOut;
     return .init(allocator, out);
