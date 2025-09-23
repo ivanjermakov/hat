@@ -25,8 +25,20 @@ pub fn ParseResult(comptime SpanType: type) type {
 
         pub fn init(allocator: Allocator, language: *ts.struct_TSLanguage, query_str: []const u8) !ParseResult(SpanType) {
             var err: ts.TSQueryError = undefined;
-            const query = ts.ts_query_new(language, query_str.ptr, @intCast(query_str.len), null, &err);
-            if (err > 0) return error.Query;
+            var err_offset: u32 = undefined;
+            const query = ts.ts_query_new(language, query_str.ptr, @intCast(query_str.len), &err_offset, &err);
+            if (err > 0) {
+                log.err(@This(), "query error position: {}\n", .{err_offset});
+                if (log.enabled(.trace)) {
+                    if (err_offset < query_str.len) {
+                        log.errPrint("{s}\n^\n", .{query_str[err_offset..@min(err_offset + 10, query_str.len)]});
+                    } else {
+                        log.errPrint("error offset outside of query string\n", .{});
+                    }
+                }
+                // log.debug(@This(), "query:\n{s}\n", .{query_str});
+                return error.Query;
+            }
 
             return .{
                 .query = query,
@@ -58,6 +70,7 @@ pub fn ParseResult(comptime SpanType: type) type {
                         .end = ts.ts_node_end_byte(capture.node),
                     };
                     const tuple = SpanType.init(span, node_type);
+                    log.trace(@This(), "init {s}: {s} -> {?}\n", .{ @typeName(SpanType), capture_name, tuple });
                     if (tuple) |t| try self.spans.append(self.allocator, t);
                 }
             }
@@ -74,22 +87,26 @@ pub const State = struct {
     allocator: Allocator,
 
     pub fn init(allocator: Allocator, ts_conf: ft.TsConfig) !State {
-        const language = try ts_conf.loadLanguage(allocator);
-        const highlight_query = if (ts_conf.highlight_query) |q| try ft.TsConfig.loadQuery(allocator, q) else null;
-        defer if (highlight_query) |q| allocator.free(q);
-        const indent_query = if (ts_conf.indent_query) |q| try ft.TsConfig.loadQuery(allocator, q) else null;
-        defer if (indent_query) |q| allocator.free(q);
-        const symbol_query = if (ts_conf.symbol_query) |q| try ft.TsConfig.loadQuery(allocator, q) else null;
-        defer if (symbol_query) |q| allocator.free(q);
+        const language = (try ts_conf.loadLanguage(allocator))();
 
         var self = State{
             .parser = ts.ts_parser_new(),
             .allocator = allocator,
         };
-        if (highlight_query) |q| self.highlight = try ParseResult(AttrsSpan).init(allocator, language(), q);
-        if (indent_query) |q| self.indent = try ParseResult(IndentSpanTuple).init(allocator, language(), q);
-        if (symbol_query) |q| self.symbol = try ParseResult(SpanFlat).init(allocator, language(), q);
-        _ = ts.ts_parser_set_language(self.parser, language());
+
+        const highlight_query = if (ts_conf.highlight_query) |q| try ft.TsConfig.loadQuery(allocator, q) else null;
+        defer if (highlight_query) |q| allocator.free(q);
+        if (highlight_query) |q| self.highlight = try ParseResult(AttrsSpan).init(allocator, language, q);
+
+        const indent_query = if (ts_conf.indent_query) |q| try ft.TsConfig.loadQuery(allocator, q) else null;
+        defer if (indent_query) |q| allocator.free(q);
+        if (indent_query) |q| self.indent = try ParseResult(IndentSpanTuple).init(allocator, language, q);
+
+        const symbol_query = if (ts_conf.symbol_query) |q| try ft.TsConfig.loadQuery(allocator, q) else null;
+        defer if (symbol_query) |q| allocator.free(q);
+        if (symbol_query) |q| self.symbol = try ParseResult(SpanFlat).init(allocator, language, q);
+
+        _ = ts.ts_parser_set_language(self.parser, language);
 
         return self;
     }
@@ -109,8 +126,18 @@ pub const State = struct {
             @ptrCast(content),
             @intCast(content.len),
         );
-        if (self.highlight) |*h| try h.makeSpans(self.tree.?);
-        if (self.indent) |*i| try i.makeSpans(self.tree.?);
+        if (log.enabled(.trace)) {
+            const root_node = ts.ts_tree_root_node(self.tree);
+            log.trace(@This(), "parse tree:\n{s}\n", .{ts.ts_node_string(root_node)});
+        }
+        if (self.highlight) |*h| {
+            try h.makeSpans(self.tree.?);
+            log.trace(@This(), "made {} highlight spans\n", .{h.spans.items.len});
+        }
+        if (self.indent) |*i| {
+            try i.makeSpans(self.tree.?);
+            log.trace(@This(), "made {} indent spans\n", .{i.spans.items.len});
+        }
     }
 
     pub fn deinit(self: *State) void {
