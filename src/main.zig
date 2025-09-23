@@ -267,9 +267,10 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     });
                     buffer.centerCursor();
                 } else if (normal_or_select and eql(u8, key, "$")) {
+                    const line_len = buffer.lineLength(@intCast(buffer.cursor.row));
                     buffer.moveCursor(.{
                         .row = buffer.cursor.row,
-                        .col = @intCast(buffer.lineLength(@intCast(buffer.cursor.row))),
+                        .col = if (line_len == 0) 0 else @intCast(line_len - 1),
                     });
                 } else if (normal_or_select and eql(u8, key, "0")) {
                     buffer.moveCursor(.{ .row = buffer.cursor.row, .col = 0 });
