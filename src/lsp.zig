@@ -257,7 +257,7 @@ pub const LspConnection = struct {
         try self.sendNotification("textDocument/didOpen", .{
             .textDocument = .{
                 .uri = buffer.uri,
-                .languageId = "",
+                .languageId = buffer.file_type.name,
                 .version = 0,
                 .text = buffer.content_raw.items,
             },
