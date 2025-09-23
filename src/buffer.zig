@@ -817,12 +817,14 @@ pub const Buffer = struct {
         defer file.close();
         const file_content = try file.readToEndAlloc(self.allocator, std.math.maxInt(usize));
         defer self.allocator.free(file_content);
-        const file_content_uni = try uni.unicodeFromBytes(self.allocator, file_content);
-        defer self.allocator.free(file_content_uni);
+        if (!std.mem.eql(u8, self.content_raw.items, file_content)) {
+            const file_content_uni = try uni.unicodeFromBytes(self.allocator, file_content);
+            defer self.allocator.free(file_content_uni);
 
-        var change = try cha.Change.initReplace(self.allocator, self, self.fullSpan(), file_content_uni);
-        try self.appendChange(&change);
-        try self.commitChanges();
+            var change = try cha.Change.initReplace(self.allocator, self, self.fullSpan(), file_content_uni);
+            try self.appendChange(&change);
+            try self.commitChanges();
+        }
         self.file_history_index = self.history_index;
 
         // TODO: attempt to keep cursor at the same semantic place
