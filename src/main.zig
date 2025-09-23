@@ -58,7 +58,8 @@ pub fn main() !void {
     std_err_writer = &std_err_file_writer.interface;
     tty_in = try std.fs.cwd().openFile("/dev/tty", .{});
 
-    log.init(std_err_writer, null);
+    log.level = log.levelEnv() orelse .none;
+    log.log_writer = std_err_writer;
     log.info(@This(), "hat started, pid: {}\n", .{std.c.getpid()});
 
     const args = cli.Args.parse(allocator) catch |e| {
@@ -79,7 +80,7 @@ pub fn main() !void {
     sig.registerAll();
 
     if (args.printer) {
-        const uri = try ur.fromPath(allocator, args.path orelse return error.NoPath);
+        const uri = try ur.fromRelativePath(allocator, args.path orelse return error.NoPath);
         var buffer = try buf.Buffer.init(allocator, uri);
         defer buffer.deinit();
         try pri.printBuffer(
@@ -107,7 +108,7 @@ pub fn main() !void {
             return e;
         };
     } else {
-        editor.openBuffer(try ur.fromPath(allocator, path)) catch |e| {
+        editor.openBuffer(try ur.fromRelativePath(allocator, path)) catch |e| {
             log.errPrint("open \"{s}\" error: {}\n", .{ path, e });
             return e;
         };
@@ -350,6 +351,25 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                         try editor.sendMessage("not a token");
                     }
 
+                    // select mode
+                } else if (buffer.mode.isSelect() and eql(u8, key, "o")) {
+                    const sel = buffer.selection.?;
+                    const pos = b: switch (buffer.mode) {
+                        .select => {
+                            break :b if (std.meta.eql(sel.start, buffer.cursor))
+                                buffer.posToCursor(buffer.cursorToPos(sel.end) - 1)
+                            else
+                                sel.start;
+                        },
+                        .select_line => {
+                            const row = if (sel.start.row == buffer.cursor.row) sel.end.row - 1 else sel.start.row;
+                            break :b Cursor{ .row = row, .col = buffer.cursor.col };
+                        },
+                        else => unreachable,
+                    };
+                    buffer.moveCursor(pos);
+                    buffer.selection = sel;
+
                     // normal mode
                 } else if (normal_or_select and (eql(u8, key, "q") or eql(u8, key, "Q"))) {
                     const force = eql(u8, key, "Q");
@@ -396,8 +416,8 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     try buffer.redo();
                 } else if (buffer.mode == .normal and eql(u8, key, "<tab>")) {
                     if (editor.buffers.items.len > 1) {
-                        const path = editor.buffers.items[1].path;
-                        editor.openBuffer(path) catch |e| log.err(@This(), "open buffer {s} error: {}\n", .{ path, e });
+                        const uri = editor.buffers.items[1].uri;
+                        editor.openBuffer(uri) catch |e| log.err(@This(), "open buffer {s} error: {}\n", .{ uri, e });
                     }
                 } else if (buffer.mode == .normal and eql(u8, key, ".")) {
                     try editor.dotRepeat(keys_consumed);
