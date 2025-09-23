@@ -38,6 +38,17 @@ pub const lsp_config = [_]LspConfig{
         \\}
         ,
     },
+    LspConfig{
+        .name = "cssls",
+        .cmd = &.{ "vscode-css-language-server", "--stdio" },
+        .file_types = &.{"css"},
+        .settings =
+        \\{
+        \\    "css": {
+        \\        "validate": true
+        \\    }
+        \\}
+    },
 };
 
 pub const LspConfig = struct {
