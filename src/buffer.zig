@@ -91,7 +91,8 @@ pub const Buffer = struct {
     allocator: Allocator,
 
     pub fn init(allocator: Allocator, uri: []const u8) !Buffer {
-        const buf_path = try allocator.dupe(u8, ur.extractPath(uri) orelse return error.InvalidUri);
+        const buf_path = try ur.toPath(allocator, uri);
+        log.debug(@This(), "file path: {s}\n", .{buf_path});
         errdefer allocator.free(buf_path);
         const file_ext = std.fs.path.extension(buf_path);
         const file_type = ft.file_type.get(file_ext) orelse ft.plain;
