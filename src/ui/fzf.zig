@@ -114,7 +114,7 @@ pub fn pickSymbol(allocator: Allocator, buffer: *const buf.Buffer, symbols: []co
     defer allocator.free(preview_cmd);
 
     const cmd: []const []const u8 = fzf_command ++ .{ "--preview", preview_cmd, "--delimiter", ":" };
-    const out = try ext.runExternalWait(allocator, cmd, bufs_str, null);
+    const out = try ext.runExternalWait(allocator, cmd, .{ .input = bufs_str });
     defer allocator.free(out);
     if (out.len == 0) return error.EmptyOut;
     return .init(allocator, out);

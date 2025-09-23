@@ -30,7 +30,7 @@ pub fn show(allocator: Allocator, file_path: []const u8) !?[]const u8 {
     try path_arg.appendSlice(allocator, file_path);
     const args = .{ "git", "--no-pager", "show", path_arg.items };
     var exit_code: u8 = undefined;
-    const content = try ext.runExternalWait(allocator, &args, null, &exit_code);
+    const content = try ext.runExternalWait(allocator, &args, .{ .exit_code = &exit_code });
     errdefer allocator.free(content);
     if (exit_code != 0) return error.GitError;
     return content;
@@ -39,7 +39,7 @@ pub fn show(allocator: Allocator, file_path: []const u8) !?[]const u8 {
 pub fn diffHunks(allocator: Allocator, file_before: []const u8, file_after: []const u8) !?[]const Hunk {
     const args = .{ "git", "--no-pager", "diff", "--unified=0", "--no-color", file_before, file_after };
     var exit_code: u8 = undefined;
-    const diff = try ext.runExternalWait(allocator, &args, null, &exit_code);
+    const diff = try ext.runExternalWait(allocator, &args, .{ .exit_code = &exit_code });
     if (exit_code == 0) return null;
     if (exit_code != 1) return error.GitError;
     defer allocator.free(diff);
