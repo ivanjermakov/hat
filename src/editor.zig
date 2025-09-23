@@ -223,7 +223,14 @@ pub const Editor = struct {
                             log.info(@This(), "lsp server terminated with code: {}\n", .{code});
                             conn.status = .Closed;
                         } else {
-                            log.trace(@This(), "waiting for lsp server termination: {s}\n", .{conn.config.name});
+                            if (conn.wait_fuel > 0) {
+                                log.trace(@This(), "waiting for lsp server termination: {s}\n", .{conn.config.name});
+                                conn.wait_fuel -= 1;
+                            } else {
+                                log.info(@This(), "lsp server failed to terminate in time, forcing\n", .{});
+                                _ = conn.child.kill() catch {};
+                                conn.status = .Closed;
+                            }
                         }
                     },
                     .Closed => {

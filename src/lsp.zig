@@ -65,6 +65,8 @@ pub const LspConnection = struct {
     server_init: ?std.json.Parsed(types.InitializeResult) = null,
     stdin_buf: [2 << 12]u8 = undefined,
     stdin_writer: std.fs.File.Writer,
+    /// Updates left for connection to terminate until forced termination
+    wait_fuel: usize = 30,
     allocator: Allocator,
 
     pub fn connect(allocator: Allocator, config: LspConfig) !LspConnection {
