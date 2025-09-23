@@ -90,6 +90,7 @@ pub const Buffer = struct {
         errdefer allocator.free(buf_path);
         const file_ext = std.fs.path.extension(buf_path);
         const file_type = ft.file_type.get(file_ext) orelse ft.plain;
+        log.debug(@This(), "file type: {s}\n", .{file_type.name});
         const file = try std.fs.cwd().openFile(buf_path, .{});
 
         var self = Buffer{
@@ -108,7 +109,11 @@ pub const Buffer = struct {
         try self.updateContent();
         try self.updateLinePositions();
         if (self.file_type.ts) |ts_conf| {
-            self.ts_state = try ts.State.init(allocator, ts_conf);
+            self.ts_state = ts.State.init(allocator, ts_conf) catch |e| b: {
+                log.err(@This(), "failed to init TsState: {}\n", .{e});
+                if (@errorReturnTrace()) |trace| log.errPrint("{f}\n", .{trace.*});
+                break :b null;
+            };
         }
         try self.reparse();
         return self;
@@ -130,7 +135,11 @@ pub const Buffer = struct {
         try self.updateContent();
         try self.updateLinePositions();
         if (self.file_type.ts) |ts_conf| {
-            self.ts_state = try ts.State.init(allocator, ts_conf);
+            self.ts_state = ts.State.init(allocator, ts_conf) catch |e| b: {
+                log.err(@This(), "failed to init TsState: {}\n", .{e});
+                if (@errorReturnTrace()) |trace| log.errPrint("{f}\n", .{trace.*});
+                break :b null;
+            };
         }
         try self.reparse();
         return self;

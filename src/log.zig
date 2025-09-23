@@ -103,6 +103,7 @@ fn log(comptime caller: type, comptime lvl: Level, comptime fmt: []const u8, arg
 
 fn callerName(comptime caller: type) []const u8 {
     const caller_name_full = @typeName(caller);
+    // TODO: type function structs have trailing `)`, e.g. ts.ParseResult(ts.AttrsSpan) -> AttrsSpan)
     var caller_name_iter = std.mem.splitBackwardsScalar(u8, caller_name_full, '.');
     return caller_name_iter.next() orelse caller_name_full;
 }
