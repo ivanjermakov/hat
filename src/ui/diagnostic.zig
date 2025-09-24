@@ -29,4 +29,8 @@ pub const Diagnostic = struct {
         self.allocator.free(self.message);
         self.allocator.free(self.raw_json);
     }
+
+    pub fn lessThan(_: void, a: Diagnostic, b: Diagnostic) bool {
+        return a.span.start.order(b.span.start) == .lt;
+    }
 };

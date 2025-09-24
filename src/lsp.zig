@@ -695,13 +695,14 @@ pub const LspConnection = struct {
 
     fn handlePublishDiagnosticsNotification(self: *LspConnection, arena: Allocator, notif: lsp.JsonRPCMessage.Notification) !void {
         const params_typed = try std.json.parseFromValue(types.PublishDiagnosticsParams, arena, notif.params.?, .{});
-        if (main.editor.findBufferByUri(params_typed.value.uri)) |target| {
-            target.clearDiagnostics();
+        if (main.editor.findBufferByUri(params_typed.value.uri)) |buffer| {
+            buffer.clearDiagnostics();
             for (params_typed.value.diagnostics) |diagnostic| {
-                try target.diagnostics.append(self.allocator, try dia.Diagnostic.fromLsp(target.allocator, diagnostic));
+                try buffer.diagnostics.append(self.allocator, try dia.Diagnostic.fromLsp(buffer.allocator, diagnostic));
             }
-            log.debug(@This(), "got {} diagnostics\n", .{target.diagnostics.items.len});
-            if (target == main.editor.active_buffer) {
+            std.mem.sort(dia.Diagnostic, buffer.diagnostics.items, {}, dia.Diagnostic.lessThan);
+            log.debug(@This(), "got {} diagnostics\n", .{buffer.diagnostics.items.len});
+            if (buffer == main.editor.active_buffer) {
                 main.editor.dirty.draw = true;
             }
         }
