@@ -699,6 +699,7 @@ pub const Buffer = struct {
         defer self.allocator.free(text);
         const text_uni = try uni.unicodeFromBytes(self.allocator, text);
         defer self.allocator.free(text_uni);
+        // TODO: insert text at line start if it ends with newline
         try self.changeInsertText(text_uni);
         try self.commitChanges();
     }
