@@ -54,11 +54,11 @@ pub const LspConnectionStatus = enum {
 
 pub const LspConnection = struct {
     config: LspConfig,
-    status: LspConnectionStatus,
+    status: LspConnectionStatus = .Created,
     child: std.process.Child,
     messages_unreplied: std.AutoHashMap(i64, LspRequest),
     poll_buf: std.array_list.Aligned(u8, null) = .empty,
-    poll_header: ?lsp.BaseProtocolHeader,
+    poll_header: ?lsp.BaseProtocolHeader = null,
     buffers: std.array_list.Aligned(*buf.Buffer, null) = .empty,
     thread: std.Thread,
     client_capabilities: types.ClientCapabilities,
@@ -98,21 +98,24 @@ pub const LspConnection = struct {
                 .rename = .{
                     .prepareSupport = true,
                 },
-                .codeAction = .{},
+                .codeAction = .{
+                    .codeActionLiteralSupport = .{
+                        .codeActionKind = .{ .valueSet = &code_action_kinds },
+                    },
+                },
             },
             .workspace = .{
                 .workspaceFolders = true,
                 .configuration = true,
                 .didChangeConfiguration = .{},
+                .executeCommand = .{},
             },
         };
 
         var self = LspConnection{
             .config = config,
-            .status = .Created,
             .child = child,
             .messages_unreplied = std.AutoHashMap(i64, LspRequest).init(allocator),
-            .poll_header = null,
             .thread = undefined,
             .client_capabilities = client_capabilities,
             .stdin_writer = undefined,
@@ -205,6 +208,8 @@ pub const LspConnection = struct {
                     log.trace(@This(), "< raw request: {s}\n", .{raw_msg_json});
                     if (std.mem.eql(u8, request.method, "workspace/configuration")) {
                         try self.handleConfigurationRequest(arena.allocator(), request);
+                    } else if (std.mem.eql(u8, request.method, "workspace/applyEdit")) {
+                        try self.handleApplyEditRequest(arena.allocator(), request);
                     }
                 },
             }
@@ -251,11 +256,34 @@ pub const LspConnection = struct {
     }
 
     pub fn codeAction(self: *LspConnection) !void {
+        if ((self.server_init orelse return).value.capabilities.codeActionProvider == null) return;
         const buffer = main.editor.active_buffer;
-        try self.sendRequest("textDocument/codeAction", .{
+
+        const arena = try self.allocator.create(std.heap.ArenaAllocator);
+        defer self.allocator.destroy(arena);
+        arena.* = std.heap.ArenaAllocator.init(self.allocator);
+        defer arena.deinit();
+
+        var diagnostics: std.array_list.Aligned(types.Diagnostic, null) = .empty;
+        defer diagnostics.deinit(self.allocator);
+        for (buffer.diagnostics.items) |diagnostic| {
+            if (diagnostic.span.inRange(buffer.cursor)) {
+                try diagnostics.append(self.allocator, try diagnostic.toLsp(arena.allocator()));
+            }
+        }
+
+        try self.sendRequest("textDocument/codeAction", types.CodeActionParams{
             .textDocument = .{ .uri = buffer.uri },
             .range = (Span{ .start = buffer.cursor, .end = buffer.cursor }).toLsp(),
-            .context = .{ .diagnostics = &.{} },
+            .context = .{ .diagnostics = diagnostics.items },
+        });
+    }
+
+    pub fn executeCommand(self: *LspConnection, command: types.Command) !void {
+        log.trace(@This(), "command {}\n", .{command});
+        try self.sendRequest("workspace/executeCommand", types.ExecuteCommandParams{
+            .command = command.command,
+            .arguments = command.arguments,
         });
     }
 
@@ -563,13 +591,12 @@ pub const LspConnection = struct {
     }
 
     fn handleCodeActionResponse(self: *LspConnection, arena: Allocator, resp: ?std.json.Value) !void {
-        _ = self;
         if (resp == null or resp.? == .null) return;
         const result = try std.json.parseFromValue([]const types.CodeAction, arena, resp.?, .{});
         const editor = &main.editor;
 
         editor.resetCodeActions();
-        editor.code_actions = try act.fromLsp(editor.allocator, result.value);
+        editor.code_actions = try act.fromLsp(self, result.value);
         log.debug(@This(), "got {} code actions\n", .{editor.code_actions.?.len});
         editor.dirty.draw = true;
     }
@@ -603,6 +630,12 @@ pub const LspConnection = struct {
         try self.sendResponse("workspace/configuration", request.id, response.items);
     }
 
+    fn handleApplyEditRequest(self: *LspConnection, arena: Allocator, request: lsp.JsonRPCMessage.Request) !void {
+        _ = self;
+        const params = (try std.json.parseFromValue(types.ApplyWorkspaceEditParams, arena, request.params.?, .{})).value;
+        try main.editor.applyWorkspaceEdit(params.edit);
+    }
+
     const default_stringify_opts = std.json.Stringify.Options{ .emit_null_optional_fields = false };
 };
 
@@ -624,3 +657,15 @@ pub fn extractTextEdit(item: types.CompletionItem) ?types.TextEdit {
     }
     return null;
 }
+
+const code_action_kinds = [_]types.CodeActionKind{
+    .empty,
+    .quickfix,
+    .refactor,
+    .@"refactor.extract",
+    .@"refactor.inline",
+    .@"refactor.rewrite",
+    .source,
+    .@"source.organizeImports",
+    .@"source.fixAll",
+};
