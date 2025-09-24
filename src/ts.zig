@@ -163,6 +163,7 @@ pub const AttrsSpan = struct {
     ///   * null
     pub fn findAttrs(capture_name: []const u8) ?[]const col.Attr {
         if (node_highlights_exact.get(capture_name)) |a| return a;
+        if (node_highlights.get(capture_name)) |a| return a;
         if (!std.mem.containsAtLeastScalar(u8, capture_name, 1, '.')) return null;
 
         for (0..capture_name.len) |i| {
