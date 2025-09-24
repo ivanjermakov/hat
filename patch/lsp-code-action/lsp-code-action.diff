@@ -1,15 +1,15 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index 0f31b8e..ef9db7c 100644
+index 5b1c666..8bacc00 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
-@@ -24,6 +24,7 @@ const main = @import("main.zig");
+@@ -23,6 +23,7 @@ const reg = @import("regex.zig");
  const ter = @import("terminal.zig");
  const ts = @import("ts.zig");
  const dia = @import("ui/diagnostic.zig");
 +const act = @import("ui/code_action.zig");
+ const fzf = @import("ui/fzf.zig");
  const uni = @import("unicode.zig");
  const ur = @import("uri.zig");
- 
 @@ -187,6 +188,7 @@ pub const Buffer = struct {
  
      pub fn enterMode(self: *Buffer, mode: Mode) FatalError!void {
@@ -40,7 +40,7 @@ index 0f31b8e..ef9db7c 100644
          const cmd = &main.editor.command_line;
          const line = self.lineContent(@intCast(self.cursor.row));
 diff --git a/src/editor.zig b/src/editor.zig
-index 4ba3924..ef84753 100644
+index 9e47642..239094d 100644
 --- a/src/editor.zig
 +++ b/src/editor.zig
 @@ -13,6 +13,7 @@ const main = @import("main.zig");
@@ -51,7 +51,7 @@ index 4ba3924..ef84753 100644
  const fzf = @import("ui/fzf.zig");
  const uni = @import("unicode.zig");
  const ur = @import("uri.zig");
-@@ -50,6 +51,7 @@ pub const Editor = struct {
+@@ -53,6 +54,7 @@ pub const Editor = struct {
      messages: std.array_list.Aligned([]const u8, null) = .empty,
      message_read_idx: usize = 0,
      hover_contents: ?[]const u8 = null,
@@ -59,7 +59,7 @@ index 4ba3924..ef84753 100644
      key_queue: std.array_list.Aligned(inp.Key, null) = .empty,
      dot_repeat_input: std.array_list.Aligned(inp.Key, null) = .empty,
      dot_repeat_input_uncommitted: std.array_list.Aligned(inp.Key, null) = .empty,
-@@ -154,6 +156,7 @@ pub const Editor = struct {
+@@ -156,6 +158,7 @@ pub const Editor = struct {
          self.messages.deinit(self.allocator);
  
          self.resetHover();
@@ -67,7 +67,7 @@ index 4ba3924..ef84753 100644
  
          self.key_queue.deinit(self.allocator);
          self.dot_repeat_input.deinit(self.allocator);
-@@ -328,6 +331,15 @@ pub const Editor = struct {
+@@ -330,6 +333,15 @@ pub const Editor = struct {
          }
      }
  
@@ -84,7 +84,7 @@ index 4ba3924..ef84753 100644
          const keys = try ter.getKeys(self.allocator, str);
          defer self.allocator.free(keys);
 diff --git a/src/lsp.zig b/src/lsp.zig
-index 015292e..722c952 100644
+index 99bc179..3a8028a 100644
 --- a/src/lsp.zig
 +++ b/src/lsp.zig
 @@ -9,12 +9,14 @@ const buf = @import("buffer.zig");
@@ -135,7 +135,7 @@ index 015292e..722c952 100644
      pub fn rename(self: *LspConnection, new_name: []const u8) !void {
          if ((self.server_init orelse return).value.capabilities.renameProvider == null) return;
          const buffer = main.editor.active_buffer;
-@@ -521,6 +535,18 @@ pub const LspConnection = struct {
+@@ -533,6 +547,18 @@ pub const LspConnection = struct {
          try main.editor.applyWorkspaceEdit(result.value);
      }
  
@@ -155,10 +155,10 @@ index 015292e..722c952 100644
          log.trace(@This(), "notification: {s}\n", .{notif.method});
          if (std.mem.eql(u8, notif.method, "window/logMessage")) {
 diff --git a/src/main.zig b/src/main.zig
-index 066118d..4834fb0 100644
+index bab23db..c29ce01 100644
 --- a/src/main.zig
 +++ b/src/main.zig
-@@ -167,6 +167,14 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+@@ -178,6 +178,14 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                  const cmd_active = editor.command_line.command != null;
                  var repeat_or_1: i32 = 1;
                  if (repeat_count) |rc| repeat_or_1 = @intCast(rc);
@@ -173,7 +173,7 @@ index 066118d..4834fb0 100644
  
                  // command line menu
                  if (cmd_active) {
-@@ -194,6 +202,10 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+@@ -205,6 +213,10 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                  } else if (cmp_menu_active and eql(u8, key, "\n")) {
                      editor.completion_menu.accept() catch |e| log.err(@This(), "cmp accept error: {}\n", .{e});
  
@@ -184,7 +184,7 @@ index 066118d..4834fb0 100644
                      // text insertion
                  } else if (buffer.mode == .insert and editor.key_queue.items[0].printable != null) {
                      var printable: std.array_list.Aligned(u21, null) = .empty;
-@@ -436,6 +448,10 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+@@ -447,6 +459,10 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                          for (buffer.lsp_connections.items) |conn| {
                              conn.findReferences() catch |e| log.err(@This(), "find references LSP error: {}\n", .{e});
                          }
@@ -196,10 +196,10 @@ index 066118d..4834fb0 100644
                          try buffer.renamePrompt();
                      } else if (buffer.mode == .normal and eql(u8, key, "r") and key2.printable != null) {
 diff --git a/src/terminal.zig b/src/terminal.zig
-index f18974d..59e4ef7 100644
+index 99cd154..6df359b 100644
 --- a/src/terminal.zig
 +++ b/src/terminal.zig
-@@ -15,6 +15,7 @@ const log = @import("log.zig");
+@@ -16,6 +16,7 @@ const log = @import("log.zig");
  const main = @import("main.zig");
  const cmd = @import("ui/command_line.zig");
  const cmp = @import("ui/completion_menu.zig");
@@ -207,7 +207,7 @@ index f18974d..59e4ef7 100644
  const uni = @import("unicode.zig");
  const ft = @import("file_type.zig");
  
-@@ -81,6 +82,7 @@ pub const Terminal = struct {
+@@ -82,6 +83,7 @@ pub const Terminal = struct {
          try self.drawCompletionMenu(cmp_menu);
  
          if (main.editor.hover_contents) |hover| try self.drawHover(hover, layout.buffer);
@@ -215,7 +215,7 @@ index f18974d..59e4ef7 100644
          if (main.editor.command_line.command == null) try self.drawMessage();
          try self.updateCursor();
          if (main.editor.command_line.command != null) try self.drawCmd(&main.editor.command_line);
-@@ -335,6 +337,34 @@ pub const Terminal = struct {
+@@ -336,6 +338,34 @@ pub const Terminal = struct {
          try self.drawOverlay(doc_lines.items, doc_pos);
      }
  

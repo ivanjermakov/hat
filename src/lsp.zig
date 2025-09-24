@@ -23,6 +23,7 @@ pub const LspConfig = struct {
     name: []const u8,
     cmd: []const []const u8,
     file_types: []const []const u8,
+    settings: ?[]const u8 = null,
 };
 
 pub fn findLspsByFileType(allocator: Allocator, file_type: []const u8) ![]LspConfig {
@@ -63,6 +64,8 @@ pub const LspConnection = struct {
     server_init: ?std.json.Parsed(types.InitializeResult) = null,
     stdin_buf: [2 << 12]u8 = undefined,
     stdin_writer: std.fs.File.Writer,
+    /// Updates left for connection to terminate until forced termination
+    wait_fuel: usize = 30,
     allocator: Allocator,
 
     pub fn connect(allocator: Allocator, config: LspConfig) !LspConnection {
@@ -98,6 +101,8 @@ pub const LspConnection = struct {
             },
             .workspace = .{
                 .workspaceFolders = true,
+                .configuration = true,
+                .didChangeConfiguration = .{},
             },
         };
 
@@ -128,9 +133,9 @@ pub const LspConnection = struct {
         return self;
     }
 
-    pub fn lspLoop(self: *LspConnection) !void {
+    pub fn lspLoop(self: *LspConnection) void {
         while (self.status != .Closed and self.status != .Disconnecting) {
-            try self.update();
+            self.update() catch |e| log.err(@This(), "LSP update error: {}\n", .{e});
             std.Thread.sleep(main.sleep_lsp_ns);
         }
     }
@@ -192,10 +197,14 @@ pub const LspConnection = struct {
                     }
                 },
                 .notification => |notif| {
+                    log.trace(@This(), "< raw notification: {s}\n", .{raw_msg_json});
                     try self.handleNotification(arena.allocator(), notif);
                 },
-                .request => {
+                .request => |request| {
                     log.trace(@This(), "< raw request: {s}\n", .{raw_msg_json});
+                    if (std.mem.eql(u8, request.method, "workspace/configuration")) {
+                        try self.handleConfigurationRequest(arena.allocator(), request);
+                    }
                 },
             }
         }
@@ -262,7 +271,7 @@ pub const LspConnection = struct {
         try self.sendNotification("textDocument/didOpen", .{
             .textDocument = .{
                 .uri = buffer.uri,
-                .languageId = "",
+                .languageId = buffer.file_type.name,
                 .version = 0,
                 .text = buffer.content_raw.items,
             },
@@ -440,14 +449,20 @@ pub const LspConnection = struct {
     }
 
     fn handleInitializeResponse(self: *LspConnection, arena: Allocator, resp: ?std.json.Value) !void {
-        _ = arena;
         if (resp == null or resp.? == .null) return;
         self.server_init = try std.json.parseFromValue(types.InitializeResult, self.allocator, resp.?, .{});
         log.debug(@This(), "server capabilities: {f}\n", .{std.json.fmt(self.server_init.?.value.capabilities, .{})});
+
         self.status = .Initialized;
         try self.sendNotification("initialized", .{});
+
         for (self.buffers.items) |buffer| {
             try self.didOpen(buffer);
+        }
+
+        if (self.config.settings) |settings| {
+            const parsed = try std.json.parseFromSlice(std.json.Value, arena, settings, .{});
+            try self.sendNotification("workspace/didChangeConfiguration", .{ .settings = parsed.value });
         }
     }
 
@@ -492,7 +507,7 @@ pub const LspConnection = struct {
         };
         defer self.allocator.free(pick_result.path);
         log.debug(@This(), "picked reference: {}\n", .{pick_result});
-        try main.editor.openBuffer(try ur.fromPath(self.allocator, pick_result.path));
+        try main.editor.openBuffer(try ur.fromRelativePath(self.allocator, pick_result.path));
         main.editor.active_buffer.moveCursor(pick_result.position);
     }
 
@@ -577,6 +592,15 @@ pub const LspConnection = struct {
                 }
             }
         }
+    }
+
+    fn handleConfigurationRequest(self: *LspConnection, arena: Allocator, request: lsp.JsonRPCMessage.Request) !void {
+        const params = (try std.json.parseFromValue(types.ConfigurationParams, arena, request.params.?, .{})).value;
+        var response = try std.array_list.Managed(std.json.Value).initCapacity(arena, params.items.len);
+        for (params.items) |_| {
+            try response.append(std.json.Value.null);
+        }
+        try self.sendResponse("workspace/configuration", request.id, response.items);
     }
 
     const default_stringify_opts = std.json.Stringify.Options{ .emit_null_optional_fields = false };

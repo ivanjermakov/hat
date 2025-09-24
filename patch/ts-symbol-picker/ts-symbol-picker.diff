@@ -1,19 +1,8 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index 0f31b8e..6cb719a 100644
+index 5b1c666..5a1fb75 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
-@@ -23,8 +23,9 @@ const lsp = @import("lsp.zig");
- const main = @import("main.zig");
- const ter = @import("terminal.zig");
- const ts = @import("ts.zig");
--const dia = @import("ui/diagnostic.zig");
- const uni = @import("unicode.zig");
-+const dia = @import("ui/diagnostic.zig");
-+const fzf = @import("ui/fzf.zig");
- const ur = @import("uri.zig");
- 
- pub const Mode = enum {
-@@ -406,7 +407,7 @@ pub const Buffer = struct {
+@@ -406,7 +406,7 @@ pub const Buffer = struct {
          main.editor.dirty.completion = true;
      }
  
@@ -22,7 +11,7 @@ index 0f31b8e..6cb719a 100644
          if (self.uncommitted_changes.items.len == 0) {
              log.debug(@This(), "no changes to commit\n", .{});
              return;
-@@ -628,6 +629,27 @@ pub const Buffer = struct {
+@@ -628,6 +628,27 @@ pub const Buffer = struct {
          return self.content_raw.items[bs.start..bs.end];
      }
  
@@ -51,10 +40,10 @@ index 0f31b8e..6cb719a 100644
          const cmd = &main.editor.command_line;
          const line = self.lineContent(@intCast(self.cursor.row));
 diff --git a/src/core.zig b/src/core.zig
-index 31baf8a..b7d5982 100644
+index 046dce8..23a46d1 100644
 --- a/src/core.zig
 +++ b/src/core.zig
-@@ -89,6 +89,11 @@ pub const SpanFlat = struct {
+@@ -88,6 +88,11 @@ pub const SpanFlat = struct {
      start: usize,
      end: usize,
  
@@ -100,10 +89,10 @@ index 0048f51..281d36f 100644
  
  pub const plain: FileTypeConfig = .{ .name = "plain", .ts = null };
 diff --git a/src/main.zig b/src/main.zig
-index 066118d..538cb13 100644
+index bab23db..6c77b5b 100644
 --- a/src/main.zig
 +++ b/src/main.zig
-@@ -438,6 +438,8 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+@@ -449,6 +449,8 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                          }
                      } else if (buffer.mode == .normal and eql(u8, multi_key, " n")) {
                          try buffer.renamePrompt();

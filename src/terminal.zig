@@ -193,18 +193,20 @@ pub const Terminal = struct {
 
                 if (area_col >= @as(i32, @intCast(area.dims.width))) break;
                 if (buffer.ts_state) |ts_state| {
-                    const highlight_spans = ts_state.highlight.spans.items;
-                    const ch_attrs: []const co.Attr = b: while (span_index < highlight_spans.len) {
-                        const span = highlight_spans[span_index];
-                        if (span.span.start > byte) break :b co.attributes.text;
-                        if (byte >= span.span.start and byte < span.span.end) {
-                            break :b span.attrs;
-                        }
-                        span_index += 1;
-                    } else {
-                        break :b co.attributes.text;
-                    };
-                    try co.attributes.write(ch_attrs, &attrs_writer);
+                    if (ts_state.highlight) |hi| {
+                        const highlight_spans = hi.spans.items;
+                        const ch_attrs: []const co.Attr = b: while (span_index < highlight_spans.len) {
+                            const span = highlight_spans[span_index];
+                            if (span.span.start > byte) break :b co.attributes.text;
+                            if (byte >= span.span.start and byte < span.span.end) {
+                                break :b span.attrs;
+                            }
+                            span_index += 1;
+                        } else {
+                            break :b co.attributes.text;
+                        };
+                        try co.attributes.write(ch_attrs, &attrs_writer);
+                    }
                 }
 
                 if (buffer.selection) |selection| {
