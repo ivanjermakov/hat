@@ -302,6 +302,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     try buffer.changeSelectionDelete();
                     try buffer.enterMode(.insert);
                 } else if (normal_or_select and eql(u8, key, "d")) {
+                    buffer.copySelectionToClipboard() catch |e| log.err(@This(), "copy to clipboard error: {}\n", .{e});
                     try buffer.changeSelectionDelete();
                     try buffer.enterMode(.normal);
                     try buffer.commitChanges();

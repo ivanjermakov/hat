@@ -690,7 +690,6 @@ pub const Buffer = struct {
     pub fn copySelectionToClipboard(self: *Buffer) !void {
         if (self.selection) |selection| {
             try clp.write(self.allocator, self.rawTextAt(selection));
-            try self.enterMode(.normal);
         }
     }
 
@@ -818,8 +817,8 @@ pub const Buffer = struct {
             const i = text_edits.len - i_ - 1;
             const edit = switch (text_edits[i]) {
                 .TextEdit => |e| e,
-                .AnnotatedTextEdit => |e| lsp.types.TextEdit{.newText = e.newText, .range = e.range},
-        };
+                .AnnotatedTextEdit => |e| lsp.types.TextEdit{ .newText = e.newText, .range = e.range },
+            };
             var change = try cha.Change.fromLsp(self.allocator, self, edit);
             log.debug(@This(), "change: {s}: {f}\n", .{ self.path, change });
             try self.appendChange(&change);
