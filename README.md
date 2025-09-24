@@ -62,7 +62,8 @@ Hat is a **ha**ckable modal **t**ext editor for modern terminals.
 | 🚧   | Case actions              |                                                       |
 | 🚧   | Marks                     |                                                       |
 | 🚧   | Comments                  |                                                       |
-| 🚧   | List mode                 |                                                       |
+| 🚧   | List mode (fill chars)    |                                                       |
+| 🚧   | Surround actions          |                                                       |
 
 ## Philosophy
 
