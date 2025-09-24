@@ -809,6 +809,23 @@ pub const Buffer = struct {
         }
     }
 
+    pub fn applyTextEditsMaybeAnnotated(
+        self: *Buffer,
+        text_edits: []const union(enum) { TextEdit: lsp.types.TextEdit, AnnotatedTextEdit: lsp.types.AnnotatedTextEdit },
+    ) !void {
+        // should be applied in reverse order to preserve original positions
+        for (0..text_edits.len) |i_| {
+            const i = text_edits.len - i_ - 1;
+            const edit = switch (text_edits[i]) {
+                .TextEdit => |e| e,
+                .AnnotatedTextEdit => |e| lsp.types.TextEdit{.newText = e.newText, .range = e.range},
+        };
+            var change = try cha.Change.fromLsp(self.allocator, self, edit);
+            log.debug(@This(), "change: {s}: {f}\n", .{ self.path, change });
+            try self.appendChange(&change);
+        }
+    }
+
     fn find(self: *Buffer, query: []const u8) ![]const SpanFlat {
         var spans: std.array_list.Aligned(SpanFlat, null) = .empty;
         var re = try reg.Regex.from(query, false, self.allocator);
