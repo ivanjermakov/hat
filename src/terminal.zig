@@ -269,12 +269,12 @@ pub const Terminal = struct {
                     if (selection.inRange(.{ .row = buffer_row, .col = buffer_col })) {
                         try co.attributes.write(co.attributes.selection, &attrs_writer);
                     }
-                }
-
-                if (buffer.mode == .normal) {
-                    for (buffer.highlights.items) |hi| {
-                        if (hi.inRange(.{ .row = buffer_row, .col = buffer_col })) {
-                            try co.attributes.write(co.attributes.highlight, &attrs_writer);
+                } else {
+                    if (buffer.mode == .normal) {
+                        for (buffer.highlights.items) |hi| {
+                            if (hi.inRange(.{ .row = buffer_row, .col = buffer_col })) {
+                                try co.attributes.write(co.attributes.highlight, &attrs_writer);
+                            }
                         }
                     }
                 }
