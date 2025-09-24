@@ -725,9 +725,18 @@ pub const Buffer = struct {
     }
 
     pub fn codeActionExecute(self: *Buffer, code_action: act.CodeAction) !void {
-        const parse_result = try std.json.parseFromSlice(lsp.types.WorkspaceEdit, self.allocator, code_action.edit_json, .{});
-        defer parse_result.deinit();
-        try main.editor.applyWorkspaceEdit(parse_result.value);
+        if (code_action.edit_json) |edit_json| {
+            const parse_result = try std.json.parseFromSlice(lsp.types.WorkspaceEdit, self.allocator, edit_json, .{});
+            defer parse_result.deinit();
+            try main.editor.applyWorkspaceEdit(parse_result.value);
+        }
+        if (code_action.command_json) |command_json| {
+            log.debug(@This(), "executing command {s}\n", .{command_json});
+            const parse_result = try std.json.parseFromSlice(lsp.types.Command, self.allocator, command_json, .{});
+            defer parse_result.deinit();
+            const command = parse_result.value;
+            try code_action.connection.executeCommand(command);
+        }
     }
 
     pub fn renamePrompt(self: *Buffer) !void {
