@@ -80,7 +80,7 @@ pub const Terminal = struct {
         try self.drawBuffer(buffer, layout.buffer);
 
         const cmp_menu = &main.editor.completion_menu;
-        try self.drawCompletionMenu(cmp_menu);
+        try self.drawCompletionMenu(cmp_menu, layout.buffer);
 
         if (main.editor.hover_contents) |hover| try self.drawHover(hover, layout.buffer);
         if (main.editor.code_actions) |code_actions| try self.drawCodeActions(code_actions, layout.buffer);
@@ -311,7 +311,7 @@ pub const Terminal = struct {
         }
     }
 
-    fn drawCompletionMenu(self: *Terminal, cmp_menu: *cmp.CompletionMenu) !void {
+    fn drawCompletionMenu(self: *Terminal, cmp_menu: *cmp.CompletionMenu, area: Area) !void {
         const max_width = 30;
         const buffer = main.editor.active_buffer;
 
@@ -324,6 +324,7 @@ pub const Terminal = struct {
             .col = @intCast(replace_range.start.character),
         })
             .applyOffset(buffer.offset.negate())
+            .applyOffset(area.pos)
             .applyOffset(.{ .row = 1 });
 
         var longest_item: usize = 0;
