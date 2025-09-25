@@ -70,8 +70,6 @@ pub const Buffer = struct {
     /// Array list of byte start position of next line
     /// Length equals number of lines, last item means total buffer byte size
     line_byte_positions: std.array_list.Aligned(usize, null) = .empty,
-    /// Indent depth for each line
-    indents: std.array_list.Aligned(usize, null) = .empty,
     history: std.array_list.Aligned(std.array_list.Aligned(cha.Change, null), null) = .empty,
     history_index: ?usize = null,
     /// History index of the last file save
@@ -179,7 +177,6 @@ pub const Buffer = struct {
 
         self.line_positions.deinit(self.allocator);
         self.line_byte_positions.deinit(self.allocator);
-        self.indents.deinit(self.allocator);
 
         for (self.history.items) |*i| {
             for (i.items) |*c| c.deinit();
@@ -454,7 +451,6 @@ pub const Buffer = struct {
 
     pub fn changeAlignIndent(self: *Buffer) !void {
         if (self.ts_state == null) return;
-        try self.updateIndents();
         if (self.selection) |selection| {
             const start: usize = @intCast(selection.start.row);
             const end: usize = @intCast(if (self.mode == .select_line) selection.end.row else selection.end.row + 1);
@@ -536,13 +532,13 @@ pub const Buffer = struct {
             var indent: i32 = 0;
             var processed_rows = std.AutoHashMap(usize, void).init(self.allocator);
             defer processed_rows.deinit();
-            // TODO: memoize node indents
             while (!ts.ts.ts_node_is_null(n)) {
+                const span = SpanFlat{
+                    .start = ts.ts.ts_node_start_byte(n),
+                    .end = ts.ts.ts_node_end_byte(n),
+                };
+                log.trace(@This(), "node {}\n", .{span});
                 if (query.captures.get(@intFromPtr(n.id))) |cap| c: {
-                    const span = SpanFlat{
-                        .start = ts.ts.ts_node_start_byte(n),
-                        .end = ts.ts.ts_node_end_byte(n),
-                    };
                     const pos = Span.fromSpanFlat(self, span);
 
                     var capture_name_len: u32 = undefined;
@@ -554,7 +550,7 @@ pub const Buffer = struct {
                     if (pos.start.row != pos.end.row and pos.start.row != row and std.mem.eql(u8, capture_name, "indent.begin")) {
                         indent += 1;
                         try processed_rows.put(@intCast(pos.start.row), {});
-                    } else if (std.mem.eql(u8, capture_name, "indent.end") or std.mem.eql(u8, capture_name, "indent.branch")) {
+                    } else if (std.mem.eql(u8, capture_name, "indent.end")) {
                         indent -= 1;
                         try processed_rows.put(@intCast(pos.start.row), {});
                     }
@@ -898,10 +894,10 @@ pub const Buffer = struct {
         );
     }
 
-    fn lineAlignIndent(self: *Buffer, row: usize) !void {
+    fn lineAlignIndent(self: *Buffer, row: usize) FatalError!void {
         const old_cursor = self.cursor;
         const line = self.lineContent(row);
-        const correct_indent: usize = self.indents.items[row];
+        const correct_indent: usize = try self.lineIndent(row);
         const correct_indent_spaces = correct_indent * self.file_type.indent_spaces;
         const current_indent_spaces: usize = lineIndentSpaces(line);
         if (correct_indent_spaces == current_indent_spaces) return;
