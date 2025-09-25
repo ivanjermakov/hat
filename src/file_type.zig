@@ -40,7 +40,7 @@ pub const TsConfig = struct {
             .lib_symbol = "tree_sitter_" ++ name,
             .highlight_query = hat_ts_path ++ "/queries/" ++ name ++ "/highlights.scm",
             .indent_query = hat_ts_path ++ "/queries/" ++ name ++ "/indents.scm",
-            .symbol_query = nvim_aerial_path ++ "/queries/" ++ name ++ "/aerial.scm",
+            .symbol_query = hat_ts_path ++ "/queries/" ++ name ++ "/aerial.scm",
         };
     }
 
@@ -64,7 +64,6 @@ pub const TsConfig = struct {
 
     const hat_ts_path = "$HOME/.config/hat/tree-sitter";
     const nvim_ts_path = "$HOME/.local/share/nvim/lazy/nvim-treesitter";
-    const nvim_aerial_path = "$HOME/.local/share/nvim/lazy/aerial.nvim";
 };
 
 pub const plain: FileTypeConfig = .{ .name = "plain", .ts = null };
