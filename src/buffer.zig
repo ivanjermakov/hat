@@ -506,42 +506,65 @@ pub const Buffer = struct {
     }
 
     pub fn updateIndents(self: *Buffer) FatalError!void {
-        const ts_state = if (self.ts_state) |ts_state| ts_state else return;
-        const spans = if (ts_state.indent) |i| i.spans.items else return;
+        if (self.ts_state == null or self.ts_state.?.indent == null) return;
         try self.reparse();
+
         self.indents.clearRetainingCapacity();
-
-        var indent_bytes = std.AutoHashMap(usize, void).init(self.allocator);
-        defer indent_bytes.deinit();
-        var dedent_bytes = std.AutoHashMap(usize, void).init(self.allocator);
-        defer dedent_bytes.deinit();
-        for (spans) |span| {
-            try indent_bytes.put(span.span.start, {});
-            try dedent_bytes.put(span.span.end - 1, {});
+        for (0..self.line_byte_positions.items.len) |row| {
+            try self.indents.append(self.allocator, try self.lineIndent(row));
         }
+        log.debug(@This(), "indents: {any}\n", .{self.indents.items});
+    }
 
-        var indent: usize = 0;
-        var indent_next: usize = 0;
-        for (0..self.line_byte_positions.items.len - 1) |row| {
-            indent = indent_next;
-            const line_byte_start = self.line_byte_positions.items[row];
-            const line_byte_end = self.line_byte_positions.items[row + 1];
-            var line_indents: usize = 0;
-            var line_dedents: usize = 0;
-            for (line_byte_start..line_byte_end) |byte| {
-                if (indent_bytes.contains(byte)) line_indents += 1;
-                if (dedent_bytes.contains(byte)) line_dedents += 1;
+    pub fn lineIndent(self: *Buffer, row: usize) FatalError!usize {
+        const ts_state = if (self.ts_state) |ts_state| ts_state else return 0;
+        const query = ts_state.indent orelse return 0;
+        const root_node = ts.ts.ts_tree_root_node(ts_state.tree);
+
+        const line_span = SpanFlat{
+            .start = if (row == 0) 0 else self.line_byte_positions.items[row - 1],
+            .end = self.line_byte_positions.items[row],
+        };
+        if (self.lineLength(row) == 0) {
+            // TODO: copy previous line indent
+            log.trace(@This(), "line {}[{}-{}] empty\n", .{ row + 1, line_span.start, line_span.end });
+            return 0;
+        }
+        if (ts.firstSmallestDescendentInSpan(root_node, line_span)) |node| {
+            log.trace(@This(), "line {} {}\n", .{ row + 1, line_span });
+            var n = node;
+            var indent: i32 = 0;
+            var processed_rows = std.AutoHashMap(usize, void).init(self.allocator);
+            defer processed_rows.deinit();
+            // TODO: memoize node indents
+            while (!ts.ts.ts_node_is_null(n)) {
+                if (query.captures.get(@intFromPtr(n.id))) |cap| c: {
+                    const span = SpanFlat{
+                        .start = ts.ts.ts_node_start_byte(n),
+                        .end = ts.ts.ts_node_end_byte(n),
+                    };
+                    const pos = Span.fromSpanFlat(self, span);
+
+                    var capture_name_len: u32 = undefined;
+                    const capture_name_buf = ts.ts.ts_query_capture_name_for_id(query.query.?, cap.index, &capture_name_len);
+                    const capture_name = capture_name_buf[0..capture_name_len];
+                    log.trace(@This(), "capture {s} [{}-{}]\n", .{ capture_name, span.start, span.end });
+
+                    if (processed_rows.contains(@intCast(pos.start.row))) break :c;
+                    if (pos.start.row != pos.end.row and pos.start.row != row and std.mem.eql(u8, capture_name, "indent.begin")) {
+                        indent += 1;
+                        try processed_rows.put(@intCast(pos.start.row), {});
+                    } else if (std.mem.eql(u8, capture_name, "indent.end") or std.mem.eql(u8, capture_name, "indent.branch")) {
+                        indent -= 1;
+                        try processed_rows.put(@intCast(pos.start.row), {});
+                    }
+                }
+                n = ts.ts.ts_node_parent(n);
             }
-            // indent is applied starting from next line, dedent is applied immediately
-            switch (std.math.order(line_indents, line_dedents)) {
-                .gt => indent_next += 1,
-                .lt => {
-                    indent = if (indent > 0) indent - 1 else 0;
-                    indent_next = if (indent_next > 0) indent_next - 1 else 0;
-                },
-                else => {},
-            }
-            try self.indents.append(self.allocator, indent);
+            return if (indent < 0) 0 else @intCast(indent);
+        } else {
+            log.trace(@This(), "line {}[{}-{}] no node\n", .{ row + 1, line_span.start, line_span.end });
+            return 0;
         }
     }
 
@@ -878,7 +901,7 @@ pub const Buffer = struct {
     fn lineAlignIndent(self: *Buffer, row: usize) !void {
         const old_cursor = self.cursor;
         const line = self.lineContent(row);
-        const correct_indent: usize = if (row == 0) 0 else self.indents.items[row - 1];
+        const correct_indent: usize = self.indents.items[row];
         const correct_indent_spaces = correct_indent * self.file_type.indent_spaces;
         const current_indent_spaces: usize = lineIndentSpaces(line);
         if (correct_indent_spaces == current_indent_spaces) return;

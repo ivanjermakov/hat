@@ -24,24 +24,8 @@ pub fn ParseResult(comptime SpanType: type) type {
         allocator: Allocator,
 
         pub fn init(allocator: Allocator, language: *ts.struct_TSLanguage, query_str: []const u8) !ParseResult(SpanType) {
-            var err: ts.TSQueryError = undefined;
-            var err_offset: u32 = undefined;
-            const query = ts.ts_query_new(language, query_str.ptr, @intCast(query_str.len), &err_offset, &err);
-            if (err > 0) {
-                log.err(@This(), "query error position: {}\n", .{err_offset});
-                if (log.enabled(.trace)) {
-                    if (err_offset < query_str.len) {
-                        log.errPrint("{s}\n^\n", .{query_str[err_offset..@min(err_offset + 10, query_str.len)]});
-                    } else {
-                        log.errPrint("error offset outside of query string\n", .{});
-                    }
-                }
-                // log.debug(@This(), "query:\n{s}\n", .{query_str});
-                return error.Query;
-            }
-
             return .{
-                .query = query,
+                .query = try queryNew(language, query_str),
                 .allocator = allocator,
             };
         }
@@ -78,11 +62,45 @@ pub fn ParseResult(comptime SpanType: type) type {
     };
 }
 
+pub const Query = struct {
+    query: ?*ts.TSQuery,
+    captures: std.AutoHashMap(usize, ts.TSQueryCapture),
+    allocator: Allocator,
+
+    pub fn init(allocator: Allocator, language: *ts.struct_TSLanguage, query_str: []const u8) !Query {
+        return .{
+            .query = try queryNew(language, query_str),
+            .captures = std.AutoHashMap(usize, ts.TSQueryCapture).init(allocator),
+            .allocator = allocator,
+        };
+    }
+
+    pub fn deinit(self: *Query) void {
+        self.captures.deinit();
+    }
+
+    pub fn capture(self: *Query, tree: *ts.TSTree) !void {
+        self.captures.clearRetainingCapacity();
+
+        const cursor: *ts.TSQueryCursor = ts.ts_query_cursor_new().?;
+        defer ts.ts_query_cursor_delete(cursor);
+        const root_node = ts.ts_tree_root_node(tree);
+        ts.ts_query_cursor_exec(cursor, self.query.?, root_node);
+
+        var match: ts.TSQueryMatch = undefined;
+        while (ts.ts_query_cursor_next_match(cursor, &match)) {
+            for (match.captures[0..match.capture_count]) |cap| {
+                try self.captures.put(@intFromPtr(cap.node.id), cap);
+            }
+        }
+    }
+};
+
 pub const State = struct {
     parser: ?*ts.TSParser = null,
     tree: ?*ts.TSTree = null,
     highlight: ?ParseResult(AttrsSpan) = null,
-    indent: ?ParseResult(IndentSpanTuple) = null,
+    indent: ?Query = null,
     allocator: Allocator,
 
     pub fn init(allocator: Allocator, ts_conf: ft.TsConfig) !State {
@@ -99,7 +117,7 @@ pub const State = struct {
 
         const indent_query = if (ts_conf.indent_query) |q| try ft.TsConfig.loadQuery(allocator, q) else null;
         defer if (indent_query) |q| allocator.free(q);
-        if (indent_query) |q| self.indent = try ParseResult(IndentSpanTuple).init(allocator, language, q);
+        if (indent_query) |q| self.indent = try .init(allocator, language, q);
 
         _ = ts.ts_parser_set_language(self.parser, language);
 
@@ -130,8 +148,8 @@ pub const State = struct {
             log.trace(@This(), "made {} highlight spans\n", .{h.spans.items.len});
         }
         if (self.indent) |*i| {
-            try i.makeSpans(self.tree.?);
-            log.trace(@This(), "made {} indent spans\n", .{i.spans.items.len});
+            try i.capture(self.tree.?);
+            log.trace(@This(), "found {} indent captures\n", .{i.captures.count()});
         }
     }
 
@@ -189,12 +207,36 @@ pub const node_highlights_exact = std.StaticStringMap([]const col.Attr).initComp
     .{ "tag", col.attributes.keyword },
 });
 
-pub const IndentSpanTuple = struct {
-    span: SpanFlat,
-    name: []const u8,
+pub fn firstSmallestDescendentInSpan(node: ts.TSNode, span: SpanFlat) ?ts.TSNode {
+    const node_start = ts.ts_node_start_byte(node);
+    const node_end = ts.ts_node_end_byte(node);
 
-    pub fn init(span: SpanFlat, capture_name: []const u8) ?IndentSpanTuple {
-        if (!std.mem.eql(u8, capture_name, "indent.begin")) return null;
-        return .{ .span = span, .name = capture_name };
+    if (node_end < span.start) return null;
+    const child_count = ts.ts_node_child_count(node);
+    if (child_count == 0 and node_start >= span.start and node_end <= span.end) return node;
+
+    for (0..child_count) |child_idx| {
+        const child_candidate = ts.ts_node_child(node, @intCast(child_idx));
+        const child_opt = firstSmallestDescendentInSpan(child_candidate, span);
+        if (child_opt) |child| return child;
     }
-};
+    return null;
+}
+
+fn queryNew(language: *ts.struct_TSLanguage, query_str: []const u8) !?*ts.TSQuery {
+    var err: ts.TSQueryError = undefined;
+    var err_offset: u32 = undefined;
+    const query = ts.ts_query_new(language, query_str.ptr, @intCast(query_str.len), &err_offset, &err);
+    if (err > 0) {
+        log.err(@This(), "query error position: {}\n", .{err_offset});
+        if (log.enabled(.trace)) {
+            if (err_offset < query_str.len) {
+                log.errPrint("{s}\n^\n", .{query_str[err_offset..@min(err_offset + 10, query_str.len)]});
+            } else {
+                log.errPrint("error offset outside of query string\n", .{});
+            }
+        }
+        return error.Query;
+    }
+    return query;
+}
