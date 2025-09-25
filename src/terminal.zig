@@ -149,7 +149,7 @@ pub const Terminal = struct {
             if (buffer_row < 0 or buffer_row >= buffer.line_positions.items.len) {
                 if (edi.Config.end_of_buffer_char) |ch| _ = try self.writer.writeAll(&.{ch});
             } else {
-                switch (edi.config.number_line_mode) {
+                switch (edi.Config.number_line_mode) {
                     .absolute => {
                         try self.writer.printInt(
                             @as(usize, @intCast(buffer_row + 1)),
@@ -496,7 +496,7 @@ pub fn terminalSize() !Dimensions {
 
 pub fn computeLayout(term_dims: Dimensions) Layout {
     const number_line_width = 6;
-    const padding_width = if (edi.config.centering_width) |cw|
+    const padding_width = if (edi.Config.centering_width) |cw|
         if (term_dims.width > cw) @divFloor(term_dims.width - cw, 2) else 0
     else
         0;

@@ -229,11 +229,11 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                         if (next_key != null and next_key.?.printable != null) {
                             try printable.append(allocator, next_key.?.printable.?);
                             keys_consumed += 1;
-                            if (edi.config.indent_newline and keys_consumed == 1 and next_key.?.printable == '\n') {
+                            if (edi.Config.indent_newline and keys_consumed == 1 and next_key.?.printable == '\n') {
                                 try buffer.changeInsertText(try printable.toOwnedSlice(allocator));
                                 try buffer.indentEmptyLine();
                             }
-                            if (edi.config.reindent_block_end and
+                            if (edi.Config.reindent_block_end and
                                 std.mem.containsAtLeastScalar(u21, edi.Config.reindent_block_end_chars, 1, next_key.?.printable.?))
                             {
                                 try buffer.changeInsertText(try printable.toOwnedSlice(allocator));
@@ -406,7 +406,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     var change = try cha.Change.initInsert(allocator, buffer, pos, &.{'\n'});
                     try buffer.appendChange(&change);
                     if (!below) buffer.moveCursor(.{ .row = row });
-                    if (edi.config.indent_newline) {
+                    if (edi.Config.indent_newline) {
                         try buffer.indentEmptyLine();
                     }
                 } else if (buffer.mode == .normal and eql(u8, key, "J")) {
