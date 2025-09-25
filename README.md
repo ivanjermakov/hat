@@ -57,13 +57,11 @@ Hat is a **ha**ckable modal **t**ext editor for modern terminals.
 | 🚧   | Wayland support           |                                                       |
 | 🚧   | Persistent undo           |                                                       |
 | 🚧   | Persistent macros         |                                                       |
-| 🚧   | Tree-sitter tree actions  |                                                       |
 | 🚧   | Surround actions          |                                                       |
 | 🚧   | Case actions              |                                                       |
 | 🚧   | Marks                     |                                                       |
 | 🚧   | Comments                  |                                                       |
 | 🚧   | List mode (fill chars)    |                                                       |
-| 🚧   | Surround actions          |                                                       |
 
 ## Philosophy
 

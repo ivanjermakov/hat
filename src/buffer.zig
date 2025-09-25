@@ -406,6 +406,58 @@ pub const Buffer = struct {
         }
     }
 
+    pub fn moveToMatchingPair(self: *Buffer) FatalError!void {
+        const candidates = edi.Config.matching_pair_chars orelse return;
+        const old_cursor = self.cursor;
+        const pos = self.cursorToPos(self.cursor);
+        var start_chars: [candidates.len]u21 = undefined;
+        for (candidates, 0..) |c, i| start_chars[i] = c[0];
+        var end_chars: [candidates.len]u21 = undefined;
+        for (candidates, 0..) |c, i| end_chars[i] = c[1];
+        const trigger_char = self.content.items[pos];
+        const pair_idx =
+            std.mem.indexOfScalar(u21, &start_chars, trigger_char) orelse
+            std.mem.indexOfScalar(u21, &end_chars, trigger_char) orelse return;
+        const pair = candidates[pair_idx];
+        const same = pair[0] == pair[1];
+        if (same or trigger_char == pair[0]) {
+            var level: i32 = 0;
+            for (pos..self.content.items.len) |p| {
+                if (p == pos) continue;
+                const ch = self.content.items[p];
+                if (ch == pair[1] and (same or level == 0)) {
+                    const cursor = self.posToCursor(p);
+                    self.moveCursor(cursor);
+                    if (self.selection == null) {
+                        self.selection = .{ .start = old_cursor, .end = self.posToCursor(self.cursorToPos(self.cursor) + 1) };
+                        main.editor.dirty.draw = true;
+                    }
+                    break;
+                }
+                if (ch == pair[0]) level += 1;
+                if (ch == pair[1]) level -= 1;
+            }
+        } else {
+            var level: i32 = 0;
+            for (0..pos) |p_| {
+                if (pos == 0) continue;
+                const p = pos - p_ - 1;
+                const ch = self.content.items[p];
+                if (ch == pair[0] and level == 0) {
+                    const cursor = self.posToCursor(p);
+                    self.moveCursor(cursor);
+                    if (self.selection == null) {
+                        self.selection = .{ .start = self.cursor, .end = self.posToCursor(self.cursorToPos(old_cursor) + 1) };
+                        main.editor.dirty.draw = true;
+                    }
+                    break;
+                }
+                if (ch == pair[0]) level += 1;
+                if (ch == pair[1]) level -= 1;
+            }
+        }
+    }
+
     pub fn appendChange(self: *Buffer, change: *cha.Change) FatalError!void {
         try self.applyChange(change);
         try self.uncommitted_changes.append(self.allocator, change.*);
@@ -1196,6 +1248,37 @@ test "moveToTokenEnd" {
     buffer.moveToTokenEnd();
     try testing.expectEqual(Cursor{ .row = 0, .col = 12 }, buffer.cursor);
     try testing.expectEqualDeep(Span{ .start = .{ .col = 6 }, .end = .{ .col = 13 } }, buffer.selection);
+}
+
+test "moveToMatchingPair" {
+    var buffer = try testSetupScratch("one (two) three\n");
+    defer main.editor.deinit();
+
+    buffer.moveCursor(.{ .col = 4 });
+    try testing.expectEqual(Cursor{ .row = 0, .col = 4 }, buffer.cursor);
+    try testing.expectEqual(null, buffer.selection);
+
+    try buffer.moveToMatchingPair();
+    try testing.expectEqual(Cursor{ .row = 0, .col = 8 }, buffer.cursor);
+    try testing.expectEqualDeep(Span{ .start = .{ .col = 4 }, .end = .{ .col = 9 } }, buffer.selection);
+
+    try buffer.moveToMatchingPair();
+    try testing.expectEqual(Cursor{ .row = 0, .col = 4 }, buffer.cursor);
+    try testing.expectEqualDeep(Span{ .start = .{ .col = 4 }, .end = .{ .col = 9 } }, buffer.selection);
+}
+
+test "moveToMatchingPair same char" {
+    var buffer = try testSetupScratch("one |two| three\n");
+    defer main.editor.deinit();
+
+    buffer.moveCursor(.{ .col = 4 });
+    try testing.expectEqual(Cursor{ .row = 0, .col = 4 }, buffer.cursor);
+
+    try buffer.moveToMatchingPair();
+    try testing.expectEqual(Cursor{ .row = 0, .col = 8 }, buffer.cursor);
+
+    try buffer.moveToMatchingPair();
+    try testing.expectEqual(Cursor{ .row = 0, .col = 8 }, buffer.cursor);
 }
 
 test "changeSelectionDelete same line" {
