@@ -63,6 +63,8 @@ pub const LspConnection = struct {
     server_init: ?std.json.Parsed(types.InitializeResult) = null,
     stdin_buf: [2 << 12]u8 = undefined,
     stdin_writer: std.fs.File.Writer,
+    /// Updates left for connection to terminate until forced termination
+    wait_fuel: usize = 30,
     allocator: Allocator,
 
     pub fn connect(allocator: Allocator, config: LspConfig) !LspConnection {
@@ -192,7 +194,12 @@ pub const LspConnection = struct {
                 },
                 .notification => |notif| {
                     log.trace(@This(), "< raw notification: {s}\n", .{raw_msg_json});
-                    try self.handleNotification(arena.allocator(), notif);
+                    if (std.mem.eql(u8, notif.method, "window/logMessage")) {
+                        const params_typed = try std.json.parseFromValue(types.LogMessageParams, arena.allocator(), notif.params.?, .{});
+                        log.debug(@This(), "server log: {s}\n", .{params_typed.value.message});
+                    } else if (std.mem.eql(u8, notif.method, "textDocument/publishDiagnostics")) {
+                        try self.handlePublishDiagnosticsNotification(arena.allocator(), notif);
+                    }
                 },
                 .request => |request| {
                     log.trace(@This(), "< raw request: {s}\n", .{raw_msg_json});
@@ -257,7 +264,7 @@ pub const LspConnection = struct {
         try self.sendNotification("textDocument/didOpen", .{
             .textDocument = .{
                 .uri = buffer.uri,
-                .languageId = "",
+                .languageId = buffer.file_type.name,
                 .version = 0,
                 .text = buffer.content_raw.items,
             },
@@ -546,22 +553,17 @@ pub const LspConnection = struct {
         try main.editor.applyWorkspaceEdit(result.value);
     }
 
-    fn handleNotification(self: *LspConnection, arena: Allocator, notif: lsp.JsonRPCMessage.Notification) !void {
-        log.trace(@This(), "notification: {s}\n", .{notif.method});
-        if (std.mem.eql(u8, notif.method, "window/logMessage")) {
-            const params_typed = try std.json.parseFromValue(types.LogMessageParams, arena, notif.params.?, .{});
-            log.debug(@This(), "server log: {s}\n", .{params_typed.value.message});
-        } else if (std.mem.eql(u8, notif.method, "textDocument/publishDiagnostics")) {
-            const params_typed = try std.json.parseFromValue(types.PublishDiagnosticsParams, arena, notif.params.?, .{});
-            if (main.editor.findBufferByUri(params_typed.value.uri)) |target| {
-                target.clearDiagnostics();
-                for (params_typed.value.diagnostics) |diagnostic| {
-                    try target.diagnostics.append(self.allocator, try dia.Diagnostic.fromLsp(target.allocator, diagnostic));
-                }
-                log.debug(@This(), "got {} diagnostics\n", .{target.diagnostics.items.len});
-                if (target == main.editor.active_buffer) {
-                    main.editor.dirty.draw = true;
-                }
+    fn handlePublishDiagnosticsNotification(self: *LspConnection, arena: Allocator, notif: lsp.JsonRPCMessage.Notification) !void {
+        const params_typed = try std.json.parseFromValue(types.PublishDiagnosticsParams, arena, notif.params.?, .{});
+        if (main.editor.findBufferByUri(params_typed.value.uri)) |buffer| {
+            buffer.clearDiagnostics();
+            for (params_typed.value.diagnostics) |diagnostic| {
+                try buffer.diagnostics.append(self.allocator, try dia.Diagnostic.fromLsp(buffer.allocator, diagnostic));
+            }
+            std.mem.sort(dia.Diagnostic, buffer.diagnostics.items, {}, dia.Diagnostic.lessThan);
+            log.debug(@This(), "got {} diagnostics\n", .{buffer.diagnostics.items.len});
+            if (buffer == main.editor.active_buffer) {
+                main.editor.dirty.draw = true;
             }
         }
     }

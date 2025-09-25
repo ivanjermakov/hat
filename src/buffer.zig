@@ -70,8 +70,6 @@ pub const Buffer = struct {
     /// Array list of byte start position of next line
     /// Length equals number of lines, last item means total buffer byte size
     line_byte_positions: std.array_list.Aligned(usize, null) = .empty,
-    /// Indent depth for each line
-    indents: std.array_list.Aligned(usize, null) = .empty,
     history: std.array_list.Aligned(std.array_list.Aligned(cha.Change, null), null) = .empty,
     history_index: ?usize = null,
     /// History index of the last file save
@@ -179,7 +177,6 @@ pub const Buffer = struct {
 
         self.line_positions.deinit(self.allocator);
         self.line_byte_positions.deinit(self.allocator);
-        self.indents.deinit(self.allocator);
 
         for (self.history.items) |*i| {
             for (i.items) |*c| c.deinit();
@@ -454,7 +451,6 @@ pub const Buffer = struct {
 
     pub fn changeAlignIndent(self: *Buffer) !void {
         if (self.ts_state == null) return;
-        try self.updateIndents();
         if (self.selection) |selection| {
             const start: usize = @intCast(selection.start.row);
             const end: usize = @intCast(if (self.mode == .select_line) selection.end.row else selection.end.row + 1);
@@ -506,42 +502,60 @@ pub const Buffer = struct {
     }
 
     pub fn updateIndents(self: *Buffer) FatalError!void {
-        const ts_state = if (self.ts_state) |ts_state| ts_state else return;
-        const spans = if (ts_state.indent) |i| i.spans.items else return;
+        if (self.ts_state == null or self.ts_state.?.indent == null) return;
         try self.reparse();
+
         self.indents.clearRetainingCapacity();
-
-        var indent_bytes = std.AutoHashMap(usize, void).init(self.allocator);
-        defer indent_bytes.deinit();
-        var dedent_bytes = std.AutoHashMap(usize, void).init(self.allocator);
-        defer dedent_bytes.deinit();
-        for (spans) |span| {
-            try indent_bytes.put(span.span.start, {});
-            try dedent_bytes.put(span.span.end - 1, {});
+        for (0..self.line_byte_positions.items.len) |row| {
+            try self.indents.append(self.allocator, try self.lineIndent(row));
         }
+        log.debug(@This(), "indents: {any}\n", .{self.indents.items});
+    }
 
-        var indent: usize = 0;
-        var indent_next: usize = 0;
-        for (0..self.line_byte_positions.items.len - 1) |row| {
-            indent = indent_next;
-            const line_byte_start = self.line_byte_positions.items[row];
-            const line_byte_end = self.line_byte_positions.items[row + 1];
-            var line_indents: usize = 0;
-            var line_dedents: usize = 0;
-            for (line_byte_start..line_byte_end) |byte| {
-                if (indent_bytes.contains(byte)) line_indents += 1;
-                if (dedent_bytes.contains(byte)) line_dedents += 1;
+    pub fn lineIndent(self: *Buffer, row: usize) FatalError!usize {
+        const ts_state = if (self.ts_state) |ts_state| ts_state else return 0;
+        const query = ts_state.indent orelse return 0;
+        if (self.lineLength(row) == 0 and row > 0) return self.lineIndent(row - 1);
+        const root_node = ts.ts.ts_tree_root_node(ts_state.tree);
+
+        const line_span = SpanFlat{
+            .start = if (row == 0) 0 else self.line_byte_positions.items[row - 1],
+            .end = self.line_byte_positions.items[row],
+        };
+        if (ts.firstSmallestDescendentInSpan(root_node, line_span)) |node| {
+            log.trace(@This(), "line {} {}\n", .{ row + 1, line_span });
+            var n = node;
+            var indent: i32 = 0;
+            var processed_rows = std.AutoHashMap(usize, void).init(self.allocator);
+            defer processed_rows.deinit();
+            while (!ts.ts.ts_node_is_null(n)) {
+                const span = SpanFlat{
+                    .start = ts.ts.ts_node_start_byte(n),
+                    .end = ts.ts.ts_node_end_byte(n),
+                };
+                log.trace(@This(), "node {}\n", .{span});
+                if (query.captures.get(@intFromPtr(n.id))) |cap| c: {
+                    const pos = Span.fromSpanFlat(self, span);
+
+                    var capture_name_len: u32 = undefined;
+                    const capture_name_buf = ts.ts.ts_query_capture_name_for_id(query.query.?, cap.index, &capture_name_len);
+                    const capture_name = capture_name_buf[0..capture_name_len];
+                    log.trace(@This(), "capture {s} [{}-{}]\n", .{ capture_name, span.start, span.end });
+
+                    if (processed_rows.contains(@intCast(pos.start.row))) break :c;
+                    if (pos.start.row != pos.end.row and pos.start.row != row and std.mem.eql(u8, capture_name, "indent.begin")) {
+                        indent += 1;
+                        try processed_rows.put(@intCast(pos.start.row), {});
+                    } else if (std.mem.eql(u8, capture_name, "indent.end") or std.mem.eql(u8, capture_name, "indent.branch")) {
+                        indent -= 1;
+                    }
+                }
+                n = ts.ts.ts_node_parent(n);
             }
-            // indent is applied starting from next line, dedent is applied immediately
-            switch (std.math.order(line_indents, line_dedents)) {
-                .gt => indent_next += 1,
-                .lt => {
-                    indent = if (indent > 0) indent - 1 else 0;
-                    indent_next = if (indent_next > 0) indent_next - 1 else 0;
-                },
-                else => {},
-            }
-            try self.indents.append(self.allocator, indent);
+            return if (indent < 0) 0 else @intCast(indent);
+        } else {
+            log.trace(@This(), "line {}[{}-{}] no node\n", .{ row + 1, line_span.start, line_span.end });
+            return 0;
         }
     }
 
@@ -679,7 +693,8 @@ pub const Buffer = struct {
         defer self.allocator.free(in_b);
 
         var exit_code: u8 = undefined;
-        const out_b = ext.runExternalWait(self.allocator, &.{ "sh", "-c", command_b }, in_b, &exit_code) catch |e| {
+        const opts = ext.RunOptions{ .input = in_b, .exit_code = &exit_code };
+        const out_b = ext.runExternalWait(self.allocator, &.{ "sh", "-c", command_b }, opts) catch |e| {
             log.err(@This(), "{}\n", .{e});
             if (@errorReturnTrace()) |trace| log.errPrint("{f}\n", .{trace.*});
             return;
@@ -706,18 +721,16 @@ pub const Buffer = struct {
     pub fn copySelectionToClipboard(self: *Buffer) !void {
         if (self.selection) |selection| {
             try clp.write(self.allocator, self.rawTextAt(selection));
-            try self.enterMode(.normal);
         }
     }
 
     pub fn changeInsertFromClipboard(self: *Buffer) !void {
-        if (self.mode.isSelect()) try self.changeSelectionDelete();
         const text = try clp.read(self.allocator);
         defer self.allocator.free(text);
         const text_uni = try uni.unicodeFromBytes(self.allocator, text);
         defer self.allocator.free(text_uni);
+        // TODO: insert text at line start if it ends with newline
         try self.changeInsertText(text_uni);
-        try self.commitChanges();
     }
 
     pub fn syncFs(self: *Buffer) !bool {
@@ -742,12 +755,14 @@ pub const Buffer = struct {
         defer file.close();
         const file_content = try file.readToEndAlloc(self.allocator, std.math.maxInt(usize));
         defer self.allocator.free(file_content);
-        const file_content_uni = try uni.unicodeFromBytes(self.allocator, file_content);
-        defer self.allocator.free(file_content_uni);
+        if (!std.mem.eql(u8, self.content_raw.items, file_content)) {
+            const file_content_uni = try uni.unicodeFromBytes(self.allocator, file_content);
+            defer self.allocator.free(file_content_uni);
 
-        var change = try cha.Change.initReplace(self.allocator, self, self.fullSpan(), file_content_uni);
-        try self.appendChange(&change);
-        try self.commitChanges();
+            var change = try cha.Change.initReplace(self.allocator, self, self.fullSpan(), file_content_uni);
+            try self.appendChange(&change);
+            try self.commitChanges();
+        }
         self.file_history_index = self.history_index;
 
         // TODO: attempt to keep cursor at the same semantic place
@@ -823,6 +838,23 @@ pub const Buffer = struct {
         }
     }
 
+    pub fn applyTextEditsMaybeAnnotated(
+        self: *Buffer,
+        text_edits: []const union(enum) { TextEdit: lsp.types.TextEdit, AnnotatedTextEdit: lsp.types.AnnotatedTextEdit },
+    ) !void {
+        // should be applied in reverse order to preserve original positions
+        for (0..text_edits.len) |i_| {
+            const i = text_edits.len - i_ - 1;
+            const edit = switch (text_edits[i]) {
+                .TextEdit => |e| e,
+                .AnnotatedTextEdit => |e| lsp.types.TextEdit{ .newText = e.newText, .range = e.range },
+            };
+            var change = try cha.Change.fromLsp(self.allocator, self, edit);
+            log.debug(@This(), "change: {s}: {f}\n", .{ self.path, change });
+            try self.appendChange(&change);
+        }
+    }
+
     fn find(self: *Buffer, query: []const u8) ![]const SpanFlat {
         var spans: std.array_list.Aligned(SpanFlat, null) = .empty;
         var re = try reg.Regex.from(query, false, self.allocator);
@@ -874,12 +906,12 @@ pub const Buffer = struct {
         );
     }
 
-    fn lineAlignIndent(self: *Buffer, row: usize) !void {
+    fn lineAlignIndent(self: *Buffer, row: usize) FatalError!void {
         const old_cursor = self.cursor;
         const line = self.lineContent(row);
-        const correct_indent: usize = if (row == 0) 0 else self.indents.items[row - 1];
-        const correct_indent_spaces = correct_indent * self.file_type.indent_spaces;
         const current_indent_spaces: usize = lineIndentSpaces(line);
+        const correct_indent: usize = if (current_indent_spaces == line.len) 0 else try self.lineIndent(row);
+        const correct_indent_spaces = correct_indent * self.file_type.indent_spaces;
         if (correct_indent_spaces == current_indent_spaces) return;
         const span = Span{
             .start = .{ .row = @intCast(row), .col = 0 },

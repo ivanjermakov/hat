@@ -5,11 +5,16 @@ const testing = std.testing;
 const log = @import("log.zig");
 const main = @import("main.zig");
 
+pub const RunOptions = struct {
+    input: ?[]const u8 = null,
+    exit_code: ?*u8 = null,
+    stderr_behavior: std.process.Child.StdIo = .Pipe,
+};
+
 pub fn runExternalWait(
     allocator: Allocator,
     cmd: []const []const u8,
-    input: ?[]const u8,
-    exit_code: ?*u8,
+    opts: RunOptions,
 ) ![]const u8 {
     if (log.enabled(.debug)) {
         log.debug(@This(), "running command:", .{});
@@ -17,25 +22,34 @@ pub fn runExternalWait(
         log.errPrint("\n", .{});
     }
     var child = std.process.Child.init(cmd, allocator);
-    if (input != null) child.stdin_behavior = .Pipe;
+    if (opts.input != null) child.stdin_behavior = .Pipe;
     child.stdout_behavior = .Pipe;
+    child.stderr_behavior = opts.stderr_behavior;
 
     try child.spawn();
     try child.waitForSpawn();
 
-    if (input) |inp| {
+    if (opts.input) |inp| {
         log.debug(@This(), "writing stdin: {s}\n", .{inp});
         try child.stdin.?.writeAll(inp);
         child.stdin.?.close();
         child.stdin = null;
     }
 
-    const res = child.stdout.?.readToEndAlloc(allocator, std.math.maxInt(usize));
+    const res = try child.stdout.?.readToEndAlloc(allocator, std.math.maxInt(usize));
+
+    if (opts.stderr_behavior == .Pipe) {
+        const err = try child.stderr.?.readToEndAlloc(allocator, std.math.maxInt(usize));
+        if (err.len > 0) {
+            log.debug(@This(), "command stderr:\n{s}\n", .{err});
+        }
+    }
+
     try main.term.switchBuf(true);
 
     const code = (try child.wait()).Exited;
     log.debug(@This(), "command exit code: {}\n", .{code});
-    if (exit_code) |c| c.* = code;
+    if (opts.exit_code) |c| c.* = code;
     main.editor.dirty.draw = true;
 
     return res;

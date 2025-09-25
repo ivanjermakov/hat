@@ -14,7 +14,7 @@ pub const PerfInfo = struct {
 
     pub fn format(self: *const PerfInfo, writer: *std.io.Writer) std.io.Writer.Error!void {
         try writer.print(
-            "total: {}, input: {}, parse: {}, mapping: {}, did_change: {}, draw: {}, commit: {}, sync: {}\n",
+            "total: {}, input: {}, parse: {}, mapping: {}, did_change: {}, draw: {}, commit: {}, sync: {}",
             .{
                 self.total / std.time.ns_per_us,
                 self.input / std.time.ns_per_us,

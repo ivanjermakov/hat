@@ -278,9 +278,10 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     });
                     buffer.centerCursor();
                 } else if (normal_or_select and eql(u8, key, "$")) {
+                    const line_len = buffer.lineLength(@intCast(buffer.cursor.row));
                     buffer.moveCursor(.{
                         .row = buffer.cursor.row,
-                        .col = @intCast(buffer.lineLength(@intCast(buffer.cursor.row))),
+                        .col = if (line_len == 0) 0 else @intCast(line_len - 1),
                     });
                 } else if (normal_or_select and eql(u8, key, "0")) {
                     buffer.moveCursor(.{ .row = buffer.cursor.row, .col = 0 });
@@ -312,6 +313,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     try buffer.changeSelectionDelete();
                     try buffer.enterMode(.insert);
                 } else if (normal_or_select and eql(u8, key, "d")) {
+                    buffer.copySelectionToClipboard() catch |e| log.err(@This(), "copy to clipboard error: {}\n", .{e});
                     try buffer.changeSelectionDelete();
                     try buffer.enterMode(.normal);
                     try buffer.commitChanges();
@@ -322,7 +324,10 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                 } else if (normal_or_select and eql(u8, key, "y")) {
                     buffer.copySelectionToClipboard() catch |e| log.err(@This(), "copy to clipboard error: {}\n", .{e});
                 } else if (normal_or_select and eql(u8, key, "p")) {
+                    if (buffer.mode.isSelect()) try buffer.changeSelectionDelete();
                     buffer.changeInsertFromClipboard() catch |e| log.err(@This(), "paste from clipboard error: {}\n", .{e});
+                    try buffer.commitChanges();
+                    try buffer.enterMode(.normal);
                 } else if (normal_or_select and eql(u8, key, "z")) {
                     buffer.centerCursor();
                 } else if (normal_or_select and eql(u8, key, "|")) {
@@ -445,6 +450,20 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     } else {
                         for (buffer.lsp_connections.items) |conn| {
                             conn.hover() catch |e| log.err(@This(), "show hover LSP error: {}\n", .{e});
+                        }
+                    }
+                } else if (buffer.mode == .normal and (eql(u8, key, "D") or eql(u8, key, "C"))) {
+                    const span: Span = .{
+                        .start = buffer.cursor,
+                        .end = buffer.posToCursor(buffer.lineStart(@intCast(buffer.cursor.row + 1)) - 1),
+                    };
+                    if (!std.meta.eql(span.start, span.end)) {
+                        var change = try cha.Change.initDelete(buffer.allocator, buffer, span);
+                        try buffer.appendChange(&change);
+                        if (eql(u8, key, "D")) {
+                            try buffer.commitChanges();
+                        } else {
+                            try buffer.enterMode(.insert);
                         }
                     }
 
