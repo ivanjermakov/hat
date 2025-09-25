@@ -546,9 +546,8 @@ pub const Buffer = struct {
                     if (pos.start.row != pos.end.row and pos.start.row != row and std.mem.eql(u8, capture_name, "indent.begin")) {
                         indent += 1;
                         try processed_rows.put(@intCast(pos.start.row), {});
-                    } else if (std.mem.eql(u8, capture_name, "indent.end")) {
+                    } else if (std.mem.eql(u8, capture_name, "indent.end") or std.mem.eql(u8, capture_name, "indent.branch")) {
                         indent -= 1;
-                        try processed_rows.put(@intCast(pos.start.row), {});
                     }
                 }
                 n = ts.ts.ts_node_parent(n);
