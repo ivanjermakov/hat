@@ -17,14 +17,10 @@ const fzf = @import("ui/fzf.zig");
 const uni = @import("unicode.zig");
 const ur = @import("uri.zig");
 
-pub const config = Config{
-    .end_of_buffer_char = null,
-};
-
 pub const Config = struct {
     /// Char to denote terminal lines after end of buffer
     /// See vim's :h fillchars -> eob
-    end_of_buffer_char: ?u8,
+    pub const end_of_buffer_char: ?u8 = null;
 };
 
 pub const Dirty = struct {
