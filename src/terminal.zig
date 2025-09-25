@@ -211,7 +211,8 @@ pub const Terminal = struct {
 
                 if (buffer.selection) |selection| {
                     if (selection.inRange(.{ .row = buffer_row, .col = buffer_col })) {
-                        try co.attributes.write(co.attributes.selection, &attrs_writer);
+                        const attr = if (buffer.mode.isSelect()) co.attributes.selection else co.attributes.selection_normal;
+                        try co.attributes.write(attr, &attrs_writer);
                     }
                 }
 
