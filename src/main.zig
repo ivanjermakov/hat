@@ -313,7 +313,10 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                 } else if (normal_or_select and eql(u8, key, "y")) {
                     buffer.copySelectionToClipboard() catch |e| log.err(@This(), "copy to clipboard error: {}\n", .{e});
                 } else if (normal_or_select and eql(u8, key, "p")) {
+                    if (buffer.mode.isSelect()) try buffer.changeSelectionDelete();
                     buffer.changeInsertFromClipboard() catch |e| log.err(@This(), "paste from clipboard error: {}\n", .{e});
+                    try buffer.commitChanges();
+                    try buffer.enterMode(.normal);
                 } else if (normal_or_select and eql(u8, key, "z")) {
                     buffer.centerCursor();
                 } else if (normal_or_select and eql(u8, key, "|")) {
