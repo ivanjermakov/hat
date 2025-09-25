@@ -366,6 +366,8 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     } else {
                         try editor.sendMessage("not a token");
                     }
+                } else if (normal_or_select and eql(u8, key, "%")) {
+                        try buffer.moveToMatchingPair();
 
                     // select mode
                 } else if (buffer.mode.isSelect() and eql(u8, key, "o")) {

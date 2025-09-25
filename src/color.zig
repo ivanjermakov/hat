@@ -86,6 +86,7 @@ pub const Attr = union(enum) {
 pub const attributes = enum {
     pub const text = &[_]Attr{.{ .fg = color.white }};
     pub const selection = &[_]Attr{.{ .bg = color.gray3 }};
+    pub const selection_normal = &[_]Attr{.{ .bg = color.gray2 }};
     pub const highlight = &[_]Attr{.{ .bg = color.gray3 }};
     pub const keyword = &[_]Attr{.{ .fg = color.magenta }};
     pub const string = &[_]Attr{.{ .fg = color.green }};

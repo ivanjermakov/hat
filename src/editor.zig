@@ -23,6 +23,9 @@ pub const Config = struct {
     /// Char to denote terminal lines after end of buffer
     /// See vim's :h fillchars -> eob
     pub const end_of_buffer_char: ?u8 = null;
+    /// Attempt to find matching pair when cursor is over one of these [start, end] chars
+    /// If start == end, will only check forward until first encountered match
+    pub const matching_pair_chars: ?[]const [2]u21 = &.{ .{ '{', '}' }, .{ '[', ']' }, .{ '(', ')' }, .{ '<', '>' }, .{ '|', '|' } };
     /// Imaginary width of a buffer that should be aligned (padded on the left).
     /// `null` means "no centering".
     /// If >`term_width`, padding is 0,
