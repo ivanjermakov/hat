@@ -515,17 +515,13 @@ pub const Buffer = struct {
     pub fn lineIndent(self: *Buffer, row: usize) FatalError!usize {
         const ts_state = if (self.ts_state) |ts_state| ts_state else return 0;
         const query = ts_state.indent orelse return 0;
+        if (self.lineLength(row) == 0 and row > 0) return self.lineIndent(row - 1);
         const root_node = ts.ts.ts_tree_root_node(ts_state.tree);
 
         const line_span = SpanFlat{
             .start = if (row == 0) 0 else self.line_byte_positions.items[row - 1],
             .end = self.line_byte_positions.items[row],
         };
-        if (self.lineLength(row) == 0) {
-            // TODO: copy previous line indent
-            log.trace(@This(), "line {}[{}-{}] empty\n", .{ row + 1, line_span.start, line_span.end });
-            return 0;
-        }
         if (ts.firstSmallestDescendentInSpan(root_node, line_span)) |node| {
             log.trace(@This(), "line {} {}\n", .{ row + 1, line_span });
             var n = node;
@@ -897,9 +893,9 @@ pub const Buffer = struct {
     fn lineAlignIndent(self: *Buffer, row: usize) FatalError!void {
         const old_cursor = self.cursor;
         const line = self.lineContent(row);
-        const correct_indent: usize = try self.lineIndent(row);
-        const correct_indent_spaces = correct_indent * self.file_type.indent_spaces;
         const current_indent_spaces: usize = lineIndentSpaces(line);
+        const correct_indent: usize = if (current_indent_spaces == line.len) 0 else try self.lineIndent(row);
+        const correct_indent_spaces = correct_indent * self.file_type.indent_spaces;
         if (correct_indent_spaces == current_indent_spaces) return;
         const span = Span{
             .start = .{ .row = @intCast(row), .col = 0 },
