@@ -6,6 +6,7 @@ const Span = core.Span;
 
 const lsp = @import("../lsp.zig");
 
+// TODO: severity
 pub const Diagnostic = struct {
     span: Span,
     message: []const u8,

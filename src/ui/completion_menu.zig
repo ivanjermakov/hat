@@ -143,6 +143,7 @@ pub const CompletionMenu = struct {
         main.editor.dirty.draw = true;
     }
 
+    // TODO: handle associated workspace commands, e.g. import symbol
     pub fn accept(self: *CompletionMenu) !void {
         defer self.reset();
         const item = self.completion_items.items[self.display_items.items[self.active_item]];
