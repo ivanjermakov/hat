@@ -219,7 +219,7 @@ pub fn firstSmallestDescendentInSpan(node: ts.TSNode, span: SpanFlat) ?ts.TSNode
 
     if (node_end < span.start) return null;
     const child_count = ts.ts_node_child_count(node);
-    if (child_count == 0 and node_start >= span.start and node_end <= span.end) return node;
+    if (child_count == 0 and node_start >= span.start) return node;
 
     for (0..child_count) |child_idx| {
         const child_candidate = ts.ts_node_child(node, @intCast(child_idx));
