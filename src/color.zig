@@ -48,7 +48,7 @@ pub const AnsiColor = enum(u8) {
     }
 };
 
-pub const color = enum {
+pub const Color = struct {
     pub const black = RgbColor.fromHex(0x000000);
     pub const gray1 = RgbColor.fromHex(0x1b1b1d);
     pub const gray2 = RgbColor.fromHex(0x2a2a2d);
@@ -81,21 +81,21 @@ pub const Attr = union(enum) {
     }
 };
 
-pub const attributes = enum {
-    pub const text = &[_]Attr{.{ .fg = color.white }};
-    pub const selection = &[_]Attr{.{ .bg = color.gray3 }};
-    pub const selection_normal = &[_]Attr{.{ .bg = color.gray2 }};
-    pub const keyword = &[_]Attr{.{ .fg = color.magenta }};
-    pub const string = &[_]Attr{.{ .fg = color.green }};
-    pub const literal = &[_]Attr{.{ .fg = color.yellow }};
-    pub const comment = &[_]Attr{.{ .fg = color.gray7 }};
-    pub const diagnostic_error = &[_]Attr{ .curly_underline, .{ .underline = color.red } };
-    pub const completion_menu = &[_]Attr{.{ .bg = color.gray2 }};
-    pub const completion_menu_active = &[_]Attr{.{ .bg = color.gray4 }};
-    pub const overlay = &[_]Attr{.{ .bg = color.gray2 }};
-    pub const message = &[_]Attr{.{ .bg = color.gray2 }};
-    pub const command_line = &[_]Attr{.{ .bg = color.gray2 }};
-    pub const number_line = &[_]Attr{.{ .fg = color.gray4 }};
+pub const Attributes = struct {
+    pub const text = &[_]Attr{.{ .fg = Color.white }};
+    pub const selection = &[_]Attr{.{ .bg = Color.gray3 }};
+    pub const selection_normal = &[_]Attr{.{ .bg = Color.gray2 }};
+    pub const keyword = &[_]Attr{.{ .fg = Color.magenta }};
+    pub const string = &[_]Attr{.{ .fg = Color.green }};
+    pub const literal = &[_]Attr{.{ .fg = Color.yellow }};
+    pub const comment = &[_]Attr{.{ .fg = Color.gray7 }};
+    pub const diagnostic_error = &[_]Attr{ .curly_underline, .{ .underline = Color.red } };
+    pub const completion_menu = &[_]Attr{.{ .bg = Color.gray2 }};
+    pub const completion_menu_active = &[_]Attr{.{ .bg = Color.gray4 }};
+    pub const overlay = &[_]Attr{.{ .bg = Color.gray2 }};
+    pub const message = &[_]Attr{.{ .bg = Color.gray2 }};
+    pub const command_line = &[_]Attr{.{ .bg = Color.gray2 }};
+    pub const number_line = &[_]Attr{.{ .fg = Color.gray4 }};
 
     pub fn write(attrs: []const Attr, writer: *std.io.Writer) !void {
         for (attrs) |attr| {

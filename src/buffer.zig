@@ -357,7 +357,7 @@ pub const Buffer = struct {
             if (col == 0) break;
             if (col != self.cursor.col) {
                 if (boundary(line[@intCast(col)], line[@intCast(col - 1)])) |b| {
-                    if (b == .wordEnd) break;
+                    if (b == .word_end) break;
                 }
             }
             col -= 1;
@@ -1048,7 +1048,7 @@ fn wordEnd(line: []const u21, pos: usize) ?usize {
         col += 1;
         const next = line[col];
         if (boundary(ch, next)) |b| {
-            if (b == .wordEnd) return col - 1;
+            if (b == .word_end) return col - 1;
         }
     }
     return line.len - 1;
@@ -1069,8 +1069,8 @@ fn tokenEnd(line: []const u21, pos: usize) ?usize {
 }
 
 const Boundary = enum {
-    wordStart,
-    wordEnd,
+    word_start,
+    word_end,
 
     /// 0: whitespace
     /// 1: symbols
@@ -1087,8 +1087,8 @@ fn boundary(ch1: u21, ch2: u21) ?Boundary {
     const r2 = Boundary.rank(ch2);
     switch (std.math.order(r1, r2)) {
         .eq => return null,
-        .lt => return .wordStart,
-        .gt => return .wordEnd,
+        .lt => return .word_start,
+        .gt => return .word_end,
     }
 }
 
