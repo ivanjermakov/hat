@@ -759,15 +759,6 @@ pub const Buffer = struct {
         }
     }
 
-    pub fn changeInsertFromClipboard(self: *Buffer) !void {
-        const text = try clp.read(self.allocator);
-        defer self.allocator.free(text);
-        const text_uni = try uni.unicodeFromBytes(self.allocator, text);
-        defer self.allocator.free(text_uni);
-        // TODO: insert text at line start if it ends with newline
-        try self.changeInsertText(text_uni);
-    }
-
     pub fn syncFs(self: *Buffer) !bool {
         if (self.scratch) return false;
         const stat = try std.fs.cwd().statFile(self.path);
