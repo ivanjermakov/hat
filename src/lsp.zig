@@ -78,15 +78,15 @@ pub const LspRequest = struct {
 };
 
 pub const LspConnectionStatus = enum {
-    Created,
-    Initialized,
-    Disconnecting,
-    Closed,
+    created,
+    initialized,
+    disconnecting,
+    closed,
 };
 
 pub const LspConnection = struct {
     config: LspConfig,
-    status: LspConnectionStatus = .Created,
+    status: LspConnectionStatus = .created,
     child: std.process.Child,
     messages_unreplied: std.AutoHashMap(i64, LspRequest),
     poll_buf: std.array_list.Aligned(u8, null) = .empty,
@@ -173,7 +173,7 @@ pub const LspConnection = struct {
     }
 
     pub fn lspLoop(self: *LspConnection) void {
-        while (self.status != .Closed and self.status != .Disconnecting) {
+        while (self.status != .closed and self.status != .disconnecting) {
             self.update() catch |e| log.err(@This(), "LSP update error: {}\n", .{e});
             std.Thread.sleep(main.sleep_lsp_ns);
         }
@@ -182,7 +182,7 @@ pub const LspConnection = struct {
     pub fn disconnect(self: *LspConnection) !void {
         try self.sendRequest("shutdown", null);
         try self.sendNotification("exit", null);
-        self.status = .Disconnecting;
+        self.status = .disconnecting;
     }
 
     pub fn update(self: *LspConnection) !void {
@@ -422,10 +422,10 @@ pub const LspConnection = struct {
     }
 
     fn poll(self: *LspConnection) !?[]const []const u8 {
-        if (self.status == .Created or self.status == .Initialized) {
+        if (self.status == .created or self.status == .initialized) {
             if (self.exitCode()) |code| {
                 log.err(@This(), "lsp server terminated prematurely with code: {}\n", .{code});
-                self.status = .Closed;
+                self.status = .closed;
                 return error.ServerCrash;
             }
         }
@@ -484,7 +484,7 @@ pub const LspConnection = struct {
         comptime method: []const u8,
         params: (types.getRequestMetadata(method).?.Params orelse ?void),
     ) !void {
-        if (!std.mem.eql(u8, method, "initialize") and self.status != .Initialized) {
+        if (!std.mem.eql(u8, method, "initialize") and self.status != .initialized) {
             log.warn(@This(), "bad connection status: {}\n", .{self.status});
             return;
         }
@@ -506,7 +506,7 @@ pub const LspConnection = struct {
         comptime method: []const u8,
         params: (types.getNotificationMetadata(method).?.Params orelse ?void),
     ) !void {
-        if (self.status != .Initialized) {
+        if (self.status != .initialized) {
             log.warn(@This(), "bad connection status: {}\n", .{self.status});
             return;
         }
@@ -527,7 +527,7 @@ pub const LspConnection = struct {
         id: lsp.JsonRPCMessage.ID,
         result: types.getRequestMetadata(method).?.Result,
     ) !void {
-        if (self.status != .Initialized) {
+        if (self.status != .initialized) {
             log.warn(@This(), "bad connection status: {}\n", .{self.status});
             return;
         }
@@ -547,7 +547,7 @@ pub const LspConnection = struct {
         self.server_init = try std.json.parseFromValue(types.InitializeResult, self.allocator, resp.?, .{});
         log.debug(@This(), "server capabilities: {f}\n", .{std.json.fmt(self.server_init.?.value.capabilities, .{})});
 
-        self.status = .Initialized;
+        self.status = .initialized;
         try self.sendNotification("initialized", .{});
 
         for (self.buffers.items) |buffer| {

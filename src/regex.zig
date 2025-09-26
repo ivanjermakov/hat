@@ -146,7 +146,6 @@ pub const RegexMatch = struct {
     }
 };
 
-// TODO: inherits from `RefCounted`
 pub const Regex = struct {
     generalCtx: ?*anyopaque,
     code: ?*anyopaque,
@@ -160,7 +159,7 @@ pub const Regex = struct {
 
     pub fn init(alloc_: Allocator) Regex {
         return Regex{
-            .generalCtx = re.pcre2_general_context_create_8(&regex_alloc, &regex_free, null),
+            .generalCtx = re.pcre2_general_context_create_8(&regexAlloc, &regexFree, null),
             .code = null,
             .allocator = alloc_,
         };
@@ -443,11 +442,11 @@ pub const Regex = struct {
     }
 };
 
-fn regex_alloc(size: usize, _: ?*anyopaque) callconv(.c) ?*anyopaque {
+fn regexAlloc(size: usize, _: ?*anyopaque) callconv(.c) ?*anyopaque {
     return std.c.malloc(size);
 }
 
-fn regex_free(ptr: ?*anyopaque, _: ?*anyopaque) callconv(.c) void {
+fn regexFree(ptr: ?*anyopaque, _: ?*anyopaque) callconv(.c) void {
     if (ptr == null) return;
     std.c.free(ptr);
 }
@@ -467,7 +466,6 @@ const SAMap = std.StringArrayHashMap;
 
 const PCRE2_ZERO_TERMINATED = ~@as(re.PCRE2_SIZE, 0);
 
-// TESTING
 test "Regex.init()" {
     var regex = Regex.init(tests.allocator);
     defer regex.deinit();
