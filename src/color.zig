@@ -13,10 +13,8 @@ pub const RgbColor = struct {
         };
     }
 
-    pub fn toHexStr(self: RgbColor) [6]u8 {
-        var buf = std.mem.zeroes([6]u8);
-        _ = std.fmt.bufPrint(&buf, "{x}{x}{x}", .{ self.r, self.g, self.b }) catch {};
-        return buf;
+    pub fn toHexStr(comptime self: RgbColor) []const u8 {
+        return std.fmt.comptimePrint("{x}{x}{x}", .{ self.r, self.g, self.b });
     }
 };
 
