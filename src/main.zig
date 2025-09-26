@@ -316,23 +316,36 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                 } else if (normal_or_select and eql(u8, key, "y")) {
                     buffer.copySelectionToClipboard() catch |e| log.err(@This(), "copy to clipboard error: {}\n", .{e});
                     try buffer.enterMode(.normal);
-                } else if (normal_or_select and eql(u8, key, "p")) {
-                    if (buffer.mode.isSelect()) try buffer.changeSelectionDelete();
+                } else if (normal_or_select and (eql(u8, key, "p") or eql(u8, key, "P"))) {
                     if (clp.read(allocator)) |text| {
                         defer allocator.free(text);
                         const text_uni = try uni.unicodeFromBytes(allocator, text);
                         defer allocator.free(text_uni);
 
-                        const row = buffer.cursor.row;
-                        const line_insert = text_uni[text_uni.len - 1] == '\n' and
-                            buffer.line_positions.items.len > 0 and row < buffer.line_positions.items.len;
-                        if (line_insert) buffer.moveCursor(.{ .row = row + 1 });
+                        if (buffer.mode.isSelect()) {
+                            try buffer.changeSelectionDelete();
+                            try buffer.changeInsertText(text_uni);
+                        } else {
+                            // in char mode p means insert after this char, P means insert here
+                            // in line mode p means insert after this line, P means insert before this line
+                            const after = eql(u8, key, "p");
+                            const row = buffer.cursor.row;
+                            const line_insert = text_uni[text_uni.len - 1] == '\n' and
+                                buffer.line_positions.items.len > 0 and row < buffer.line_positions.items.len;
+                            const insert_row = if (after) row + 1 else row;
+                            if (line_insert) {
+                                buffer.moveCursor(.{ .row = insert_row });
+                            } else {
+                                if (after) buffer.moveCursor(buffer.cursor.applyOffset(.{ .col = 1 }));
+                            }
 
-                        try buffer.changeInsertText(text_uni);
+                            try buffer.changeInsertText(text_uni);
 
-                        if (line_insert) {
-                            const indent = buf.lineIndentSpaces(buffer.lineContent(@intCast(row + 1)));
-                            if (line_insert) buffer.moveCursor(.{ .row = row + 1, .col = @intCast(indent) });
+                            if (line_insert) {
+                                // put cursor to the start of insertion
+                                const indent = buf.lineIndentSpaces(buffer.lineContent(@intCast(insert_row)));
+                                if (line_insert) buffer.moveCursor(.{ .row = insert_row, .col = @intCast(indent) });
+                            }
                         }
 
                         try buffer.commitChanges();
