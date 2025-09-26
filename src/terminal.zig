@@ -449,10 +449,6 @@ pub fn parseAnsi(input: *std.array_list.Aligned(u8, null)) !inp.Key {
             key.printable = 'd';
             key.modifiers = @intFromEnum(inp.Modifier.control);
         },
-        0x09 => {
-            _ = input.orderedRemove(0);
-            key.code = .tab;
-        },
         0x7f => {
             _ = input.orderedRemove(0);
             key.code = .backspace;
