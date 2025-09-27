@@ -641,6 +641,8 @@ comptime {
 
 pub fn testSetup() !void {
     const allocator = std.testing.allocator;
+    std_err_file_writer = std_err.writer(&std_err_buf);
+    log.log_writer = &std_err_file_writer.interface;
     log.level = .@"error";
     editor = try edi.Editor.init(allocator);
     var writer = std.io.Writer.Discarding.init(&std_out_buf).writer;
