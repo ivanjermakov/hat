@@ -206,7 +206,7 @@ pub const Buffer = struct {
             .select => {
                 const end_pos = self.cursorToPos(self.cursor) + 1;
                 self.selection = .{ .start = self.cursor, .end = self.posToCursor(end_pos) };
-                log.warn(@This(), "selection: {?}\n", .{self.selection});
+                log.debug(@This(), "selection: {?}\n", .{self.selection});
                 main.editor.dirty.draw = true;
             },
             .select_line => {
@@ -243,7 +243,6 @@ pub const Buffer = struct {
     }
 
     pub fn moveCursor(self: *Buffer, new_cursor: Cursor) void {
-        log.warn(@This(), "move cursor attempt {}\n", .{new_cursor});
         const old_cursor = self.cursor;
         const vertical_only = old_cursor.col == new_cursor.col and old_cursor.row != new_cursor.row;
 

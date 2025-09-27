@@ -66,9 +66,9 @@ pub fn errPrint(comptime fmt: []const u8, args: anytype) void {
     log_writer.flush() catch {};
 }
 
-pub fn assertEql(comptime Caller: type, comptime T: type, actual: []const T, expected: []const T) void {
-    if (!std.mem.eql(T, actual, expected)) {
-        err(Caller, "assert failed:\n  actual: {any}\n  expected: {any}\n", .{ actual, expected });
+pub fn assertEql(comptime Caller: type, comptime T: type, expected: []const T, actual: []const T) void {
+    if (!std.mem.eql(T, expected, actual)) {
+        err(Caller, "assert failed:\n  expected: {any}\n  actual: {any}\n", .{ expected, actual });
         unreachable;
     }
 }
