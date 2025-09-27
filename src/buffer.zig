@@ -215,6 +215,17 @@ pub const Buffer = struct {
             },
             .insert => {
                 self.clearSelection();
+
+                if (self.cursorToPos(self.cursor) + 1 >= self.content.items.len) {
+                    log.debug(@This(), "non-terminated line, needs newline\n", .{});
+                    var nl_change = try cha.Change.initInsert(
+                        self.allocator,
+                        self,
+                        self.posToCursor(if (self.content.items.len > 0) self.content.items.len - 1 else 0),
+                        &.{'\n'},
+                    );
+                    try self.appendChange(&nl_change);
+                }
             },
         }
         if (mode != .normal) main.editor.dotRepeatInside();
@@ -1165,6 +1176,37 @@ test "cursorToPos newline" {
     try testing.expectEqualDeep(4, buffer.cursorToPos(.{ .row = 1 }));
 }
 
+test "posToCursor" {
+    var buffer = try testSetupScratch("one\n");
+    defer main.editor.deinit();
+
+    try testing.expectEqualDeep(Cursor{ .col = 0 }, buffer.posToCursor(0));
+    try testing.expectEqualDeep(Cursor{ .col = 1 }, buffer.posToCursor(1));
+    try testing.expectEqualDeep(Cursor{ .col = 2 }, buffer.posToCursor(2));
+    try testing.expectEqualDeep(Cursor{ .col = 3 }, buffer.posToCursor(3));
+}
+
+test "posToCursor non-terminated" {
+    var buffer = try testSetupScratch("one");
+    defer main.editor.deinit();
+
+    try testing.expectEqualDeep(Cursor{ .col = 0 }, buffer.posToCursor(0));
+    try testing.expectEqualDeep(Cursor{ .col = 1 }, buffer.posToCursor(1));
+    try testing.expectEqualDeep(Cursor{ .col = 2 }, buffer.posToCursor(2));
+    try testing.expectEqualDeep(Cursor{ .col = 3 }, buffer.posToCursor(3));
+}
+
+test "posToCursor non-terminated multiline" {
+    var buffer = try testSetupScratch("\none");
+    defer main.editor.deinit();
+
+    try testing.expectEqualDeep(Cursor{ .row = 0, .col = 0 }, buffer.posToCursor(0));
+    try testing.expectEqualDeep(Cursor{ .row = 1, .col = 0 }, buffer.posToCursor(1));
+    try testing.expectEqualDeep(Cursor{ .row = 1, .col = 1 }, buffer.posToCursor(2));
+    try testing.expectEqualDeep(Cursor{ .row = 1, .col = 2 }, buffer.posToCursor(3));
+    try testing.expectEqualDeep(Cursor{ .row = 1, .col = 3 }, buffer.posToCursor(4));
+}
+
 test "textAt" {
     var buffer = try testSetupScratch("one");
     defer main.editor.deinit();
@@ -1277,6 +1319,24 @@ test "moveToMatchingPair same char" {
 
     try buffer.moveToMatchingPair();
     try testing.expectEqual(Cursor{ .row = 0, .col = 8 }, buffer.cursor);
+}
+
+test "insert empty file" {
+    var buffer = try testSetupScratch("");
+    defer main.editor.deinit();
+
+    try buffer.enterMode(.insert);
+    try buffer.changeInsertText(&.{'a'});
+    try buffer.changeInsertText(&.{'b'});
+    try buffer.changeInsertText(&.{'c'});
+
+    try buffer.commitChanges();
+    try buffer.updateRaw();
+    try testing.expectEqualStrings("abc\n", buffer.content_raw.items);
+
+    try buffer.undo();
+    try buffer.updateRaw();
+    try testing.expectEqualStrings("", buffer.content_raw.items);
 }
 
 test "delete selection same line" {
