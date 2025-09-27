@@ -209,7 +209,10 @@ pub const Buffer = struct {
         main.editor.resetCodeActions();
 
         if (self.mode == mode) return;
-        if (self.mode == .insert) try self.commitChanges();
+        if (self.mode == .insert) {
+            try self.commitChanges();
+            self.moveCursor(self.cursor.applyOffset(.{ .col = -1 }));
+        }
 
         switch (mode) {
             .normal => {
