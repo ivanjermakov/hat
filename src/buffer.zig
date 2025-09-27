@@ -213,7 +213,9 @@ pub const Buffer = struct {
                 self.selection = self.lineSpan(@intCast(self.cursor.row));
                 main.editor.dirty.draw = true;
             },
-            .insert => self.clearSelection(),
+            .insert => {
+                self.clearSelection();
+            },
         }
         if (mode != .normal) main.editor.dotRepeatInside();
         log.debug(@This(), "mode: {}->{}\n", .{ self.mode, mode });
@@ -241,6 +243,7 @@ pub const Buffer = struct {
     }
 
     pub fn moveCursor(self: *Buffer, new_cursor: Cursor) void {
+        log.warn(@This(), "move cursor attempt {}\n", .{new_cursor});
         const old_cursor = self.cursor;
         const vertical_only = old_cursor.col == new_cursor.col and old_cursor.row != new_cursor.row;
 
@@ -662,11 +665,15 @@ pub const Buffer = struct {
     }
 
     pub fn lineTerminated(self: *const Buffer, row: usize) bool {
-        return row + 1 < self.line_positions.items.len or self.content.getLast() == '\n';
+        return row + 1 < self.line_positions.items.len or (self.content.items.len > 0 and self.content.getLast() == '\n');
     }
 
     /// Line length at `row` (excl. newline char)
     pub fn lineLength(self: *const Buffer, row: usize) usize {
+        const terminated = self.lineTerminated(row);
+        if (self.line_positions.items.len == 1) {
+            return if (terminated) self.line_positions.items[row] - 1 else self.line_positions.items[row];
+        }
         if (row == 0) {
             if (self.content.items.len == 0) {
                 // empty file
@@ -675,7 +682,7 @@ pub const Buffer = struct {
             return self.line_positions.items[row] - 1;
         }
         const len = self.line_positions.items[row] - self.line_positions.items[row - 1];
-        if (len == 0 or !self.lineTerminated(row)) {
+        if (len == 0 or !terminated) {
             // phantom line
             return len;
         }
@@ -1272,7 +1279,7 @@ test "moveToMatchingPair same char" {
     try testing.expectEqual(Cursor{ .row = 0, .col = 8 }, buffer.cursor);
 }
 
-test "changeSelectionDelete same line" {
+test "delete selection same line" {
     var buffer = try testSetupScratch("abc\n");
     defer main.editor.deinit();
 
@@ -1283,6 +1290,19 @@ test "changeSelectionDelete same line" {
     try buffer.commitChanges();
     try buffer.updateRaw();
     try testing.expectEqualStrings("ac\n", buffer.content_raw.items);
+}
+
+test "delete selection all non terminated" {
+    var buffer = try testSetupScratch("abc");
+    defer main.editor.deinit();
+
+    try buffer.enterMode(.select);
+    buffer.moveCursor(.{ .col = 2 });
+    try buffer.changeSelectionDelete();
+
+    try buffer.commitChanges();
+    try buffer.updateRaw();
+    try testing.expectEqualStrings("", buffer.content_raw.items);
 }
 
 test "delete selection line to end" {

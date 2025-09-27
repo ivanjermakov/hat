@@ -173,6 +173,7 @@ pub const Terminal = struct {
             var area_col: i32 = 0;
 
             var line = buffer.lineContent(@intCast(buffer_row));
+            const terminated = buffer.lineTerminated(@intCast(buffer_row));
             try self.moveCursor(.{ .row = @intCast(term_row), .col = area.pos.col });
 
             if (buffer.offset.col > 0) {
@@ -186,7 +187,7 @@ pub const Terminal = struct {
                 }
             }
 
-            for (0..line.len + 1) |i| {
+            for (0..if (terminated) line.len + 1 else line.len) |i| {
                 const ch = if (i == line.len) ' ' else line[i];
                 _ = attrs_writer.consumeAll();
                 const buffer_col: i32 = buffer.offset.col + @as(i32, @intCast(i));
