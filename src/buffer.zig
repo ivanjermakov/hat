@@ -652,15 +652,16 @@ pub const Buffer = struct {
     }
 
     pub fn posToCursor(self: *const Buffer, pos: usize) Cursor {
-        var i: usize = 0;
+        var row: usize = 0;
         var line_start: usize = 0;
-        for (self.line_positions.items) |l_pos| {
-            if (l_pos > pos) break;
-            if (i > 0 and l_pos == self.line_positions.items[i - 1]) break;
-            line_start = l_pos;
-            i += 1;
+        for (self.line_positions.items) |next_line_start| {
+            if (next_line_start > pos) break;
+            if (next_line_start == pos and next_line_start == self.content.items.len) break;
+            if (row > 0 and next_line_start == self.line_positions.items[row - 1]) break;
+            line_start = next_line_start;
+            row += 1;
         }
-        return Cursor{ .row = @intCast(i), .col = @intCast(pos - line_start) };
+        return Cursor{ .row = @intCast(row), .col = @intCast(pos - line_start) };
     }
 
     pub fn lineTerminated(self: *const Buffer, row: usize) bool {
