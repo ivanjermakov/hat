@@ -219,14 +219,27 @@ pub const Buffer = struct {
             .select => {
                 const end_pos = self.cursorToPos(self.cursor) + 1;
                 self.selection = .{ .start = self.cursor, .end = self.posToCursor(end_pos) };
-                log.warn(@This(), "selection: {?}\n", .{self.selection});
+                log.debug(@This(), "selection: {?}\n", .{self.selection});
                 main.editor.dirty.draw = true;
             },
             .select_line => {
                 self.selection = self.lineSpan(@intCast(self.cursor.row));
                 main.editor.dirty.draw = true;
             },
-            .insert => self.clearSelection(),
+            .insert => {
+                self.clearSelection();
+
+                if (self.cursorToPos(self.cursor) + 1 >= self.content.items.len) {
+                    log.debug(@This(), "non-terminated line, needs newline\n", .{});
+                    var nl_change = try cha.Change.initInsert(
+                        self.allocator,
+                        self,
+                        self.posToCursor(if (self.content.items.len > 0) self.content.items.len - 1 else 0),
+                        &.{'\n'},
+                    );
+                    try self.appendChange(&nl_change);
+                }
+            },
         }
         if (mode != .normal) main.editor.dotRepeatInside();
         log.debug(@This(), "mode: {}->{}\n", .{ self.mode, mode });
@@ -721,23 +734,28 @@ pub const Buffer = struct {
     }
 
     pub fn posToCursor(self: *const Buffer, pos: usize) Cursor {
-        var i: usize = 0;
+        var row: usize = 0;
         var line_start: usize = 0;
-        for (self.line_positions.items) |l_pos| {
-            if (l_pos > pos) break;
-            if (i > 0 and l_pos == self.line_positions.items[i - 1]) break;
-            line_start = l_pos;
-            i += 1;
+        for (self.line_positions.items) |next_line_start| {
+            if (next_line_start > pos) break;
+            if (next_line_start == pos and next_line_start == self.content.items.len) break;
+            if (row > 0 and next_line_start == self.line_positions.items[row - 1]) break;
+            line_start = next_line_start;
+            row += 1;
         }
-        return Cursor{ .row = @intCast(i), .col = @intCast(pos - line_start) };
+        return Cursor{ .row = @intCast(row), .col = @intCast(pos - line_start) };
     }
 
     pub fn lineTerminated(self: *const Buffer, row: usize) bool {
-        return row + 1 < self.line_positions.items.len or self.content.getLast() == '\n';
+        return row + 1 < self.line_positions.items.len or (self.content.items.len > 0 and self.content.getLast() == '\n');
     }
 
     /// Line length at `row` (excl. newline char)
     pub fn lineLength(self: *const Buffer, row: usize) usize {
+        const terminated = self.lineTerminated(row);
+        if (self.line_positions.items.len == 1) {
+            return if (terminated) self.line_positions.items[row] - 1 else self.line_positions.items[row];
+        }
         if (row == 0) {
             if (self.content.items.len == 0) {
                 // empty file
@@ -746,7 +764,7 @@ pub const Buffer = struct {
             return self.line_positions.items[row] - 1;
         }
         const len = self.line_positions.items[row] - self.line_positions.items[row - 1];
-        if (len == 0 or !self.lineTerminated(row)) {
+        if (len == 0 or !terminated) {
             // phantom line
             return len;
         }
@@ -864,15 +882,6 @@ pub const Buffer = struct {
         if (self.selection) |selection| {
             try clp.write(self.allocator, self.rawTextAt(selection));
         }
-    }
-
-    pub fn changeInsertFromClipboard(self: *Buffer) !void {
-        const text = try clp.read(self.allocator);
-        defer self.allocator.free(text);
-        const text_uni = try uni.unicodeFromBytes(self.allocator, text);
-        defer self.allocator.free(text_uni);
-        // TODO: insert text at line start if it ends with newline
-        try self.changeInsertText(text_uni);
     }
 
     pub fn syncFs(self: *Buffer) !bool {
@@ -1274,6 +1283,37 @@ test "cursorToPos newline" {
     try testing.expectEqualDeep(4, buffer.cursorToPos(.{ .row = 1 }));
 }
 
+test "posToCursor" {
+    var buffer = try testSetupScratch("one\n");
+    defer main.editor.deinit();
+
+    try testing.expectEqualDeep(Cursor{ .col = 0 }, buffer.posToCursor(0));
+    try testing.expectEqualDeep(Cursor{ .col = 1 }, buffer.posToCursor(1));
+    try testing.expectEqualDeep(Cursor{ .col = 2 }, buffer.posToCursor(2));
+    try testing.expectEqualDeep(Cursor{ .col = 3 }, buffer.posToCursor(3));
+}
+
+test "posToCursor non-terminated" {
+    var buffer = try testSetupScratch("one");
+    defer main.editor.deinit();
+
+    try testing.expectEqualDeep(Cursor{ .col = 0 }, buffer.posToCursor(0));
+    try testing.expectEqualDeep(Cursor{ .col = 1 }, buffer.posToCursor(1));
+    try testing.expectEqualDeep(Cursor{ .col = 2 }, buffer.posToCursor(2));
+    try testing.expectEqualDeep(Cursor{ .col = 3 }, buffer.posToCursor(3));
+}
+
+test "posToCursor non-terminated multiline" {
+    var buffer = try testSetupScratch("\none");
+    defer main.editor.deinit();
+
+    try testing.expectEqualDeep(Cursor{ .row = 0, .col = 0 }, buffer.posToCursor(0));
+    try testing.expectEqualDeep(Cursor{ .row = 1, .col = 0 }, buffer.posToCursor(1));
+    try testing.expectEqualDeep(Cursor{ .row = 1, .col = 1 }, buffer.posToCursor(2));
+    try testing.expectEqualDeep(Cursor{ .row = 1, .col = 2 }, buffer.posToCursor(3));
+    try testing.expectEqualDeep(Cursor{ .row = 1, .col = 3 }, buffer.posToCursor(4));
+}
+
 test "textAt" {
     var buffer = try testSetupScratch("one");
     defer main.editor.deinit();
@@ -1388,7 +1428,25 @@ test "moveToMatchingPair same char" {
     try testing.expectEqual(Cursor{ .row = 0, .col = 8 }, buffer.cursor);
 }
 
-test "changeSelectionDelete same line" {
+test "insert empty file" {
+    var buffer = try testSetupScratch("");
+    defer main.editor.deinit();
+
+    try buffer.enterMode(.insert);
+    try buffer.changeInsertText(&.{'a'});
+    try buffer.changeInsertText(&.{'b'});
+    try buffer.changeInsertText(&.{'c'});
+
+    try buffer.commitChanges();
+    try buffer.updateRaw();
+    try testing.expectEqualStrings("abc\n", buffer.content_raw.items);
+
+    try buffer.undo();
+    try buffer.updateRaw();
+    try testing.expectEqualStrings("", buffer.content_raw.items);
+}
+
+test "delete selection same line" {
     var buffer = try testSetupScratch("abc\n");
     defer main.editor.deinit();
 
@@ -1399,6 +1457,19 @@ test "changeSelectionDelete same line" {
     try buffer.commitChanges();
     try buffer.updateRaw();
     try testing.expectEqualStrings("ac\n", buffer.content_raw.items);
+}
+
+test "delete selection all non terminated" {
+    var buffer = try testSetupScratch("abc");
+    defer main.editor.deinit();
+
+    try buffer.enterMode(.select);
+    buffer.moveCursor(.{ .col = 2 });
+    try buffer.changeSelectionDelete();
+
+    try buffer.commitChanges();
+    try buffer.updateRaw();
+    try testing.expectEqualStrings("", buffer.content_raw.items);
 }
 
 test "delete selection line to end" {
