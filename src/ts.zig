@@ -196,15 +196,15 @@ pub const AttrsSpan = struct {
 };
 
 pub const node_highlights = std.StaticStringMap([]const col.Attr).initComptime(.{
-    .{ "keyword", col.attributes.keyword },
-    .{ "string", col.attributes.string },
-    .{ "number", col.attributes.literal },
-    .{ "boolean", col.attributes.literal },
-    .{ "comment", col.attributes.comment },
+    .{ "keyword", col.Attributes.keyword },
+    .{ "string", col.Attributes.string },
+    .{ "number", col.Attributes.literal },
+    .{ "boolean", col.Attributes.literal },
+    .{ "comment", col.Attributes.comment },
 });
 
 pub const node_highlights_exact = std.StaticStringMap([]const col.Attr).initComptime(.{
-    .{ "tag", col.attributes.keyword },
+    .{ "tag", col.Attributes.keyword },
 });
 
 pub fn firstSmallestDescendentInSpan(node: ts.TSNode, span: SpanFlat) ?ts.TSNode {

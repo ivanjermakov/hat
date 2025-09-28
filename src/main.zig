@@ -26,6 +26,7 @@ const per = @import("perf.zig");
 const cha = @import("change.zig");
 const cli = @import("cli.zig");
 const ur = @import("uri.zig");
+const clp = @import("clipboard.zig");
 
 pub const sleep_ns: u64 = 16 * std.time.ns_per_ms;
 pub const sleep_lsp_ns: u64 = sleep_ns;
@@ -312,8 +313,10 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                 } else if (normal_or_select and eql(u8, key, "c")) {
                     try buffer.changeSelectionDelete();
                     try buffer.enterMode(.insert);
-                } else if (normal_or_select and eql(u8, key, "d")) {
-                    buffer.copySelectionToClipboard() catch |e| log.err(@This(), "copy to clipboard error: {}\n", .{e});
+                } else if (normal_or_select and (eql(u8, key, "d") or eql(u8, key, "~"))) {
+                    if (eql(u8, key, "d")) {
+                        buffer.copySelectionToClipboard() catch |e| log.err(@This(), "copy to clipboard error: {}\n", .{e});
+                    }
                     try buffer.changeSelectionDelete();
                     try buffer.enterMode(.normal);
                     try buffer.commitChanges();
@@ -323,11 +326,44 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     try buffer.enterMode(.normal);
                 } else if (normal_or_select and eql(u8, key, "y")) {
                     buffer.copySelectionToClipboard() catch |e| log.err(@This(), "copy to clipboard error: {}\n", .{e});
-                } else if (normal_or_select and eql(u8, key, "p")) {
-                    if (buffer.mode.isSelect()) try buffer.changeSelectionDelete();
-                    buffer.changeInsertFromClipboard() catch |e| log.err(@This(), "paste from clipboard error: {}\n", .{e});
-                    try buffer.commitChanges();
                     try buffer.enterMode(.normal);
+                } else if (normal_or_select and (eql(u8, key, "p") or eql(u8, key, "P"))) {
+                    if (clp.read(allocator)) |text| {
+                        defer allocator.free(text);
+                        const text_uni = try uni.unicodeFromBytes(allocator, text);
+                        defer allocator.free(text_uni);
+
+                        if (buffer.mode.isSelect()) {
+                            try buffer.changeSelectionDelete();
+                            try buffer.changeInsertText(text_uni);
+                        } else {
+                            // in char mode p means insert after this char, P means insert here
+                            // in line mode p means insert after this line, P means insert before this line
+                            const after = eql(u8, key, "p");
+                            const row = buffer.cursor.row;
+                            const line_insert = text_uni[text_uni.len - 1] == '\n' and
+                                buffer.line_positions.items.len > 0 and row < buffer.line_positions.items.len;
+                            const insert_row = if (after) row + 1 else row;
+                            if (line_insert) {
+                                buffer.moveCursor(.{ .row = insert_row });
+                            } else {
+                                if (after) buffer.moveCursor(buffer.cursor.applyOffset(.{ .col = 1 }));
+                            }
+
+                            try buffer.changeInsertText(text_uni);
+
+                            if (line_insert) {
+                                // put cursor to the start of insertion
+                                const indent = buf.lineIndentSpaces(buffer.lineContent(@intCast(insert_row)));
+                                if (line_insert) buffer.moveCursor(.{ .row = insert_row, .col = @intCast(indent) });
+                            }
+                        }
+
+                        try buffer.commitChanges();
+                        try buffer.enterMode(.normal);
+                    } else |e| {
+                        log.err(@This(), "paste from clipboard error: {}\n", .{e});
+                    }
                 } else if (normal_or_select and eql(u8, key, "z")) {
                     buffer.centerCursor();
                 } else if (normal_or_select and eql(u8, key, "|")) {
@@ -355,6 +391,8 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     } else {
                         try editor.sendMessage("not a token");
                     }
+                } else if (normal_or_select and eql(u8, key, "%")) {
+                    try buffer.moveToMatchingPair();
 
                     // select mode
                 } else if (buffer.mode.isSelect() and eql(u8, key, "o")) {
@@ -419,7 +457,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     try buffer.undo();
                 } else if (buffer.mode == .normal and eql(u8, key, "U")) {
                     try buffer.redo();
-                } else if (buffer.mode == .normal and eql(u8, key, "<tab>")) {
+                } else if (buffer.mode == .normal and eql(u8, key, "\t")) {
                     if (editor.buffers.items.len > 1) {
                         const uri = editor.buffers.items[1].uri;
                         editor.openBuffer(uri) catch |e| log.err(@This(), "open buffer {s} error: {}\n", .{ uri, e });
@@ -617,6 +655,8 @@ comptime {
 
 pub fn testSetup() !void {
     const allocator = std.testing.allocator;
+    std_err_file_writer = std_err.writer(&std_err_buf);
+    log.log_writer = &std_err_file_writer.interface;
     log.level = .@"error";
     editor = try edi.Editor.init(allocator);
     var writer = std.io.Writer.Discarding.init(&std_out_buf).writer;
