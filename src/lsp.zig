@@ -16,7 +16,13 @@ const fzf = @import("ui/fzf.zig");
 const dia = @import("ui/diagnostic.zig");
 const ur = @import("uri.zig");
 
-pub const lsp_config = [_]LspConfig{};
+pub const lsp_config = [_]LspConfig{
+    LspConfig{
+        .name = "lua_ls",
+        .cmd = &.{"lua-language-server"},
+        .file_types = &.{"lua"},
+    },
+};
 
 pub const LspConfig = struct {
     name: []const u8,
@@ -133,7 +139,7 @@ pub const LspConnection = struct {
 
     pub fn lspLoop(self: *LspConnection) void {
         while (self.status != .closed and self.status != .disconnecting) {
-            self.update() catch |e| log.err(@This(), "LSP update error: {}\n", .{e});
+            self.update() catch |e| log.err(@This(), "LSP update error: {}\n", .{e}, @errorReturnTrace());
             std.Thread.sleep(main.sleep_lsp_ns);
         }
     }
@@ -323,7 +329,7 @@ pub const LspConnection = struct {
     fn poll(self: *LspConnection) !?[]const []const u8 {
         if (self.status == .created or self.status == .initialized) {
             if (self.exitCode()) |code| {
-                log.err(@This(), "lsp server terminated prematurely with code: {}\n", .{code});
+                log.err(@This(), "lsp server terminated prematurely with code: {}\n", .{code}, @errorReturnTrace());
                 self.status = .closed;
                 return error.ServerCrash;
             }
@@ -335,7 +341,7 @@ pub const LspConnection = struct {
             fs.readNonblock(&err_writer.writer, self.child.stderr.?) catch break :b;
             const written = err_writer.written();
             if (written.len > 0) {
-                log.err(@This(), "{s}\n", .{written});
+                log.err(@This(), "{s}\n", .{written}, @errorReturnTrace());
             }
         }
 
@@ -494,8 +500,7 @@ pub const LspConnection = struct {
         const locations = resp_typed.value;
         log.debug(@This(), "got reference locations: {any}\n", .{locations});
         const pick_result = fzf.pickLspLocation(self.allocator, locations) catch |e| {
-            log.err(@This(), "{}\n", .{e});
-            if (@errorReturnTrace()) |trace| log.errPrint("{f}\n", .{trace.*});
+            log.err(@This(), "{}\n", .{e}, @errorReturnTrace());
             return;
         };
         defer self.allocator.free(pick_result.path);
