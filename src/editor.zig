@@ -34,9 +34,7 @@ pub const Config = struct {
     pub const number_line_mode: NumberLineMode = .relative;
     /// In buffers with TS indent support, autoindent inserted newline
     pub const indent_newline: bool = true;
-    /// In buffers with TS indent support, reindent current line upon insertion of one of `reindent_block_end_chars`
-    pub const reindent_block_end: bool = true;
-
+    /// In buffers with TS indent support, reindent current line upon insertion of one of these chars
     pub const reindent_block_end_chars: []const u21 = &.{ '}', ']', ')' };
 };
 
