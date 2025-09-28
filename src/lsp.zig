@@ -163,7 +163,7 @@ pub const LspConnection = struct {
         defer arena.deinit();
 
         for (raw_msgs) |raw_msg_json| {
-            const msg_json = try std.json.parseFromSlice(lsp.JsonRPCMessage, arena.allocator(), raw_msg_json, .{});
+            const msg_json = try std.json.parseFromSlice(lsp.JsonRPCMessage, arena.allocator(), raw_msg_json, parse_opts);
             defer msg_json.deinit();
             const rpc_message: lsp.JsonRPCMessage = msg_json.value;
             switch (rpc_message) {
@@ -201,7 +201,7 @@ pub const LspConnection = struct {
                 .notification => |notif| {
                     log.trace(@This(), "< raw notification: {s}\n", .{raw_msg_json});
                     if (std.mem.eql(u8, notif.method, "window/logMessage")) {
-                        const params_typed = try std.json.parseFromValue(types.LogMessageParams, arena.allocator(), notif.params.?, .{});
+                        const params_typed = try std.json.parseFromValue(types.LogMessageParams, arena.allocator(), notif.params.?, parse_opts);
                         log.debug(@This(), "server log: {s}\n", .{params_typed.value.message});
                     } else if (std.mem.eql(u8, notif.method, "textDocument/publishDiagnostics")) {
                         try self.handlePublishDiagnosticsNotification(arena.allocator(), notif);
@@ -398,7 +398,7 @@ pub const LspConnection = struct {
             .method = method,
             .params = params,
         };
-        const json_message = try std.json.Stringify.valueAlloc(self.allocator, request, default_stringify_opts);
+        const json_message = try std.json.Stringify.valueAlloc(self.allocator, request, stringify_opts);
         log.trace(@This(), "> raw request: {s}\n", .{json_message});
         try self.stdin_writer.interface.print("Content-Length: {}\r\n\r\n{s}", .{ json_message.len, json_message });
         try self.stdin_writer.interface.flush();
@@ -419,7 +419,7 @@ pub const LspConnection = struct {
             .method = method,
             .params = params,
         };
-        const json_message = try std.json.Stringify.valueAlloc(self.allocator, request, default_stringify_opts);
+        const json_message = try std.json.Stringify.valueAlloc(self.allocator, request, stringify_opts);
         defer self.allocator.free(json_message);
         log.trace(@This(), "> raw notification: {s}\n", .{json_message});
         try self.stdin_writer.interface.print("Content-Length: {}\r\n\r\n{s}", .{ json_message.len, json_message });
@@ -440,7 +440,7 @@ pub const LspConnection = struct {
             .id = id,
             .result_or_error = .{ .result = result },
         };
-        const json_message = try std.json.Stringify.valueAlloc(self.allocator, request, default_stringify_opts);
+        const json_message = try std.json.Stringify.valueAlloc(self.allocator, request, stringify_opts);
         defer self.allocator.free(json_message);
         log.trace(@This(), "> raw response: {s}\n", .{json_message});
         try self.stdin_writer.interface.print("Content-Length: {}\r\n\r\n{s}", .{ json_message.len, json_message });
@@ -449,7 +449,7 @@ pub const LspConnection = struct {
 
     fn handleInitializeResponse(self: *LspConnection, arena: Allocator, resp: ?std.json.Value) !void {
         if (resp == null or resp.? == .null) return;
-        self.server_init = try std.json.parseFromValue(types.InitializeResult, self.allocator, resp.?, .{});
+        self.server_init = try std.json.parseFromValue(types.InitializeResult, self.allocator, resp.?, parse_opts);
         log.debug(@This(), "server capabilities: {f}\n", .{std.json.fmt(self.server_init.?.value.capabilities, .{})});
 
         self.status = .initialized;
@@ -460,7 +460,7 @@ pub const LspConnection = struct {
         }
 
         if (self.config.settings) |settings| {
-            const parsed = try std.json.parseFromSlice(std.json.Value, arena, settings, .{});
+            const parsed = try std.json.parseFromSlice(std.json.Value, arena, settings, parse_opts);
             try self.sendNotification("workspace/didChangeConfiguration", .{ .settings = parsed.value });
         }
     }
@@ -471,7 +471,7 @@ pub const LspConnection = struct {
             Definition: types.Definition,
             array_of_DefinitionLink: []const types.DefinitionLink,
         };
-        const resp_typed = try lsp.parser.UnionParser(ResponseType).jsonParseFromValue(arena, resp.?, .{});
+        const resp_typed = try lsp.parser.UnionParser(ResponseType).jsonParseFromValue(arena, resp.?, parse_opts);
         log.debug(@This(), "got definition response: {}\n", .{resp_typed});
 
         const location = b: switch (resp_typed.Definition) {
@@ -496,7 +496,7 @@ pub const LspConnection = struct {
 
     fn handleFindReferencesResponse(self: *LspConnection, arena: Allocator, resp: ?std.json.Value) !void {
         if (resp == null or resp.? == .null) return;
-        const resp_typed = try std.json.parseFromValue([]const types.Location, arena, resp.?, .{});
+        const resp_typed = try std.json.parseFromValue([]const types.Location, arena, resp.?, parse_opts);
         const locations = resp_typed.value;
         log.debug(@This(), "got reference locations: {any}\n", .{locations});
         const pick_result = fzf.pickLspLocation(self.allocator, locations) catch |e| {
@@ -519,7 +519,7 @@ pub const LspConnection = struct {
 
         const items: []const types.CompletionItem = b: {
             const empty = [_]types.CompletionItem{};
-            const resp_typed = lsp.parser.UnionParser(ResponseType).jsonParseFromValue(arena, resp.?, .{}) catch break :b &empty;
+            const resp_typed = lsp.parser.UnionParser(ResponseType).jsonParseFromValue(arena, resp.?, parse_opts) catch break :b &empty;
             switch (resp_typed) {
                 .array_of_CompletionItem => |a| break :b a,
                 .CompletionList => |l| break :b l.items,
@@ -536,7 +536,7 @@ pub const LspConnection = struct {
     fn handleHoverResponse(self: *LspConnection, arena: Allocator, resp: ?std.json.Value) !void {
         _ = self;
         if (resp == null or resp.? == .null) return;
-        const result = try std.json.parseFromValue(types.Hover, arena, resp.?, .{});
+        const result = try std.json.parseFromValue(types.Hover, arena, resp.?, parse_opts);
         const contents = switch (result.value.contents) {
             .MarkupContent => |c| c.value,
             // deprecated
@@ -552,14 +552,14 @@ pub const LspConnection = struct {
     fn handleRenameResponse(self: *LspConnection, arena: Allocator, resp: ?std.json.Value) !void {
         _ = self;
         if (resp == null or resp.? == .null) return;
-        const result = try std.json.parseFromValue(types.WorkspaceEdit, arena, resp.?, .{});
+        const result = try std.json.parseFromValue(types.WorkspaceEdit, arena, resp.?, parse_opts);
         main.main_loop_mutex.lock();
         defer main.main_loop_mutex.unlock();
         try main.editor.applyWorkspaceEdit(result.value);
     }
 
     fn handlePublishDiagnosticsNotification(self: *LspConnection, arena: Allocator, notif: lsp.JsonRPCMessage.Notification) !void {
-        const params_typed = try std.json.parseFromValue(types.PublishDiagnosticsParams, arena, notif.params.?, .{});
+        const params_typed = try std.json.parseFromValue(types.PublishDiagnosticsParams, arena, notif.params.?, parse_opts);
         if (main.editor.findBufferByUri(params_typed.value.uri)) |buffer| {
             buffer.clearDiagnostics();
             for (params_typed.value.diagnostics) |diagnostic| {
@@ -574,7 +574,7 @@ pub const LspConnection = struct {
     }
 
     fn handleConfigurationRequest(self: *LspConnection, arena: Allocator, request: lsp.JsonRPCMessage.Request) !void {
-        const params = (try std.json.parseFromValue(types.ConfigurationParams, arena, request.params.?, .{})).value;
+        const params = (try std.json.parseFromValue(types.ConfigurationParams, arena, request.params.?, parse_opts)).value;
         var response = try std.array_list.Managed(std.json.Value).initCapacity(arena, params.items.len);
         for (params.items) |_| {
             try response.append(std.json.Value.null);
@@ -582,7 +582,8 @@ pub const LspConnection = struct {
         try self.sendResponse("workspace/configuration", request.id, response.items);
     }
 
-    const default_stringify_opts = std.json.Stringify.Options{ .emit_null_optional_fields = false };
+    const parse_opts = std.json.ParseOptions{ .ignore_unknown_fields = true };
+    const stringify_opts = std.json.Stringify.Options{ .emit_null_optional_fields = false };
 };
 
 var request_id: i64 = 0;
