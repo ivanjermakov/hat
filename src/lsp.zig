@@ -50,6 +50,11 @@ pub const lsp_config = [_]LspConfig{
         \\}
         ,
     },
+    LspConfig{
+        .name = "lua_ls",
+        .cmd = &.{"lua-language-server"},
+        .file_types = &.{"lua"},
+    },
 };
 
 pub const LspConfig = struct {

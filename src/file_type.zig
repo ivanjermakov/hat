@@ -16,6 +16,7 @@ pub const file_type = std.StaticStringMap(FileTypeConfig).initComptime(.{
     .{ ".json", FileTypeConfig{ .name = "json", .ts = .init("json") } },
     .{ ".html", FileTypeConfig{ .name = "html", .ts = .init("html") } },
     .{ ".css", FileTypeConfig{ .name = "css", .ts = .init("css") } },
+    .{ ".lua", FileTypeConfig{ .name = "lua", .ts = .init("lua") } },
 });
 
 pub const FileTypeConfig = struct {
