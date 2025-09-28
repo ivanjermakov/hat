@@ -603,6 +603,7 @@ pub const Buffer = struct {
             return 0;
         }
         var node = n.?;
+        const indent_row: usize = @intCast(self.posToCursor(ts.ts.ts_node_start_byte(node)).row);
 
         var indent: i32 = 0;
         var processed_rows = std.AutoHashMap(usize, void).init(self.allocator);
@@ -622,7 +623,7 @@ pub const Buffer = struct {
                 log.trace(@This(), "capture {s} [{}-{}]\n", .{ capture_name, span.start, span.end });
 
                 if (processed_rows.contains(@intCast(pos.start.row))) break :c;
-                if (pos.start.row != pos.end.row and pos.start.row != row and std.mem.eql(u8, capture_name, "indent.begin")) {
+                if (pos.start.row != pos.end.row and pos.start.row != indent_row and std.mem.eql(u8, capture_name, "indent.begin")) {
                     indent += 1;
                     try processed_rows.put(@intCast(pos.start.row), {});
                 } else if (std.mem.eql(u8, capture_name, "indent.end") or std.mem.eql(u8, capture_name, "indent.branch")) {
