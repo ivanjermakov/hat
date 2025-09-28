@@ -222,7 +222,7 @@ pub const Terminal = struct {
                         const span = diagnostic.span;
 
                         if (span.inRange(.{ .row = buffer_row, .col = buffer_col })) {
-                            try co.Attribute.writeSlice(co.Attribute.diagnostic_error, &attrs_writer);
+                            try co.Attribute.writeSlice(co.Attribute.diagnosticSeverity(diagnostic.severity), &attrs_writer);
                             break;
                         }
                     }

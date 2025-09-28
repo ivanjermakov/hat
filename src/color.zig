@@ -1,4 +1,5 @@
 const std = @import("std");
+const lsp = @import("lsp");
 
 pub const RgbColor = struct {
     r: u8,
@@ -85,17 +86,29 @@ pub const Attribute = union(enum) {
     pub const string = &[_]Attribute{.{ .fg = color.green }};
     pub const literal = &[_]Attribute{.{ .fg = color.yellow }};
     pub const comment = &[_]Attribute{.{ .fg = color.gray7 }};
-    pub const diagnostic_error = &[_]Attribute{ .curly_underline, .{ .underline = color.red } };
     pub const completion_menu = &[_]Attribute{.{ .bg = color.gray2 }};
     pub const completion_menu_active = &[_]Attribute{.{ .bg = color.gray4 }};
     pub const overlay = &[_]Attribute{.{ .bg = color.gray2 }};
     pub const message = &[_]Attribute{.{ .bg = color.gray2 }};
     pub const command_line = &[_]Attribute{.{ .bg = color.gray2 }};
     pub const number_line = &[_]Attribute{.{ .fg = color.gray4 }};
+    pub const diagnostic_error = &[_]Attribute{ .curly_underline, .{ .underline = color.red } };
+    pub const diagnostic_warn = &[_]Attribute{ .curly_underline, .{ .underline = color.yellow } };
+    pub const diagnostic_info = &[_]Attribute{ .curly_underline, .{ .underline = color.magenta } };
+    pub const diagnostic_hint = &[_]Attribute{ .{ .fg = color.gray6 } };
 
     pub fn writeSlice(attrs: []const Attribute, writer: *std.io.Writer) !void {
         for (attrs) |attr| {
             try attr.write(writer);
         }
+    }
+
+    pub fn diagnosticSeverity(severity: lsp.types.DiagnosticSeverity) []const Attribute {
+        return switch (severity) {
+            .Warning => diagnostic_warn,
+            .Information => diagnostic_info,
+            .Hint => diagnostic_hint,
+            else => diagnostic_error,
+        };
     }
 };
