@@ -234,8 +234,8 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                                 try buffer.changeInsertText(try printable.toOwnedSlice(allocator));
                                 try buffer.indentEmptyLine();
                             }
-                            if (edi.Config.reindent_block_end and
-                                std.mem.containsAtLeastScalar(u21, edi.Config.reindent_block_end_chars, 1, next_key.?.printable.?))
+                            if (edi.Config.reindent_block_end_chars != null and
+                                std.mem.containsAtLeastScalar(u21, edi.Config.reindent_block_end_chars.?, 1, next_key.?.printable.?))
                             {
                                 try buffer.changeInsertText(try printable.toOwnedSlice(allocator));
                                 try buffer.changeAlignIndent();
