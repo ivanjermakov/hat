@@ -138,7 +138,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
         _ = timer.lap();
         _ = timer_total.lap();
 
-        editor.updateInput() catch |e| log.err(@This(), "update input error: {}\n", .{e});
+        editor.updateInput() catch |e| log.err(@This(), "update input error: {}\n", .{e}, @errorReturnTrace());
         perf.input = timer.lap();
 
         const eql = std.mem.eql;
@@ -192,7 +192,8 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                 // command line menu
                 if (cmd_active) {
                     if (eql(u8, key, "\n")) {
-                        editor.handleCmd() catch |e| log.err(@This(), "handle cmd error: {}\n", .{e});
+                        editor.handleCmd() catch |e|
+                            log.err(@This(), "handle cmd error: {}\n", .{e}, @errorReturnTrace());
                     } else if (cmd_active and eql(u8, key, "<escape>")) {
                         editor.command_line.close();
                     } else if (cmd_active and eql(u8, key, "<left>")) {
@@ -209,7 +210,8 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
 
                     // code action menu
                 } else if (code_action) |action| {
-                    buffer.codeActionExecute(action) catch |e| log.err(@This(), "code action exec error: {}\n", .{e});
+                    buffer.codeActionExecute(action) catch |e|
+                        log.err(@This(), "code action exec error: {}\n", .{e}, @errorReturnTrace());
 
                     // cmp_menu
                 } else if (cmp_menu_active and eql(u8, key, "<up>")) {
@@ -217,7 +219,8 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                 } else if (cmp_menu_active and eql(u8, key, "<down>")) {
                     editor.completion_menu.nextItem();
                 } else if (cmp_menu_active and eql(u8, key, "\n")) {
-                    editor.completion_menu.accept() catch |e| log.err(@This(), "cmp accept error: {}\n", .{e});
+                    editor.completion_menu.accept() catch |e|
+                        log.err(@This(), "cmp accept error: {}\n", .{e}, @errorReturnTrace());
 
                     // text insertion
                 } else if (buffer.mode == .insert and editor.key_queue.items[0].printable != null) {
@@ -326,7 +329,8 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     try buffer.enterMode(.insert);
                 } else if (normal_or_select and (eql(u8, key, "d") or eql(u8, key, "~"))) {
                     if (eql(u8, key, "d")) {
-                        buffer.copySelectionToClipboard() catch |e| log.err(@This(), "copy to clipboard error: {}\n", .{e});
+                        buffer.copySelectionToClipboard() catch |e|
+                            log.err(@This(), "copy to clipboard error: {}\n", .{e}, @errorReturnTrace());
                     }
                     try buffer.changeSelectionDelete();
                     try buffer.enterMode(.normal);
@@ -336,7 +340,8 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     try buffer.commitChanges();
                     try buffer.enterMode(.normal);
                 } else if (normal_or_select and eql(u8, key, "y")) {
-                    buffer.copySelectionToClipboard() catch |e| log.err(@This(), "copy to clipboard error: {}\n", .{e});
+                    buffer.copySelectionToClipboard() catch |e|
+                        log.err(@This(), "copy to clipboard error: {}\n", .{e}, @errorReturnTrace());
                     try buffer.enterMode(.normal);
                 } else if (normal_or_select and (eql(u8, key, "p") or eql(u8, key, "P"))) {
                     if (clp.read(allocator)) |text| {
@@ -373,7 +378,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                         try buffer.commitChanges();
                         try buffer.enterMode(.normal);
                     } else |e| {
-                        log.err(@This(), "paste from clipboard error: {}\n", .{e});
+                        log.err(@This(), "paste from clipboard error: {}\n", .{e}, @errorReturnTrace());
                     }
                 } else if (normal_or_select and eql(u8, key, "z")) {
                     buffer.centerCursor();
@@ -427,7 +432,8 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                     // normal mode
                 } else if (normal_or_select and (eql(u8, key, "q") or eql(u8, key, "Q"))) {
                     const force = eql(u8, key, "Q");
-                    editor.closeBuffer(force) catch |e| log.err(@This(), "close buffer error: {}\n", .{e});
+                    editor.closeBuffer(force) catch |e|
+                        log.err(@This(), "close buffer error: {}\n", .{e}, @errorReturnTrace());
                     if (editor.buffers.items.len == 0) break :main_loop;
                 } else if (buffer.mode == .normal and eql(u8, key, "v")) {
                     try buffer.enterMode(.select);
@@ -471,7 +477,8 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                 } else if (buffer.mode == .normal and eql(u8, key, "\t")) {
                     if (editor.buffers.items.len > 1) {
                         const uri = editor.buffers.items[1].uri;
-                        editor.openBuffer(uri) catch |e| log.err(@This(), "open buffer {s} error: {}\n", .{ uri, e });
+                        editor.openBuffer(uri) catch |e|
+                            log.err(@This(), "open buffer {s} error: {}\n", .{ uri, e }, @errorReturnTrace());
                     }
                 } else if (buffer.mode == .normal and eql(u8, key, ".")) {
                     try editor.dotRepeat(keys_consumed);
@@ -486,19 +493,25 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                 } else if (buffer.mode == .normal and eql(u8, key, "X")) {
                     try buffer.findNextDiagnostic(false);
                 } else if (buffer.mode == .normal and eql(u8, key, "r") and editor.recording_macro != null) {
-                    editor.recordMacro() catch |e| log.err(@This(), "record macro error: {}\n", .{e});
+                    editor.recordMacro() catch |e|
+                        log.err(@This(), "record macro error: {}\n", .{e}, @errorReturnTrace());
                 } else if (buffer.mode == .normal and eql(u8, key, "<c-n>")) {
-                    editor.pickFile() catch |e| log.err(@This(), "pick file error: {}\n", .{e});
+                    editor.pickFile() catch |e|
+                        log.err(@This(), "pick file error: {}\n", .{e}, @errorReturnTrace());
                 } else if (buffer.mode == .normal and eql(u8, key, "<c-f>")) {
-                    editor.findInFiles() catch |e| log.err(@This(), "find in files error: {}\n", .{e});
+                    editor.findInFiles() catch |e|
+                        log.err(@This(), "find in files error: {}\n", .{e}, @errorReturnTrace());
                 } else if (buffer.mode == .normal and eql(u8, key, "<c-e>")) {
-                    editor.pickBuffer() catch |e| log.err(@This(), "pick buffer error: {}\n", .{e});
+                    editor.pickBuffer() catch |e|
+                        log.err(@This(), "pick buffer error: {}\n", .{e}, @errorReturnTrace());
                 } else if (buffer.mode == .normal and eql(u8, key, "<c-d>")) {
                     if (editor.hover_contents) |hover| {
-                        editor.openScratch(hover) catch |e| log.err(@This(), "open scratch error: {}\n", .{e});
+                        editor.openScratch(hover) catch |e|
+                            log.err(@This(), "open scratch error: {}\n", .{e}, @errorReturnTrace());
                     } else {
                         for (buffer.lsp_connections.items) |conn| {
-                            conn.hover() catch |e| log.err(@This(), "show hover LSP error: {}\n", .{e});
+                            conn.hover() catch |e|
+                                log.err(@This(), "show hover LSP error: {}\n", .{e}, @errorReturnTrace());
                         }
                     }
                 } else if (buffer.mode == .normal and (eql(u8, key, "D") or eql(u8, key, "C"))) {
@@ -538,29 +551,33 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
 
                     if (buffer.mode == .normal and eql(u8, multi_key, " w")) {
                         buffer.write() catch |e| {
-                            log.err(@This(), "write buffer error: {}\n", .{e});
+                            log.err(@This(), "write buffer error: {}\n", .{e}, @errorReturnTrace());
                             try editor.sendMessageFmt("write buffer error: {}", .{e});
                         };
                         try editor.sendMessageFmt("write \"{s}\" {}B", .{ buffer.path, buffer.content_raw.items.len });
                     } else if (buffer.mode == .normal and eql(u8, multi_key, " d")) {
                         for (buffer.lsp_connections.items) |conn| {
-                            conn.goToDefinition() catch |e| log.err(@This(), "go to def LSP error: {}\n", .{e});
+                            conn.goToDefinition() catch |e|
+                                log.err(@This(), "go to def LSP error: {}\n", .{e}, @errorReturnTrace());
                         }
                     } else if (buffer.mode == .normal and eql(u8, multi_key, " r")) {
                         for (buffer.lsp_connections.items) |conn| {
-                            conn.findReferences() catch |e| log.err(@This(), "find references LSP error: {}\n", .{e});
+                            conn.findReferences() catch |e|
+                                log.err(@This(), "find references LSP error: {}\n", .{e}, @errorReturnTrace());
                         }
                     } else if (buffer.mode == .normal and eql(u8, multi_key, " n")) {
                         try buffer.renamePrompt();
                     } else if (buffer.mode == .normal and eql(u8, multi_key, " l")) {
                         for (buffer.lsp_connections.items) |conn| {
-                            conn.format() catch |e| log.err(@This(), "format LSP error: {}", .{e});
+                            conn.format() catch |e|
+                                log.err(@This(), "format LSP error: {}", .{e}, @errorReturnTrace());
                         }
                     } else if (buffer.mode == .normal and eql(u8, multi_key, " f")) {
                         try buffer.findSymbols();
                     } else if (buffer.mode == .normal and eql(u8, multi_key, " c")) {
                         for (buffer.lsp_connections.items) |conn| {
-                            conn.codeAction() catch |e| log.err(@This(), "code action LSP error: {}", .{e});
+                            conn.codeAction() catch |e|
+                                log.err(@This(), "code action LSP error: {}", .{e}, @errorReturnTrace());
                         }
                     } else if (buffer.mode == .normal and eql(u8, key, "r") and key2.printable != null) {
                         const macro_name: u8 = @intCast(key2.printable.?);
@@ -625,10 +642,12 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
             buffer.version += 1;
             buffer.clearDiagnostics();
             try buffer.reparse();
-            buffer.updateGitHunks() catch |e| log.err(@This(), "git hunk update error: {}", .{e});
+            buffer.updateGitHunks() catch |e|
+                log.err(@This(), "git hunk update error: {}", .{e}, @errorReturnTrace());
             perf.parse = timer.lap();
             for (buffer.lsp_connections.items) |conn| {
-                conn.didChange(editor.active_buffer) catch |e| log.err(@This(), "did change LSP error: {}\n", .{e});
+                conn.didChange(editor.active_buffer) catch |e|
+                    log.err(@This(), "did change LSP error: {}\n", .{e}, @errorReturnTrace());
             }
             for (buffer.pending_changes.items) |*change| change.deinit();
             buffer.pending_changes.clearRetainingCapacity();
@@ -640,10 +659,11 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
 
         if (editor.dirty.draw) {
             editor.dirty.draw = false;
-            term.draw() catch |e| log.err(@This(), "draw error: {}\n", .{e});
+            term.draw() catch |e| log.err(@This(), "draw error: {}\n", .{e}, @errorReturnTrace());
         } else if (editor.dirty.cursor) {
             editor.dirty.cursor = false;
-            term.updateCursor() catch |e| log.err(@This(), "update cursor error: {}\n", .{e});
+            term.updateCursor() catch |e|
+                log.err(@This(), "update cursor error: {}\n", .{e}, @errorReturnTrace());
 
             if (buffer.highlights.items.len > 0) {
                 buffer.highlights.clearRetainingCapacity();
@@ -657,17 +677,20 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                 editor.dirty.draw = true;
             }
             for (buffer.lsp_connections.items) |conn| {
-                conn.highlight() catch |e| log.err(@This(), "highlight LSP error: {}\n", .{e});
+                conn.highlight() catch |e|
+                    log.err(@This(), "highlight LSP error: {}\n", .{e}, @errorReturnTrace());
             }
 
-            term.updateCursor() catch |e| log.err(@This(), "update cursor error: {}\n", .{e});
+            term.updateCursor() catch |e|
+                log.err(@This(), "update cursor error: {}\n", .{e}, @errorReturnTrace());
         }
         perf.draw = timer.lap();
 
         if (editor.dirty.completion) {
             editor.dirty.completion = false;
             for (buffer.lsp_connections.items) |conn| {
-                conn.sendCompletionRequest() catch |e| log.err(@This(), "cmp request LSP error: {}\n", .{e});
+                conn.sendCompletionRequest() catch |e|
+                    log.err(@This(), "cmp request LSP error: {}\n", .{e}, @errorReturnTrace());
             }
         }
         if (editor.dot_repeat_state == .commit_ready) {
@@ -676,11 +699,12 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
         perf.commit = timer.lap();
 
         if (buffer.syncFs() catch |e| b: {
-            log.err(@This(), "sync fs error: {}\n", .{e});
+            log.err(@This(), "sync fs error: {}\n", .{e}, @errorReturnTrace());
             break :b false;
         }) {
             try editor.sendMessage("external buffer modification");
-            buffer.changeFsExternal() catch |e| log.err(@This(), "external change fs error: {}\n", .{e});
+            buffer.changeFsExternal() catch |e|
+                log.err(@This(), "external change fs error: {}\n", .{e}, @errorReturnTrace());
         }
         perf.sync = timer.lap();
 

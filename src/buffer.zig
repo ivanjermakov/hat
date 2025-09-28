@@ -118,8 +118,7 @@ pub const Buffer = struct {
         try self.updateLinePositions();
         if (self.file_type.ts) |ts_conf| {
             self.ts_state = ts.State.init(allocator, ts_conf) catch |e| b: {
-                log.err(@This(), "failed to init TsState: {}\n", .{e});
-                if (@errorReturnTrace()) |trace| log.errPrint("{f}\n", .{trace.*});
+                log.err(@This(), "failed to init TsState: {}\n", .{e}, @errorReturnTrace());
                 break :b null;
             };
         }
@@ -144,8 +143,7 @@ pub const Buffer = struct {
         try self.updateLinePositions();
         if (self.file_type.ts) |ts_conf| {
             self.ts_state = ts.State.init(allocator, ts_conf) catch |e| b: {
-                log.err(@This(), "failed to init TsState: {}\n", .{e});
-                if (@errorReturnTrace()) |trace| log.errPrint("{f}\n", .{trace.*});
+                log.err(@This(), "failed to init TsState: {}\n", .{e}, @errorReturnTrace());
                 break :b null;
             };
         }
@@ -154,10 +152,7 @@ pub const Buffer = struct {
     }
 
     pub fn reparse(self: *Buffer) FatalError!void {
-        self.updateRaw() catch |e| {
-            log.err(@This(), "{}\n", .{e});
-            if (@errorReturnTrace()) |trace| log.errPrint("{f}\n", .{trace.*});
-        };
+        self.updateRaw() catch |e| log.err(@This(), "{}\n", .{e}, @errorReturnTrace());
         if (self.ts_state) |*ts_state| try ts_state.reparse(self.content_raw.items);
         try self.updateLinePositions();
     }
@@ -512,7 +507,7 @@ pub const Buffer = struct {
 
         if (edi.Config.autosave and self.git_root != null) {
             log.debug(@This(), "autosave {s}\n", .{self.path});
-            self.write() catch |e| log.err(@This(), "write buffer error: {}", .{e});
+            self.write() catch |e| log.err(@This(), "write buffer error: {}", .{e}, @errorReturnTrace());
         }
     }
 
@@ -703,7 +698,7 @@ pub const Buffer = struct {
             self.history_index = if (h_idx > 0) h_idx - 1 else null;
 
             if (edi.Config.autosave and self.git_root != null) {
-                self.write() catch |e| log.err(@This(), "write buffer error: {}", .{e});
+                self.write() catch |e| log.err(@This(), "write buffer error: {}", .{e}, @errorReturnTrace());
                 log.debug(@This(), "autosave {s}\n", .{self.path});
             }
         }
@@ -723,7 +718,7 @@ pub const Buffer = struct {
         self.history_index = redo_idx;
 
         if (edi.Config.autosave and self.git_root != null) {
-            self.write() catch |e| log.err(@This(), "write buffer error: {}", .{e});
+            self.write() catch |e| log.err(@This(), "write buffer error: {}", .{e}, @errorReturnTrace());
             log.debug(@This(), "autosave {s}\n", .{self.path});
         }
     }
@@ -807,8 +802,7 @@ pub const Buffer = struct {
                     log.debug(@This(), "symbol span: {s}\n", .{symbol_name});
                 }
                 const pick_result = fzf.pickSymbol(self.allocator, self, parse_result.spans.items) catch |e| {
-                    log.err(@This(), "{}\n", .{e});
-                    if (@errorReturnTrace()) |trace| std.debug.dumpStackTrace(trace.*);
+                    log.err(@This(), "{}\n", .{e}, @errorReturnTrace());
                     return;
                 };
                 defer self.allocator.free(pick_result.path);
@@ -859,8 +853,7 @@ pub const Buffer = struct {
         var exit_code: u8 = undefined;
         const opts = ext.RunOptions{ .input = in_b, .exit_code = &exit_code };
         const out_b = ext.runExternalWait(self.allocator, &.{ "sh", "-c", command_b }, opts) catch |e| {
-            log.err(@This(), "{}\n", .{e});
-            if (@errorReturnTrace()) |trace| log.errPrint("{f}\n", .{trace.*});
+            log.err(@This(), "{}\n", .{e}, @errorReturnTrace());
             return;
         };
         defer self.allocator.free(out_b);

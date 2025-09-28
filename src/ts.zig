@@ -234,7 +234,7 @@ fn queryNew(language: *ts.struct_TSLanguage, query_str: []const u8) !?*ts.TSQuer
     var err_offset: u32 = undefined;
     const query = ts.ts_query_new(language, query_str.ptr, @intCast(query_str.len), &err_offset, &err);
     if (err > 0) {
-        log.err(@This(), "query error position: {}\n", .{err_offset});
+        log.err(@This(), "query error position: {}\n", .{err_offset}, null);
         if (log.enabled(.trace)) {
             if (err_offset < query_str.len) {
                 log.errPrint("{s}\n^\n", .{query_str[err_offset..@min(err_offset + 10, query_str.len)]});
