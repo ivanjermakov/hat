@@ -65,9 +65,6 @@ Hat is a **ha**ckable modal **t**ext editor for modern terminals.
 
 ## Philosophy
 
-Based on [suckless](https://suckless.org/philosophy/) and
-[unix](https://en.wikipedia.org/wiki/Unix_philosophy) philosophies.
-
 Software is:
 - doing not more and not less than what the user needs
     * Every feature is implemented in the most simple and straightforward form: keep it simple, fast, and clear
@@ -78,9 +75,11 @@ Software is:
 - distributed as source code, compiled by the user
 - not meant to be developed forever and its final state should be described by its feature set from
 the beginning
-- extended either by the user directly or by applying
-[source code patches](https://en.wikipedia.org/wiki/Patch_(computing)#Source_code_patching), distributed as diff files
+- extended either by the user directly, or by applying [source code patches](https://en.wikipedia.org/wiki/Patch_(computing)#Source_code_patching)
+distributed as diff files
     * It is encouraged to share your extensions with others who can find it useful
+
+See [Hackable software](http://blog.ivnj.org/post/hackable-software.html) for details.
 
 ## Build, install, usage, configuration
 
