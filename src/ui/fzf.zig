@@ -3,7 +3,7 @@ const Allocator = std.mem.Allocator;
 
 const buf = @import("../buffer.zig");
 const col = @import("../color.zig");
-const Color = col.Color;
+const Color = col.color;
 const core = @import("../core.zig");
 const Cursor = core.Cursor;
 const ext = @import("../external.zig");

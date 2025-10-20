@@ -109,8 +109,7 @@ pub const Buffer = struct {
         try self.updateLinePositions();
         if (self.file_type.ts) |ts_conf| {
             self.ts_state = ts.State.init(allocator, ts_conf) catch |e| b: {
-                log.err(@This(), "failed to init TsState: {}\n", .{e});
-                if (@errorReturnTrace()) |trace| log.errPrint("{f}\n", .{trace.*});
+                log.err(@This(), "failed to init TsState: {}\n", .{e}, @errorReturnTrace());
                 break :b null;
             };
         }
@@ -135,8 +134,7 @@ pub const Buffer = struct {
         try self.updateLinePositions();
         if (self.file_type.ts) |ts_conf| {
             self.ts_state = ts.State.init(allocator, ts_conf) catch |e| b: {
-                log.err(@This(), "failed to init TsState: {}\n", .{e});
-                if (@errorReturnTrace()) |trace| log.errPrint("{f}\n", .{trace.*});
+                log.err(@This(), "failed to init TsState: {}\n", .{e}, @errorReturnTrace());
                 break :b null;
             };
         }
@@ -145,10 +143,7 @@ pub const Buffer = struct {
     }
 
     pub fn reparse(self: *Buffer) FatalError!void {
-        self.updateRaw() catch |e| {
-            log.err(@This(), "{}\n", .{e});
-            if (@errorReturnTrace()) |trace| log.errPrint("{f}\n", .{trace.*});
-        };
+        self.updateRaw() catch |e| log.err(@This(), "{}\n", .{e}, @errorReturnTrace());
         if (self.ts_state) |*ts_state| try ts_state.reparse(self.content_raw.items);
         try self.updateLinePositions();
     }
@@ -776,8 +771,7 @@ pub const Buffer = struct {
         var exit_code: u8 = undefined;
         const opts = ext.RunOptions{ .input = in_b, .exit_code = &exit_code };
         const out_b = ext.runExternalWait(self.allocator, &.{ "sh", "-c", command_b }, opts) catch |e| {
-            log.err(@This(), "{}\n", .{e});
-            if (@errorReturnTrace()) |trace| log.errPrint("{f}\n", .{trace.*});
+            log.err(@This(), "{}\n", .{e}, @errorReturnTrace());
             return;
         };
         defer self.allocator.free(out_b);

@@ -163,7 +163,7 @@ pub const State = struct {
 
 pub const AttrsSpan = struct {
     span: SpanFlat,
-    attrs: []const col.Attr,
+    attrs: []const col.Attribute,
 
     /// Capture name is a dot-separated list of ts node types, forming hierarchy, e.g. `identifier.type`
     /// @see https://tree-sitter.github.io/tree-sitter/using-parsers/queries/2-operators.html#capturing-nodes
@@ -179,7 +179,7 @@ pub const AttrsSpan = struct {
     ///   * check `identifier.type`
     ///   * check `identifier`
     ///   * null
-    pub fn findAttrs(capture_name: []const u8) ?[]const col.Attr {
+    pub fn findAttrs(capture_name: []const u8) ?[]const col.Attribute {
         if (node_highlights_exact.get(capture_name)) |a| return a;
         if (node_highlights.get(capture_name)) |a| return a;
         if (!std.mem.containsAtLeastScalar(u8, capture_name, 1, '.')) return null;
@@ -195,16 +195,16 @@ pub const AttrsSpan = struct {
     }
 };
 
-pub const node_highlights = std.StaticStringMap([]const col.Attr).initComptime(.{
-    .{ "keyword", col.Attributes.keyword },
-    .{ "string", col.Attributes.string },
-    .{ "number", col.Attributes.literal },
-    .{ "boolean", col.Attributes.literal },
-    .{ "comment", col.Attributes.comment },
+pub const node_highlights = std.StaticStringMap([]const col.Attribute).initComptime(.{
+    .{ "keyword", col.Attribute.keyword },
+    .{ "string", col.Attribute.string },
+    .{ "number", col.Attribute.literal },
+    .{ "boolean", col.Attribute.literal },
+    .{ "comment", col.Attribute.comment },
 });
 
-pub const node_highlights_exact = std.StaticStringMap([]const col.Attr).initComptime(.{
-    .{ "tag", col.Attributes.keyword },
+pub const node_highlights_exact = std.StaticStringMap([]const col.Attribute).initComptime(.{
+    .{ "tag", col.Attribute.keyword },
 });
 
 pub fn firstSmallestDescendentInSpan(node: ts.TSNode, span: SpanFlat) ?ts.TSNode {
@@ -228,7 +228,7 @@ fn queryNew(language: *ts.struct_TSLanguage, query_str: []const u8) !?*ts.TSQuer
     var err_offset: u32 = undefined;
     const query = ts.ts_query_new(language, query_str.ptr, @intCast(query_str.len), &err_offset, &err);
     if (err > 0) {
-        log.err(@This(), "query error position: {}\n", .{err_offset});
+        log.err(@This(), "query error position: {}\n", .{err_offset}, null);
         if (log.enabled(.trace)) {
             if (err_offset < query_str.len) {
                 log.errPrint("{s}\n^\n", .{query_str[err_offset..@min(err_offset + 10, query_str.len)]});
