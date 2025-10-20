@@ -62,7 +62,7 @@ pub fn printBuffer(buffer: *buf.Buffer, writer: *std.io.Writer, highlight: ?High
             if (buffer.ts_state) |ts_state| {
                 if (ts_state.highlight) |hi| {
                     const highlight_spans = hi.spans.items;
-                    const ch_attrs: []const co.Attr = b: while (span_index < highlight_spans.len) {
+                    const ch_attrs: []const co.Attribute = b: while (span_index < highlight_spans.len) {
                         const span = highlight_spans[span_index];
                         if (span.span.start > byte) break :b co.attributes.text;
                         if (byte >= span.span.start and byte < span.span.end) {
@@ -72,12 +72,12 @@ pub fn printBuffer(buffer: *buf.Buffer, writer: *std.io.Writer, highlight: ?High
                     } else {
                         break :b co.attributes.text;
                     };
-                    try co.attributes.write(ch_attrs, &attrs_writer);
+                    try co.Attribute.writeSlice(ch_attrs, &attrs_writer);
                 }
             }
 
             const hi_line = highlight != null and row == highlight.?.highlight_line;
-            if (hi_line) try co.attributes.write(co.attributes.selection, &attrs_writer);
+            if (hi_line) try co.Attribute.writeSlice(co.Attribute.selection, &attrs_writer);
 
             attrs = attrs_writer.buffered();
             if (last_attrs == null or !std.mem.eql(u8, attrs, last_attrs.?)) {
