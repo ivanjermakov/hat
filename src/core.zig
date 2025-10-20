@@ -98,6 +98,10 @@ pub const SpanFlat = struct {
     pub fn fromRegex(match: reg.RegexMatch) SpanFlat {
         return .{ .start = match.getStartAt(0).?, .end = match.getEndAt(0).? };
     }
+
+    pub fn inRange(self: SpanFlat, pos: usize) bool {
+        return self.start <= pos and pos < self.end;
+    }
 };
 
 pub const Layout = struct {

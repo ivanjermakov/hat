@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = std.builtin;
 
 const co = @import("color.zig");
 const dt = @import("datetime.zig");
@@ -41,8 +42,9 @@ pub const Level = enum(u8) {
     }
 };
 
-pub fn err(comptime caller: type, comptime fmt: []const u8, args: anytype) void {
+pub fn err(comptime caller: type, comptime fmt: []const u8, args: anytype, stack_trace: ?*builtin.StackTrace) void {
     log(caller, .@"error", fmt, args);
+    if (stack_trace) |t| errPrint("{f}\n", .{t.*});
 }
 
 pub fn warn(comptime caller: type, comptime fmt: []const u8, args: anytype) void {
@@ -66,9 +68,9 @@ pub fn errPrint(comptime fmt: []const u8, args: anytype) void {
     log_writer.flush() catch {};
 }
 
-pub fn assertEql(comptime Caller: type, comptime T: type, actual: []const T, expected: []const T) void {
-    if (!std.mem.eql(T, actual, expected)) {
-        err(Caller, "assert failed:\n  actual: {any}\n  expected: {any}\n", .{ actual, expected });
+pub fn assertEql(comptime Caller: type, comptime T: type, expected: []const T, actual: []const T) void {
+    if (!std.mem.eql(T, expected, actual)) {
+        err(Caller, "assert failed:\n  expected: {any}\n  actual: {any}\n", .{ expected, actual }, null);
         unreachable;
     }
 }
@@ -77,24 +79,15 @@ pub fn enabled(lvl: Level) bool {
     return @intFromEnum(lvl) <= @intFromEnum(level);
 }
 
-pub fn init(writer: ?*std.io.Writer, target_level: ?Level) void {
-    if (writer) |w| log_writer = w;
-
-    if (target_level) |tl| {
-        level = tl;
-    } else {
-        if (std.posix.getenv(log_level_var)) |level_var| {
-            inline for (std.meta.fields(Level)) |l| {
-                if (std.mem.eql(u8, l.name, level_var)) {
-                    level = @enumFromInt(l.value);
-                    break;
-                }
+pub fn levelEnv() ?Level {
+    if (std.posix.getenv(log_level_var)) |level_var| {
+        inline for (std.meta.fields(Level)) |l| {
+            if (std.mem.eql(u8, l.name, level_var)) {
+                return @enumFromInt(l.value);
             }
-        } else {
-            level = .none;
         }
     }
-    info(@This(), "logging enabled, level: {f}\n", .{level});
+    return null;
 }
 
 fn log(comptime caller: type, comptime lvl: Level, comptime fmt: []const u8, args: anytype) void {
@@ -112,6 +105,7 @@ fn log(comptime caller: type, comptime lvl: Level, comptime fmt: []const u8, arg
 
 fn callerName(comptime caller: type) []const u8 {
     const caller_name_full = @typeName(caller);
+    // TODO: type function structs have trailing `)`, e.g. ts.ParseResult(ts.AttrsSpan) -> AttrsSpan)
     var caller_name_iter = std.mem.splitBackwardsScalar(u8, caller_name_full, '.');
     return caller_name_iter.next() orelse caller_name_full;
 }

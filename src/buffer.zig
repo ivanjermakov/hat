@@ -70,8 +70,6 @@ pub const Buffer = struct {
     /// Array list of byte start position of next line
     /// Length equals number of lines, last item means total buffer byte size
     line_byte_positions: std.array_list.Aligned(usize, null) = .empty,
-    /// Indent depth for each line
-    indents: std.array_list.Aligned(usize, null) = .empty,
     history: std.array_list.Aligned(std.array_list.Aligned(cha.Change, null), null) = .empty,
     history_index: ?usize = null,
     /// History index of the last file save
@@ -86,10 +84,12 @@ pub const Buffer = struct {
     allocator: Allocator,
 
     pub fn init(allocator: Allocator, uri: []const u8) !Buffer {
-        const buf_path = try allocator.dupe(u8, ur.extractPath(uri) orelse return error.InvalidUri);
+        const buf_path = try ur.toPath(allocator, uri);
+        log.debug(@This(), "file path: {s}\n", .{buf_path});
         errdefer allocator.free(buf_path);
         const file_ext = std.fs.path.extension(buf_path);
         const file_type = ft.file_type.get(file_ext) orelse ft.plain;
+        log.debug(@This(), "file type: {s}\n", .{file_type.name});
         const file = try std.fs.cwd().openFile(buf_path, .{});
 
         var self = Buffer{
@@ -108,7 +108,10 @@ pub const Buffer = struct {
         try self.updateContent();
         try self.updateLinePositions();
         if (self.file_type.ts) |ts_conf| {
-            self.ts_state = try ts.State.init(allocator, ts_conf);
+            self.ts_state = ts.State.init(allocator, ts_conf) catch |e| b: {
+                log.err(@This(), "failed to init TsState: {}\n", .{e}, @errorReturnTrace());
+                break :b null;
+            };
         }
         try self.reparse();
         return self;
@@ -130,17 +133,17 @@ pub const Buffer = struct {
         try self.updateContent();
         try self.updateLinePositions();
         if (self.file_type.ts) |ts_conf| {
-            self.ts_state = try ts.State.init(allocator, ts_conf);
+            self.ts_state = ts.State.init(allocator, ts_conf) catch |e| b: {
+                log.err(@This(), "failed to init TsState: {}\n", .{e}, @errorReturnTrace());
+                break :b null;
+            };
         }
         try self.reparse();
         return self;
     }
 
     pub fn reparse(self: *Buffer) FatalError!void {
-        self.updateRaw() catch |e| {
-            log.err(@This(), "{}\n", .{e});
-            if (@errorReturnTrace()) |trace| log.errPrint("{f}\n", .{trace.*});
-        };
+        self.updateRaw() catch |e| log.err(@This(), "{}\n", .{e}, @errorReturnTrace());
         if (self.ts_state) |*ts_state| try ts_state.reparse(self.content_raw.items);
         try self.updateLinePositions();
     }
@@ -169,7 +172,6 @@ pub const Buffer = struct {
 
         self.line_positions.deinit(self.allocator);
         self.line_byte_positions.deinit(self.allocator);
-        self.indents.deinit(self.allocator);
 
         for (self.history.items) |*i| {
             for (i.items) |*c| c.deinit();
@@ -189,7 +191,10 @@ pub const Buffer = struct {
         main.editor.resetHover();
 
         if (self.mode == mode) return;
-        if (self.mode == .insert) try self.commitChanges();
+        if (self.mode == .insert) {
+            try self.commitChanges();
+            self.moveCursor(self.cursor.applyOffset(.{ .col = -1 }));
+        }
 
         switch (mode) {
             .normal => {
@@ -199,14 +204,27 @@ pub const Buffer = struct {
             .select => {
                 const end_pos = self.cursorToPos(self.cursor) + 1;
                 self.selection = .{ .start = self.cursor, .end = self.posToCursor(end_pos) };
-                log.warn(@This(), "selection: {?}\n", .{self.selection});
+                log.debug(@This(), "selection: {?}\n", .{self.selection});
                 main.editor.dirty.draw = true;
             },
             .select_line => {
                 self.selection = self.lineSpan(@intCast(self.cursor.row));
                 main.editor.dirty.draw = true;
             },
-            .insert => self.clearSelection(),
+            .insert => {
+                self.clearSelection();
+
+                if (self.cursorToPos(self.cursor) + 1 >= self.content.items.len) {
+                    log.debug(@This(), "non-terminated line, needs newline\n", .{});
+                    var nl_change = try cha.Change.initInsert(
+                        self.allocator,
+                        self,
+                        self.posToCursor(if (self.content.items.len > 0) self.content.items.len - 1 else 0),
+                        &.{'\n'},
+                    );
+                    try self.appendChange(&nl_change);
+                }
+            },
         }
         if (mode != .normal) main.editor.dotRepeatInside();
         log.debug(@This(), "mode: {}->{}\n", .{ self.mode, mode });
@@ -350,7 +368,7 @@ pub const Buffer = struct {
             if (col == 0) break;
             if (col != self.cursor.col) {
                 if (boundary(line[@intCast(col)], line[@intCast(col - 1)])) |b| {
-                    if (b == .wordEnd) break;
+                    if (b == .word_end) break;
                 }
             }
             col -= 1;
@@ -399,6 +417,58 @@ pub const Buffer = struct {
         }
     }
 
+    pub fn moveToMatchingPair(self: *Buffer) FatalError!void {
+        const candidates = edi.Config.matching_pair_chars orelse return;
+        const old_cursor = self.cursor;
+        const pos = self.cursorToPos(self.cursor);
+        var start_chars: [candidates.len]u21 = undefined;
+        for (candidates, 0..) |c, i| start_chars[i] = c[0];
+        var end_chars: [candidates.len]u21 = undefined;
+        for (candidates, 0..) |c, i| end_chars[i] = c[1];
+        const trigger_char = self.content.items[pos];
+        const pair_idx =
+            std.mem.indexOfScalar(u21, &start_chars, trigger_char) orelse
+            std.mem.indexOfScalar(u21, &end_chars, trigger_char) orelse return;
+        const pair = candidates[pair_idx];
+        const same = pair[0] == pair[1];
+        if (same or trigger_char == pair[0]) {
+            var level: i32 = 0;
+            for (pos..self.content.items.len) |p| {
+                if (p == pos) continue;
+                const ch = self.content.items[p];
+                if (ch == pair[1] and (same or level == 0)) {
+                    const cursor = self.posToCursor(p);
+                    self.moveCursor(cursor);
+                    if (self.selection == null) {
+                        self.selection = .{ .start = old_cursor, .end = self.posToCursor(self.cursorToPos(self.cursor) + 1) };
+                        main.editor.dirty.draw = true;
+                    }
+                    break;
+                }
+                if (ch == pair[0]) level += 1;
+                if (ch == pair[1]) level -= 1;
+            }
+        } else {
+            var level: i32 = 0;
+            for (0..pos) |p_| {
+                if (pos == 0) continue;
+                const p = pos - p_ - 1;
+                const ch = self.content.items[p];
+                if (ch == pair[0] and level == 0) {
+                    const cursor = self.posToCursor(p);
+                    self.moveCursor(cursor);
+                    if (self.selection == null) {
+                        self.selection = .{ .start = self.cursor, .end = self.posToCursor(self.cursorToPos(old_cursor) + 1) };
+                        main.editor.dirty.draw = true;
+                    }
+                    break;
+                }
+                if (ch == pair[0]) level += 1;
+                if (ch == pair[1]) level -= 1;
+            }
+        }
+    }
+
     pub fn appendChange(self: *Buffer, change: *cha.Change) FatalError!void {
         try self.applyChange(change);
         try self.uncommitted_changes.append(self.allocator, change.*);
@@ -444,10 +514,9 @@ pub const Buffer = struct {
 
     pub fn changeAlignIndent(self: *Buffer) !void {
         if (self.ts_state == null) return;
-        try self.updateIndents();
         if (self.selection) |selection| {
             const start: usize = @intCast(selection.start.row);
-            const end: usize = @intCast(selection.end.row + 1);
+            const end: usize = @intCast(if (self.mode == .select_line) selection.end.row else selection.end.row + 1);
             for (start..end) |row| {
                 try self.lineAlignIndent(@intCast(row));
             }
@@ -496,41 +565,60 @@ pub const Buffer = struct {
     }
 
     pub fn updateIndents(self: *Buffer) FatalError!void {
-        const spans = if (self.ts_state) |ts_state| ts_state.indent.spans.items else return;
+        if (self.ts_state == null or self.ts_state.?.indent == null) return;
         try self.reparse();
+
         self.indents.clearRetainingCapacity();
-
-        var indent_bytes = std.AutoHashMap(usize, void).init(self.allocator);
-        defer indent_bytes.deinit();
-        var dedent_bytes = std.AutoHashMap(usize, void).init(self.allocator);
-        defer dedent_bytes.deinit();
-        for (spans) |span| {
-            try indent_bytes.put(span.span.start, {});
-            try dedent_bytes.put(span.span.end - 1, {});
+        for (0..self.line_byte_positions.items.len) |row| {
+            try self.indents.append(self.allocator, try self.lineIndent(row));
         }
+        log.debug(@This(), "indents: {any}\n", .{self.indents.items});
+    }
 
-        var indent: usize = 0;
-        var indent_next: usize = 0;
-        for (0..self.line_byte_positions.items.len - 1) |row| {
-            indent = indent_next;
-            const line_byte_start = self.line_byte_positions.items[row];
-            const line_byte_end = self.line_byte_positions.items[row + 1];
-            var line_indents: usize = 0;
-            var line_dedents: usize = 0;
-            for (line_byte_start..line_byte_end) |byte| {
-                if (indent_bytes.contains(byte)) line_indents += 1;
-                if (dedent_bytes.contains(byte)) line_dedents += 1;
+    pub fn lineIndent(self: *Buffer, row: usize) FatalError!usize {
+        const ts_state = if (self.ts_state) |ts_state| ts_state else return 0;
+        const query = ts_state.indent orelse return 0;
+        if (self.lineLength(row) == 0 and row > 0) return self.lineIndent(row - 1);
+        const root_node = ts.ts.ts_tree_root_node(ts_state.tree);
+
+        const line_span = SpanFlat{
+            .start = if (row == 0) 0 else self.line_byte_positions.items[row - 1],
+            .end = self.line_byte_positions.items[row],
+        };
+        if (ts.firstSmallestDescendentInSpan(root_node, line_span)) |node| {
+            log.trace(@This(), "line {} {}\n", .{ row + 1, line_span });
+            var n = node;
+            var indent: i32 = 0;
+            var processed_rows = std.AutoHashMap(usize, void).init(self.allocator);
+            defer processed_rows.deinit();
+            while (!ts.ts.ts_node_is_null(n)) {
+                const span = SpanFlat{
+                    .start = ts.ts.ts_node_start_byte(n),
+                    .end = ts.ts.ts_node_end_byte(n),
+                };
+                log.trace(@This(), "node {}\n", .{span});
+                if (query.captures.get(@intFromPtr(n.id))) |cap| c: {
+                    const pos = Span.fromSpanFlat(self, span);
+
+                    var capture_name_len: u32 = undefined;
+                    const capture_name_buf = ts.ts.ts_query_capture_name_for_id(query.query.?, cap.index, &capture_name_len);
+                    const capture_name = capture_name_buf[0..capture_name_len];
+                    log.trace(@This(), "capture {s} [{}-{}]\n", .{ capture_name, span.start, span.end });
+
+                    if (processed_rows.contains(@intCast(pos.start.row))) break :c;
+                    if (pos.start.row != pos.end.row and pos.start.row != row and std.mem.eql(u8, capture_name, "indent.begin")) {
+                        indent += 1;
+                        try processed_rows.put(@intCast(pos.start.row), {});
+                    } else if (std.mem.eql(u8, capture_name, "indent.end") or std.mem.eql(u8, capture_name, "indent.branch")) {
+                        indent -= 1;
+                    }
+                }
+                n = ts.ts.ts_node_parent(n);
             }
-            // indent is applied starting from next line, dedent is applied immediately
-            switch (std.math.order(line_indents, line_dedents)) {
-                .gt => indent_next += 1,
-                .lt => {
-                    indent = if (indent > 0) indent - 1 else 0;
-                    indent_next = if (indent_next > 0) indent_next - 1 else 0;
-                },
-                else => {},
-            }
-            try self.indents.append(self.allocator, indent);
+            return if (indent < 0) 0 else @intCast(indent);
+        } else {
+            log.trace(@This(), "line {}[{}-{}] no node\n", .{ row + 1, line_span.start, line_span.end });
+            return 0;
         }
     }
 
@@ -573,23 +661,28 @@ pub const Buffer = struct {
     }
 
     pub fn posToCursor(self: *const Buffer, pos: usize) Cursor {
-        var i: usize = 0;
+        var row: usize = 0;
         var line_start: usize = 0;
-        for (self.line_positions.items) |l_pos| {
-            if (l_pos > pos) break;
-            if (i > 0 and l_pos == self.line_positions.items[i - 1]) break;
-            line_start = l_pos;
-            i += 1;
+        for (self.line_positions.items) |next_line_start| {
+            if (next_line_start > pos) break;
+            if (next_line_start == pos and next_line_start == self.content.items.len) break;
+            if (row > 0 and next_line_start == self.line_positions.items[row - 1]) break;
+            line_start = next_line_start;
+            row += 1;
         }
-        return Cursor{ .row = @intCast(i), .col = @intCast(pos - line_start) };
+        return Cursor{ .row = @intCast(row), .col = @intCast(pos - line_start) };
     }
 
     pub fn lineTerminated(self: *const Buffer, row: usize) bool {
-        return row + 1 < self.line_positions.items.len or self.content.getLast() == '\n';
+        return row + 1 < self.line_positions.items.len or (self.content.items.len > 0 and self.content.getLast() == '\n');
     }
 
     /// Line length at `row` (excl. newline char)
     pub fn lineLength(self: *const Buffer, row: usize) usize {
+        const terminated = self.lineTerminated(row);
+        if (self.line_positions.items.len == 1) {
+            return if (terminated) self.line_positions.items[row] - 1 else self.line_positions.items[row];
+        }
         if (row == 0) {
             if (self.content.items.len == 0) {
                 // empty file
@@ -598,7 +691,7 @@ pub const Buffer = struct {
             return self.line_positions.items[row] - 1;
         }
         const len = self.line_positions.items[row] - self.line_positions.items[row - 1];
-        if (len == 0 or !self.lineTerminated(row)) {
+        if (len == 0 or !terminated) {
             // phantom line
             return len;
         }
@@ -651,9 +744,9 @@ pub const Buffer = struct {
         defer self.allocator.free(in_b);
 
         var exit_code: u8 = undefined;
-        const out_b = ext.runExternalWait(self.allocator, &.{ "sh", "-c", command_b }, in_b, &exit_code) catch |e| {
-            log.err(@This(), "{}\n", .{e});
-            if (@errorReturnTrace()) |trace| log.errPrint("{f}\n", .{trace.*});
+        const opts = ext.RunOptions{ .input = in_b, .exit_code = &exit_code };
+        const out_b = ext.runExternalWait(self.allocator, &.{ "sh", "-c", command_b }, opts) catch |e| {
+            log.err(@This(), "{}\n", .{e}, @errorReturnTrace());
             return;
         };
         defer self.allocator.free(out_b);
@@ -678,18 +771,7 @@ pub const Buffer = struct {
     pub fn copySelectionToClipboard(self: *Buffer) !void {
         if (self.selection) |selection| {
             try clp.write(self.allocator, self.rawTextAt(selection));
-            try self.enterMode(.normal);
         }
-    }
-
-    pub fn changeInsertFromClipboard(self: *Buffer) !void {
-        if (self.mode.isSelect()) try self.changeSelectionDelete();
-        const text = try clp.read(self.allocator);
-        defer self.allocator.free(text);
-        const text_uni = try uni.unicodeFromBytes(self.allocator, text);
-        defer self.allocator.free(text_uni);
-        try self.changeInsertText(text_uni);
-        try self.commitChanges();
     }
 
     pub fn syncFs(self: *Buffer) !bool {
@@ -714,12 +796,14 @@ pub const Buffer = struct {
         defer file.close();
         const file_content = try file.readToEndAlloc(self.allocator, std.math.maxInt(usize));
         defer self.allocator.free(file_content);
-        const file_content_uni = try uni.unicodeFromBytes(self.allocator, file_content);
-        defer self.allocator.free(file_content_uni);
+        if (!std.mem.eql(u8, self.content_raw.items, file_content)) {
+            const file_content_uni = try uni.unicodeFromBytes(self.allocator, file_content);
+            defer self.allocator.free(file_content_uni);
 
-        var change = try cha.Change.initReplace(self.allocator, self, self.fullSpan(), file_content_uni);
-        try self.appendChange(&change);
-        try self.commitChanges();
+            var change = try cha.Change.initReplace(self.allocator, self, self.fullSpan(), file_content_uni);
+            try self.appendChange(&change);
+            try self.commitChanges();
+        }
         self.file_history_index = self.history_index;
 
         // TODO: attempt to keep cursor at the same semantic place
@@ -795,6 +879,23 @@ pub const Buffer = struct {
         }
     }
 
+    pub fn applyTextEditsMaybeAnnotated(
+        self: *Buffer,
+        text_edits: []const union(enum) { TextEdit: lsp.types.TextEdit, AnnotatedTextEdit: lsp.types.AnnotatedTextEdit },
+    ) !void {
+        // should be applied in reverse order to preserve original positions
+        for (0..text_edits.len) |i_| {
+            const i = text_edits.len - i_ - 1;
+            const edit = switch (text_edits[i]) {
+                .TextEdit => |e| e,
+                .AnnotatedTextEdit => |e| lsp.types.TextEdit{ .newText = e.newText, .range = e.range },
+            };
+            var change = try cha.Change.fromLsp(self.allocator, self, edit);
+            log.debug(@This(), "change: {s}: {f}\n", .{ self.path, change });
+            try self.appendChange(&change);
+        }
+    }
+
     fn find(self: *Buffer, query: []const u8) ![]const SpanFlat {
         var spans: std.array_list.Aligned(SpanFlat, null) = .empty;
         var re = try reg.Regex.from(query, false, self.allocator);
@@ -846,13 +947,12 @@ pub const Buffer = struct {
         );
     }
 
-    fn lineAlignIndent(self: *Buffer, row: usize) !void {
-        if (row == 0) return;
+    fn lineAlignIndent(self: *Buffer, row: usize) FatalError!void {
         const old_cursor = self.cursor;
         const line = self.lineContent(row);
-        const correct_indent: usize = self.indents.items[row - 1];
-        const correct_indent_spaces = correct_indent * self.file_type.indent_spaces;
         const current_indent_spaces: usize = lineIndentSpaces(line);
+        const correct_indent: usize = if (current_indent_spaces == line.len) 0 else try self.lineIndent(row);
+        const correct_indent_spaces = correct_indent * self.file_type.indent_spaces;
         if (correct_indent_spaces == current_indent_spaces) return;
         const span = Span{
             .start = .{ .row = @intCast(row), .col = 0 },
@@ -954,7 +1054,7 @@ fn wordEnd(line: []const u21, pos: usize) ?usize {
         col += 1;
         const next = line[col];
         if (boundary(ch, next)) |b| {
-            if (b == .wordEnd) return col - 1;
+            if (b == .word_end) return col - 1;
         }
     }
     return line.len - 1;
@@ -975,8 +1075,8 @@ fn tokenEnd(line: []const u21, pos: usize) ?usize {
 }
 
 const Boundary = enum {
-    wordStart,
-    wordEnd,
+    word_start,
+    word_end,
 
     /// 0: whitespace
     /// 1: symbols
@@ -993,8 +1093,8 @@ fn boundary(ch1: u21, ch2: u21) ?Boundary {
     const r2 = Boundary.rank(ch2);
     switch (std.math.order(r1, r2)) {
         .eq => return null,
-        .lt => return .wordStart,
-        .gt => return .wordEnd,
+        .lt => return .word_start,
+        .gt => return .word_end,
     }
 }
 
@@ -1040,7 +1140,7 @@ fn testSetupTmp(content: []const u8) !*Buffer {
         try tmp_file.writeAll(content);
     }
 
-    try main.editor.openBuffer(try ur.fromPath(allocator, tmp_file_path));
+    try main.editor.openBuffer(try ur.fromRelativePath(allocator, tmp_file_path));
     const buffer = main.editor.active_buffer;
 
     try testing.expectEqualStrings("abc", buffer.content_raw.items);
@@ -1071,6 +1171,37 @@ test "cursorToPos newline" {
     defer main.editor.deinit();
 
     try testing.expectEqualDeep(4, buffer.cursorToPos(.{ .row = 1 }));
+}
+
+test "posToCursor" {
+    var buffer = try testSetupScratch("one\n");
+    defer main.editor.deinit();
+
+    try testing.expectEqualDeep(Cursor{ .col = 0 }, buffer.posToCursor(0));
+    try testing.expectEqualDeep(Cursor{ .col = 1 }, buffer.posToCursor(1));
+    try testing.expectEqualDeep(Cursor{ .col = 2 }, buffer.posToCursor(2));
+    try testing.expectEqualDeep(Cursor{ .col = 3 }, buffer.posToCursor(3));
+}
+
+test "posToCursor non-terminated" {
+    var buffer = try testSetupScratch("one");
+    defer main.editor.deinit();
+
+    try testing.expectEqualDeep(Cursor{ .col = 0 }, buffer.posToCursor(0));
+    try testing.expectEqualDeep(Cursor{ .col = 1 }, buffer.posToCursor(1));
+    try testing.expectEqualDeep(Cursor{ .col = 2 }, buffer.posToCursor(2));
+    try testing.expectEqualDeep(Cursor{ .col = 3 }, buffer.posToCursor(3));
+}
+
+test "posToCursor non-terminated multiline" {
+    var buffer = try testSetupScratch("\none");
+    defer main.editor.deinit();
+
+    try testing.expectEqualDeep(Cursor{ .row = 0, .col = 0 }, buffer.posToCursor(0));
+    try testing.expectEqualDeep(Cursor{ .row = 1, .col = 0 }, buffer.posToCursor(1));
+    try testing.expectEqualDeep(Cursor{ .row = 1, .col = 1 }, buffer.posToCursor(2));
+    try testing.expectEqualDeep(Cursor{ .row = 1, .col = 2 }, buffer.posToCursor(3));
+    try testing.expectEqualDeep(Cursor{ .row = 1, .col = 3 }, buffer.posToCursor(4));
 }
 
 test "textAt" {
@@ -1156,7 +1287,56 @@ test "moveToTokenEnd" {
     try testing.expectEqualDeep(Span{ .start = .{ .col = 6 }, .end = .{ .col = 13 } }, buffer.selection);
 }
 
-test "changeSelectionDelete same line" {
+test "moveToMatchingPair" {
+    var buffer = try testSetupScratch("one (two) three\n");
+    defer main.editor.deinit();
+
+    buffer.moveCursor(.{ .col = 4 });
+    try testing.expectEqual(Cursor{ .row = 0, .col = 4 }, buffer.cursor);
+    try testing.expectEqual(null, buffer.selection);
+
+    try buffer.moveToMatchingPair();
+    try testing.expectEqual(Cursor{ .row = 0, .col = 8 }, buffer.cursor);
+    try testing.expectEqualDeep(Span{ .start = .{ .col = 4 }, .end = .{ .col = 9 } }, buffer.selection);
+
+    try buffer.moveToMatchingPair();
+    try testing.expectEqual(Cursor{ .row = 0, .col = 4 }, buffer.cursor);
+    try testing.expectEqualDeep(Span{ .start = .{ .col = 4 }, .end = .{ .col = 9 } }, buffer.selection);
+}
+
+test "moveToMatchingPair same char" {
+    var buffer = try testSetupScratch("one |two| three\n");
+    defer main.editor.deinit();
+
+    buffer.moveCursor(.{ .col = 4 });
+    try testing.expectEqual(Cursor{ .row = 0, .col = 4 }, buffer.cursor);
+
+    try buffer.moveToMatchingPair();
+    try testing.expectEqual(Cursor{ .row = 0, .col = 8 }, buffer.cursor);
+
+    try buffer.moveToMatchingPair();
+    try testing.expectEqual(Cursor{ .row = 0, .col = 8 }, buffer.cursor);
+}
+
+test "insert empty file" {
+    var buffer = try testSetupScratch("");
+    defer main.editor.deinit();
+
+    try buffer.enterMode(.insert);
+    try buffer.changeInsertText(&.{'a'});
+    try buffer.changeInsertText(&.{'b'});
+    try buffer.changeInsertText(&.{'c'});
+
+    try buffer.commitChanges();
+    try buffer.updateRaw();
+    try testing.expectEqualStrings("abc\n", buffer.content_raw.items);
+
+    try buffer.undo();
+    try buffer.updateRaw();
+    try testing.expectEqualStrings("", buffer.content_raw.items);
+}
+
+test "delete selection same line" {
     var buffer = try testSetupScratch("abc\n");
     defer main.editor.deinit();
 
@@ -1167,6 +1347,19 @@ test "changeSelectionDelete same line" {
     try buffer.commitChanges();
     try buffer.updateRaw();
     try testing.expectEqualStrings("ac\n", buffer.content_raw.items);
+}
+
+test "delete selection all non terminated" {
+    var buffer = try testSetupScratch("abc");
+    defer main.editor.deinit();
+
+    try buffer.enterMode(.select);
+    buffer.moveCursor(.{ .col = 2 });
+    try buffer.changeSelectionDelete();
+
+    try buffer.commitChanges();
+    try buffer.updateRaw();
+    try testing.expectEqualStrings("", buffer.content_raw.items);
 }
 
 test "delete selection line to end" {
