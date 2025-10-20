@@ -15,8 +15,8 @@ const ur = @import("uri.zig");
 
 fn e2eSetup() !bool {
     main.std_err_file_writer = main.std_err.writer(&main.std_err_buf);
+    log.level = .debug;
     log.log_writer = &main.std_err_file_writer.interface;
-    log.init(log.log_writer, .debug);
     if (e2eSkip()) return false;
     try createTmpFiles();
     return true;
@@ -73,7 +73,7 @@ fn startEditor() !void {
     main.term = try ter.Terminal.init(allocator, &main.std_out_writer.interface, term_size);
     defer main.term.deinit();
 
-    main.editor = try edi.Editor.init(allocator, .{});
+    main.editor = try edi.Editor.init(allocator);
     defer main.editor.deinit();
 
     try main.editor.openBuffer(try ur.fromPath(allocator, "/tmp/hat_e2e.zig"));

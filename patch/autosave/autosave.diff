@@ -1,5 +1,5 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index 0f31b8e..6316d83 100644
+index 5b1c666..d0d94e1 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
 @@ -223,14 +223,6 @@ pub const Buffer = struct {
@@ -22,7 +22,7 @@ index 0f31b8e..6316d83 100644
  
          main.editor.dotRepeatCommitReady();
 +
-+        if (main.editor.config.autosave) {
++        if (edi.config.autosave) {
 +            log.debug(@This(), "autosave {s}\n", .{self.path});
 +            self.write() catch |e| log.err(@This(), "write buffer error: {}", .{e});
 +        }
@@ -34,7 +34,7 @@ index 0f31b8e..6316d83 100644
              }
              self.history_index = if (h_idx > 0) h_idx - 1 else null;
 +
-+            if (main.editor.config.autosave) {
++            if (edi.config.autosave) {
 +                self.write() catch |e| log.err(@This(), "write buffer error: {}", .{e});
 +                log.debug(@This(), "autosave {s}\n", .{self.path});
 +            }
@@ -46,7 +46,7 @@ index 0f31b8e..6316d83 100644
          }
          self.history_index = redo_idx;
 +
-+        if (main.editor.config.autosave) {
++        if (edi.config.autosave) {
 +            self.write() catch |e| log.err(@This(), "write buffer error: {}", .{e});
 +            log.debug(@This(), "autosave {s}\n", .{self.path});
 +        }
@@ -54,14 +54,21 @@ index 0f31b8e..6316d83 100644
  
      pub fn textAt(self: *const Buffer, span: Span) []const u21 {
 diff --git a/src/editor.zig b/src/editor.zig
-index 4ba3924..eea4a4b 100644
+index 9e47642..cfa00fa 100644
 --- a/src/editor.zig
 +++ b/src/editor.zig
-@@ -32,6 +32,7 @@ pub const DotRepeat = enum {
+@@ -19,12 +19,14 @@ const ur = @import("uri.zig");
+ 
+ pub const config = Config{
+     .end_of_buffer_char = null,
++    .autosave = false,
  };
  
  pub const Config = struct {
-+    autosave: bool = false,
      /// Char to denote terminal lines after end of buffer
      /// See vim's :h fillchars -> eob
-     end_of_buffer_char: ?u8 = null,
+     end_of_buffer_char: ?u8,
++    autosave: bool,
+ };
+ 
+ pub const Dirty = struct {
