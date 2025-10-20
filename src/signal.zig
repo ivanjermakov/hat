@@ -4,7 +4,10 @@ const log = @import("log.zig");
 const main = @import("main.zig");
 const ter = @import("terminal.zig");
 
-pub const SigHandle = struct { sig: u8, handle: std.posix.Sigaction.handler_fn };
+pub const SigHandle = struct {
+    sig: u8,
+    handle: std.posix.Sigaction.handler_fn,
+};
 
 pub const sig_handle = .{
     .int = SigHandle{ .sig = std.posix.SIG.INT, .handle = handleSigInt },

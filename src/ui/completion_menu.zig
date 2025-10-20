@@ -88,6 +88,7 @@ pub const CompletionMenu = struct {
         self.display_items.clearRetainingCapacity();
         for (0..self.completion_items.items.len) |i| {
             const cmp_item = self.completion_items.items[i];
+            // TODO: smarter filtering
             if (std.ascii.startsWithIgnoreCase(cmp_item.filter_text, prompt)) {
                 try self.display_items.append(self.allocator, i);
                 if (self.display_items.items.len >= max_entries) break;
@@ -143,6 +144,7 @@ pub const CompletionMenu = struct {
         main.editor.dirty.draw = true;
     }
 
+    // TODO: handle associated workspace commands, e.g. import symbol
     pub fn accept(self: *CompletionMenu) !void {
         defer self.reset();
         const item = self.completion_items.items[self.display_items.items[self.active_item]];

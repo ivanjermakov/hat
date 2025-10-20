@@ -3,6 +3,7 @@ const Allocator = std.mem.Allocator;
 
 const buf = @import("../buffer.zig");
 const col = @import("../color.zig");
+const Color = col.color;
 const core = @import("../core.zig");
 const Cursor = core.Cursor;
 const SpanFlat = core.SpanFlat;
@@ -136,7 +137,7 @@ const fzf_command: []const []const u8 = &.{
     "--no-info",
     "--no-hscroll",
     "--color=prompt:-1",
-    std.fmt.comptimePrint("--color=hl:#{s}", .{col.color.blue.toHexStr()}),
-    std.fmt.comptimePrint("--color=hl+:#{s}", .{col.color.blue.toHexStr()}),
-    std.fmt.comptimePrint("--color=bg+:#{s}", .{col.color.gray4.toHexStr()}),
+    std.fmt.comptimePrint("--color=hl:#{s}", .{Color.blue.toHexStr()}),
+    std.fmt.comptimePrint("--color=hl+:#{s}", .{Color.blue.toHexStr()}),
+    std.fmt.comptimePrint("--color=bg+:#{s}", .{Color.gray4.toHexStr()}),
 };
