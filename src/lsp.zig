@@ -16,13 +16,7 @@ const fzf = @import("ui/fzf.zig");
 const dia = @import("ui/diagnostic.zig");
 const ur = @import("uri.zig");
 
-pub const lsp_config = [_]LspConfig{
-    LspConfig{
-        .name = "lua_ls",
-        .cmd = &.{"lua-language-server"},
-        .file_types = &.{"lua"},
-    },
-};
+pub const lsp_config = [_]LspConfig{};
 
 pub const LspConfig = struct {
     name: []const u8,
