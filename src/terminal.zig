@@ -127,7 +127,7 @@ pub const Terminal = struct {
         try self.writer.writeAll(if (enable) "\x1b[?7h" else "\x1b[?7l");
     }
 
-    fn resetAttributes(self: *Terminal) !void {
+    fn resetAttribute(self: *Terminal) !void {
         try self.writer.writeAll("\x1b[0m");
     }
 
@@ -140,13 +140,13 @@ pub const Terminal = struct {
     }
 
     fn drawNumberLine(self: *Terminal, buffer: *buf.Buffer, area: Area) !void {
-        try co.attributes.write(co.attributes.number_line, self.writer);
-        defer self.resetAttributes() catch {};
+        try co.Attribute.writeSlice(co.Attribute.number_line, self.writer);
+        defer self.resetAttribute() catch {};
         for (@intCast(area.pos.row)..@as(usize, @intCast(area.pos.row)) + area.dims.height) |term_row| {
             const buffer_row = @as(i32, @intCast(term_row)) + buffer.offset.row;
             try self.moveCursor(.{ .row = @intCast(term_row), .col = area.pos.col });
             if (buffer_row < 0 or buffer_row >= buffer.line_positions.items.len) {
-                if (edi.config.end_of_buffer_char) |ch| _ = try self.writer.writeAll(&.{ch});
+                if (edi.Config.end_of_buffer_char) |ch| _ = try self.writer.writeAll(&.{ch});
             } else {
                 try self.writer.printInt(
                     @as(usize, @intCast(buffer_row + 1)),
@@ -175,6 +175,7 @@ pub const Terminal = struct {
             var area_col: i32 = 0;
 
             var line = buffer.lineContent(@intCast(buffer_row));
+            const terminated = buffer.lineTerminated(@intCast(buffer_row));
             try self.moveCursor(.{ .row = @intCast(term_row), .col = area.pos.col });
 
             if (buffer.offset.col > 0) {
@@ -188,7 +189,7 @@ pub const Terminal = struct {
                 }
             }
 
-            for (0..line.len + 1) |i| {
+            for (0..if (terminated) line.len + 1 else line.len) |i| {
                 const ch = if (i == line.len) ' ' else line[i];
                 _ = attrs_writer.consumeAll();
                 const buffer_col: i32 = buffer.offset.col + @as(i32, @intCast(i));
@@ -197,23 +198,24 @@ pub const Terminal = struct {
                 if (buffer.ts_state) |ts_state| {
                     if (ts_state.highlight) |hi| {
                         const highlight_spans = hi.spans.items;
-                        const ch_attrs: []const co.Attr = b: while (span_index < highlight_spans.len) {
+                        const ch_attrs: []const co.Attribute = b: while (span_index < highlight_spans.len) {
                             const span = highlight_spans[span_index];
-                            if (span.span.start > byte) break :b co.attributes.text;
+                            if (span.span.start > byte) break :b co.Attribute.text;
                             if (byte >= span.span.start and byte < span.span.end) {
                                 break :b span.attrs;
                             }
                             span_index += 1;
                         } else {
-                            break :b co.attributes.text;
+                            break :b co.Attribute.text;
                         };
-                        try co.attributes.write(ch_attrs, &attrs_writer);
+                        try co.Attribute.writeSlice(ch_attrs, &attrs_writer);
                     }
                 }
 
                 if (buffer.selection) |selection| {
                     if (selection.inRange(.{ .row = buffer_row, .col = buffer_col })) {
-                        try co.attributes.write(co.attributes.selection, &attrs_writer);
+                        const attr = if (buffer.mode.isSelect()) co.Attribute.selection else co.Attribute.selection_normal;
+                        try co.Attribute.writeSlice(attr, &attrs_writer);
                     }
                 }
 
@@ -222,7 +224,7 @@ pub const Terminal = struct {
                         const span = diagnostic.span;
 
                         if (span.inRange(.{ .row = buffer_row, .col = buffer_col })) {
-                            try co.attributes.write(co.attributes.diagnostic_error, &attrs_writer);
+                            try co.Attribute.writeSlice(co.Attribute.diagnosticSeverity(diagnostic.severity), &attrs_writer);
                             break;
                         }
                     }
@@ -230,7 +232,7 @@ pub const Terminal = struct {
 
                 attrs = attrs_writer.buffered();
                 if (last_attrs == null or !std.mem.eql(u8, attrs, last_attrs.?)) {
-                    self.resetAttributes() catch {};
+                    self.resetAttribute() catch {};
                     try self.writer.writeAll(attrs);
                     @memcpy(&last_attrs_buf, &attrs_buf);
                     last_attrs = last_attrs_buf[0..attrs.len];
@@ -244,7 +246,7 @@ pub const Terminal = struct {
                 if (col_width > 1) try self.moveCursor(.{ .row = @intCast(term_row), .col = area.pos.col + area_col });
             }
             // reached line end
-            try self.resetAttributes();
+            try self.resetAttribute();
             last_attrs = null;
         }
     }
@@ -272,7 +274,7 @@ pub const Terminal = struct {
         const menu_width = @min(max_width, longest_item + 1);
 
         {
-            try self.resetAttributes();
+            try self.resetAttribute();
 
             for (0..cmp_menu.display_items.items.len) |menu_row| {
                 const idx = cmp_menu.display_items.items[menu_row];
@@ -282,9 +284,9 @@ pub const Terminal = struct {
                     .col = menu_pos.col,
                 });
                 if (menu_row == cmp_menu.active_item) {
-                    try co.attributes.write(co.attributes.completion_menu_active, self.writer);
+                    try co.Attribute.writeSlice(co.Attribute.completion_menu_active, self.writer);
                 } else {
-                    try co.attributes.write(co.attributes.completion_menu, self.writer);
+                    try co.Attribute.writeSlice(co.Attribute.completion_menu, self.writer);
                 }
                 try self.writer.writeAll(cmp_item.label[0..@min(cmp_item.label.len, menu_width)]);
 
@@ -295,7 +297,7 @@ pub const Terminal = struct {
                     }
                 }
             }
-            try self.resetAttributes();
+            try self.resetAttribute();
         }
 
         {
@@ -371,8 +373,8 @@ pub const Terminal = struct {
     /// Draw a box on top of the editor's content, containing `lines`
     /// Box width is min(longest line, available area)
     fn drawOverlay(self: *Terminal, lines: []const []const u8, pos: Cursor) !void {
-        try co.attributes.write(co.attributes.overlay, self.writer);
-        defer self.resetAttributes() catch {};
+        try co.Attribute.writeSlice(co.Attribute.overlay, self.writer);
+        defer self.resetAttribute() catch {};
 
         const max_doc_width = 90;
         var longest_line: usize = 0;
@@ -401,21 +403,21 @@ pub const Terminal = struct {
         const message = main.editor.messages.items[main.editor.message_read_idx];
         const message_height = std.mem.count(u8, message, "\n") + 1;
         try self.moveCursor(.{ .row = @intCast(self.dimensions.height - message_height) });
-        try co.attributes.write(co.attributes.message, self.writer);
+        try co.Attribute.writeSlice(co.Attribute.message, self.writer);
         try self.writer.writeAll(message);
-        try self.resetAttributes();
+        try self.resetAttribute();
     }
 
     fn drawCmd(self: *Terminal, command_line: *const cmd.CommandLine) !void {
         const last_row = self.dimensions.height - 1;
         const prefix = command_line.command.?.prefix();
         try self.moveCursor(.{ .row = @intCast(last_row) });
-        try co.attributes.write(co.attributes.command_line, self.writer);
+        try co.Attribute.writeSlice(co.Attribute.command_line, self.writer);
         try self.writer.writeAll(prefix);
         for (command_line.content.items) |ch| {
             try uni.unicodeToBytesWrite(self.writer, &.{ch});
         }
-        try self.resetAttributes();
+        try self.resetAttribute();
         try self.moveCursor(.{ .row = @intCast(last_row), .col = @intCast(prefix.len + command_line.cursor) });
     }
 };
@@ -477,10 +479,6 @@ pub fn parseAnsi(input: *std.array_list.Aligned(u8, null)) !inp.Key {
             _ = input.orderedRemove(0);
             key.printable = 'd';
             key.modifiers = @intFromEnum(inp.Modifier.control);
-        },
-        0x09 => {
-            _ = input.orderedRemove(0);
-            key.code = .tab;
         },
         0x7f => {
             _ = input.orderedRemove(0);

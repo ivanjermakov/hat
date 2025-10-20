@@ -21,8 +21,9 @@ pub const FileTypeConfig = struct {
 pub const TsConfig = struct {
     lib_path: []const u8,
     lib_symbol: []const u8,
-    highlight_query: ?[]const u8,
-    indent_query: ?[]const u8,
+    highlight_query: ?[]const u8 = null,
+    indent_query: ?[]const u8 = null,
+    symbol_query: ?[]const u8 = null,
 
     pub fn loadLanguage(self: *const TsConfig, allocator: Allocator) !*const fn () *ts.ts.struct_TSLanguage {
         const lib_path_exp = try env.expand(allocator, self.lib_path, std.posix.getenv);

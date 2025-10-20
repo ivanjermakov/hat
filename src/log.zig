@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = std.builtin;
 
 const co = @import("color.zig");
 const dt = @import("datetime.zig");
@@ -41,8 +42,9 @@ pub const Level = enum(u8) {
     }
 };
 
-pub fn err(comptime caller: type, comptime fmt: []const u8, args: anytype) void {
+pub fn err(comptime caller: type, comptime fmt: []const u8, args: anytype, stack_trace: ?*builtin.StackTrace) void {
     log(caller, .@"error", fmt, args);
+    if (stack_trace) |t| errPrint("{f}\n", .{t.*});
 }
 
 pub fn warn(comptime caller: type, comptime fmt: []const u8, args: anytype) void {
@@ -66,9 +68,9 @@ pub fn errPrint(comptime fmt: []const u8, args: anytype) void {
     log_writer.flush() catch {};
 }
 
-pub fn assertEql(comptime Caller: type, comptime T: type, actual: []const T, expected: []const T) void {
-    if (!std.mem.eql(T, actual, expected)) {
-        err(Caller, "assert failed:\n  actual: {any}\n  expected: {any}\n", .{ actual, expected });
+pub fn assertEql(comptime Caller: type, comptime T: type, expected: []const T, actual: []const T) void {
+    if (!std.mem.eql(T, expected, actual)) {
+        err(Caller, "assert failed:\n  expected: {any}\n  actual: {any}\n", .{ expected, actual }, null);
         unreachable;
     }
 }
