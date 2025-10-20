@@ -64,13 +64,13 @@ pub fn printBuffer(buffer: *buf.Buffer, writer: *std.io.Writer, highlight: ?High
                     const highlight_spans = hi.spans.items;
                     const ch_attrs: []const co.Attribute = b: while (span_index < highlight_spans.len) {
                         const span = highlight_spans[span_index];
-                        if (span.span.start > byte) break :b co.attributes.text;
+                        if (span.span.start > byte) break :b co.Attribute.text;
                         if (byte >= span.span.start and byte < span.span.end) {
                             break :b span.attrs;
                         }
                         span_index += 1;
                     } else {
-                        break :b co.attributes.text;
+                        break :b co.Attribute.text;
                     };
                     try co.Attribute.writeSlice(ch_attrs, &attrs_writer);
                 }

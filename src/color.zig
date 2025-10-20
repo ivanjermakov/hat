@@ -78,9 +78,7 @@ pub const Attribute = union(enum) {
             .curly_underline => _ = try writer.write("\x1b[4:3m"),
         }
     }
-};
 
-pub const attributes = enum {
     pub const text = &[_]Attribute{.{ .fg = color.white }};
     pub const selection = &[_]Attribute{.{ .bg = color.gray3 }};
     pub const selection_normal = &[_]Attribute{.{ .bg = color.gray2 }};
@@ -98,7 +96,7 @@ pub const attributes = enum {
     pub const diagnostic_warn = &[_]Attribute{ .curly_underline, .{ .underline = color.yellow } };
     pub const diagnostic_info = &[_]Attribute{ .curly_underline, .{ .underline = color.magenta } };
     pub const diagnostic_hint = &[_]Attribute{ .{ .fg = color.gray6 } };
-    pub const highlight = &[_]Attribute{.{ .bg = color.gray3 }};
+    pub const highlight = &[_]Attribute{ .{ .bg = color.gray3 } };
 
     pub fn writeSlice(attrs: []const Attribute, writer: *std.io.Writer) !void {
         for (attrs) |attr| {
@@ -115,3 +113,4 @@ pub const attributes = enum {
         };
     }
 };
+

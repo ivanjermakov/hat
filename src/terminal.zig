@@ -219,7 +219,7 @@ pub const Terminal = struct {
                     if (buffer.mode == .normal) {
                         for (buffer.highlights.items) |hi| {
                             if (hi.inRange(.{ .row = buffer_row, .col = buffer_col })) {
-                                try co.attributes.write(co.attributes.highlight, &attrs_writer);
+                                try co.Attribute.writeSlice(co.Attribute.highlight, &attrs_writer);
                             }
                         }
                     }

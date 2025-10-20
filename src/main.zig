@@ -626,7 +626,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                 editor.dirty.draw = true;
             }
             for (buffer.lsp_connections.items) |conn| {
-                conn.highlight() catch |e| log.err(@This(), "highlight LSP error: {}", .{e});
+                conn.highlight() catch |e| log.err(@This(), "highlight LSP error: {}", .{e}, @errorReturnTrace());
             }
             term.updateCursor() catch |e| log.err(@This(), "update cursor error: {}\n", .{e}, @errorReturnTrace());
         }
