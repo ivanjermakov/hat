@@ -17,16 +17,14 @@ const fzf = @import("ui/fzf.zig");
 const uni = @import("unicode.zig");
 const ur = @import("uri.zig");
 
-pub const config = Config{
-    .end_of_buffer_char = null,
-    .number_line_mode = .absolute,
-};
-
 pub const Config = struct {
     /// Char to denote terminal lines after end of buffer
     /// See vim's :h fillchars -> eob
-    end_of_buffer_char: ?u8,
-    number_line_mode: NumberLineMode,
+    pub const end_of_buffer_char: ?u8 = null;
+    /// Attempt to find matching pair when cursor is over one of these [start, end] chars
+    /// If start == end, will only check forward until first encountered match
+    pub const matching_pair_chars: ?[]const [2]u21 = &.{ .{ '{', '}' }, .{ '[', ']' }, .{ '(', ')' }, .{ '<', '>' }, .{ '|', '|' } };
+    pub const number_line_mode: NumberLineMode = .absolute;
 };
 
 pub const NumberLineMode = enum {
@@ -117,7 +115,7 @@ pub const Editor = struct {
             try buffer.lsp_connections.append(self.allocator, conn);
             try conn.buffers.append(self.allocator, buffer);
             log.debug(@This(), "attached buffer {s} to lsp {s}\n", .{ uri, conn.config.name });
-            if (conn.status == .Initialized) try conn.didOpen(buffer);
+            if (conn.status == .initialized) try conn.didOpen(buffer);
         }
     }
 
@@ -181,14 +179,14 @@ pub const Editor = struct {
         const path = try fzf.pickFile(self.allocator);
         defer self.allocator.free(path);
         log.debug(@This(), "picked path: {s}\n", .{path});
-        try self.openBuffer(try ur.fromPath(self.allocator, path));
+        try self.openBuffer(try ur.fromRelativePath(self.allocator, path));
     }
 
     pub fn findInFiles(self: *Editor) !void {
         const find_result = fzf.findInFiles(self.allocator) catch return;
         defer self.allocator.free(find_result.path);
         log.debug(@This(), "find result: {}\n", .{find_result});
-        try self.openBuffer(try ur.fromPath(self.allocator, find_result.path));
+        try self.openBuffer(try ur.fromRelativePath(self.allocator, find_result.path));
         self.active_buffer.moveCursor(find_result.position);
     }
 
@@ -196,7 +194,7 @@ pub const Editor = struct {
         const buf_path = fzf.pickBuffer(self.allocator, self.buffers.items) catch return;
         defer self.allocator.free(buf_path);
         log.debug(@This(), "picked buffer: {s}\n", .{buf_path});
-        try self.openBuffer(try ur.fromPath(self.allocator, buf_path));
+        try self.openBuffer(try ur.fromRelativePath(self.allocator, buf_path));
     }
 
     pub fn updateInput(self: *Editor) !void {
@@ -218,19 +216,26 @@ pub const Editor = struct {
             while (iter.next()) |entry| {
                 const conn = entry.value_ptr;
                 switch (conn.status) {
-                    .Created, .Initialized => {
+                    .created, .initialized => {
                         log.debug(@This(), "disconnecting lsp client\n", .{});
                         try conn.disconnect();
                     },
-                    .Disconnecting => {
+                    .disconnecting => {
                         if (conn.exitCode()) |code| {
                             log.info(@This(), "lsp server terminated with code: {}\n", .{code});
-                            conn.status = .Closed;
+                            conn.status = .closed;
                         } else {
-                            log.trace(@This(), "waiting for lsp server termination: {s}\n", .{conn.config.name});
+                            if (conn.wait_fuel > 0) {
+                                log.trace(@This(), "waiting for lsp server termination: {s}\n", .{conn.config.name});
+                                conn.wait_fuel -= 1;
+                            } else {
+                                log.info(@This(), "lsp server failed to terminate in time, forcing\n", .{});
+                                _ = conn.child.kill() catch {};
+                                conn.status = .closed;
+                            }
                         }
                     },
-                    .Closed => {
+                    .closed => {
                         conn.thread.join();
                         conn.deinit();
                         _ = self.lsp_connections.remove(entry.key_ptr.*);
@@ -425,24 +430,42 @@ pub const Editor = struct {
         self.command_line.close();
     }
 
+    // TODO: apply another dummy edit that resets cursor position back to `old_cursor`
+    // because now redoing workspace edit jumps the cursor
     pub fn applyWorkspaceEdit(self: *Editor, workspace_edit: lsp.types.WorkspaceEdit) !void {
         const old_buffer = self.active_buffer;
         const old_cursor = old_buffer.cursor;
         const old_offset = old_buffer.offset;
         log.debug(@This(), "workspace edit: {}\n", .{workspace_edit});
-        var change_iter = workspace_edit.changes.?.map.iterator();
-        while (change_iter.next()) |entry| {
-            const change_uri = entry.key_ptr.*;
-            const text_edits = entry.value_ptr.*;
-            try self.openBuffer(change_uri);
-            const buffer = self.active_buffer;
-            try buffer.applyTextEdits(text_edits);
-            // TODO: apply another dummy edit that resets cursor position back to `old_cursor`
-            // because now redoing rename jumps the cursor
-            try buffer.commitChanges();
+        if (workspace_edit.changes) |changes| {
+            var change_iter = changes.map.iterator();
+            while (change_iter.next()) |entry| {
+                const change_uri = entry.key_ptr.*;
+                const text_edits = entry.value_ptr.*;
+                try self.openBuffer(change_uri);
+                const buffer = self.active_buffer;
+                try buffer.applyTextEdits(text_edits);
+                try buffer.commitChanges();
+            }
+        }
+        if (workspace_edit.documentChanges) |changes| {
+            for (changes) |change| {
+                switch (change) {
+                    .TextDocumentEdit => |docEdit| {
+                        try self.openBuffer(docEdit.textDocument.uri);
+                        const buffer = self.active_buffer;
+                        try buffer.applyTextEditsMaybeAnnotated(@ptrCast(docEdit.edits));
+                        try buffer.commitChanges();
+                    },
+                    else => {
+                        log.warn(@This(), "unsupported change type {s}\n", .{@tagName(change)});
+                    },
+                }
+            }
         }
         self.active_buffer = old_buffer;
-        self.active_buffer.cursor = old_cursor;
+        // TODO: attempt to keep cursor at the same semantic place
+        self.active_buffer.moveCursor(old_cursor);
         self.active_buffer.offset = old_offset;
         self.dirty.draw = true;
     }

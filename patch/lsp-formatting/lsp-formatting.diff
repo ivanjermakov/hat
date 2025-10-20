@@ -1,5 +1,5 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index 0f31b8e..6980b94 100644
+index 5b1c666..3d676b9 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
 @@ -675,6 +675,12 @@ pub const Buffer = struct {
@@ -16,7 +16,7 @@ index 0f31b8e..6980b94 100644
          if (self.selection) |selection| {
              try clp.write(self.allocator, self.rawTextAt(selection));
 diff --git a/src/lsp.zig b/src/lsp.zig
-index 015292e..afe4d96 100644
+index 99bc179..35c216d 100644
 --- a/src/lsp.zig
 +++ b/src/lsp.zig
 @@ -93,6 +93,7 @@ pub const LspConnection = struct {
@@ -55,7 +55,7 @@ index 015292e..afe4d96 100644
      pub fn rename(self: *LspConnection, new_name: []const u8) !void {
          if ((self.server_init orelse return).value.capabilities.renameProvider == null) return;
          const buffer = main.editor.active_buffer;
-@@ -521,6 +536,20 @@ pub const LspConnection = struct {
+@@ -533,6 +548,20 @@ pub const LspConnection = struct {
          try main.editor.applyWorkspaceEdit(result.value);
      }
  
@@ -77,10 +77,10 @@ index 015292e..afe4d96 100644
          log.trace(@This(), "notification: {s}\n", .{notif.method});
          if (std.mem.eql(u8, notif.method, "window/logMessage")) {
 diff --git a/src/main.zig b/src/main.zig
-index 066118d..af90642 100644
+index bab23db..295af4d 100644
 --- a/src/main.zig
 +++ b/src/main.zig
-@@ -438,6 +438,8 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+@@ -449,6 +449,8 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                          }
                      } else if (buffer.mode == .normal and eql(u8, multi_key, " n")) {
                          try buffer.renamePrompt();
