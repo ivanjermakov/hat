@@ -723,24 +723,6 @@ pub const Buffer = struct {
         return self.content_raw.items[bs.start..bs.end];
     }
 
-    pub fn goToDefinition(self: *Buffer) !void {
-        for (self.lsp_connections.items) |conn| {
-            try conn.goToDefinition();
-        }
-    }
-
-    pub fn findReferences(self: *Buffer) !void {
-        for (self.lsp_connections.items) |conn| {
-            try conn.findReferences();
-        }
-    }
-
-    pub fn showHover(self: *Buffer) !void {
-        for (self.lsp_connections.items) |conn| {
-            try conn.hover();
-        }
-    }
-
     pub fn renamePrompt(self: *Buffer) !void {
         const cmd = &main.editor.command_line;
         const line = self.lineContent(@intCast(self.cursor.row));
