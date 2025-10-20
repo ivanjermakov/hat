@@ -103,7 +103,7 @@ pub const LspConnection = struct {
     stdin_buf: [2 << 12]u8 = undefined,
     stdin_writer: std.fs.File.Writer,
     /// Updates left for connection to terminate until forced termination
-    wait_fuel: usize = 30,
+    wait_fuel: usize = 10,
     allocator: Allocator,
 
     pub fn connect(allocator: Allocator, config: LspConfig) !LspConnection {
@@ -702,7 +702,9 @@ pub const LspConnection = struct {
         if (main.editor.findBufferByUri(params_typed.value.uri)) |buffer| {
             buffer.clearDiagnostics();
             for (params_typed.value.diagnostics) |diagnostic| {
-                try buffer.diagnostics.append(self.allocator, try dia.Diagnostic.fromLsp(buffer.allocator, diagnostic));
+                var d = try dia.Diagnostic.fromLsp(buffer.allocator, diagnostic);
+                if (std.meta.eql(d.span.start, d.span.end)) d.span.end.col += 1;
+                try buffer.diagnostics.append(self.allocator, d);
             }
             std.mem.sort(dia.Diagnostic, buffer.diagnostics.items, {}, dia.Diagnostic.lessThan);
             log.debug(@This(), "got {} diagnostics\n", .{buffer.diagnostics.items.len});

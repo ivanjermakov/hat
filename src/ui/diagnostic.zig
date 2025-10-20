@@ -6,10 +6,10 @@ const Span = core.Span;
 
 const lsp = @import("../lsp.zig");
 
-// TODO: severity
 pub const Diagnostic = struct {
     span: Span,
     message: []const u8,
+    severity: lsp.types.DiagnosticSeverity,
     raw_json: []const u8,
     allocator: Allocator,
 
@@ -17,6 +17,7 @@ pub const Diagnostic = struct {
         return .{
             .span = Span.fromLsp(lsp_diagnostic.range),
             .message = try allocator.dupe(u8, lsp_diagnostic.message),
+            .severity = lsp_diagnostic.severity orelse .Error,
             .raw_json = try std.json.Stringify.valueAlloc(allocator, lsp_diagnostic, .{}),
             .allocator = allocator,
         };

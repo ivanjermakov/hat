@@ -1,4 +1,5 @@
 const std = @import("std");
+const lsp = @import("lsp");
 
 pub const RgbColor = struct {
     r: u8,
@@ -46,7 +47,7 @@ pub const AnsiColor = enum(u8) {
     }
 };
 
-pub const Color = struct {
+pub const color = struct {
     pub const black = RgbColor.fromHex(0x000000);
     pub const gray1 = RgbColor.fromHex(0x1b1b1d);
     pub const gray2 = RgbColor.fromHex(0x2a2a2d);
@@ -63,14 +64,14 @@ pub const Color = struct {
     pub const magenta = RgbColor.fromHex(0xd3a8ef);
 };
 
-pub const Attr = union(enum) {
+pub const Attribute = union(enum) {
     fg: RgbColor,
     bg: RgbColor,
     underline: RgbColor,
     curly_underline,
     bold,
 
-    pub fn write(self: Attr, writer: *std.io.Writer) !void {
+    pub fn write(self: Attribute, writer: *std.io.Writer) !void {
         switch (self) {
             .fg => |c| try writer.print("\x1b[38;2;{};{};{}m", .{ c.r, c.g, c.b }),
             .bg => |c| try writer.print("\x1b[48;2;{};{};{}m", .{ c.r, c.g, c.b }),
@@ -79,31 +80,41 @@ pub const Attr = union(enum) {
             .bold => _ = try writer.write("\x1b[1m"),
         }
     }
-};
 
-pub const Attributes = struct {
-    pub const text = &[_]Attr{.{ .fg = Color.white }};
-    pub const selection = &[_]Attr{.{ .bg = Color.gray3 }};
-    pub const selection_normal = &[_]Attr{.{ .bg = Color.gray2 }};
-    pub const highlight = &[_]Attr{.{ .bg = Color.gray3 }};
-    pub const keyword = &[_]Attr{.{ .fg = Color.magenta }};
-    pub const string = &[_]Attr{.{ .fg = Color.green }};
-    pub const literal = &[_]Attr{.{ .fg = Color.yellow }};
-    pub const comment = &[_]Attr{.{ .fg = Color.gray7 }};
-    pub const diagnostic_error = &[_]Attr{ .curly_underline, .{ .underline = Color.red } };
-    pub const completion_menu = &[_]Attr{.{ .bg = Color.gray2 }};
-    pub const completion_menu_active = &[_]Attr{.{ .bg = Color.gray4 }};
-    pub const overlay = &[_]Attr{.{ .bg = Color.gray2 }};
-    pub const message = &[_]Attr{.{ .bg = Color.gray2 }};
-    pub const command_line = &[_]Attr{.{ .bg = Color.gray2 }};
-    pub const number_line = &[_]Attr{.{ .fg = Color.gray4 }};
-    pub const git_added = &[_]Attr{ .{ .fg = Color.green }, .bold };
-    pub const git_modified = &[_]Attr{ .{ .fg = Color.yellow }, .bold };
-    pub const git_deleted = &[_]Attr{ .{ .fg = Color.red }, .bold };
+    pub const text = &[_]Attribute{.{ .fg = color.white }};
+    pub const selection = &[_]Attribute{.{ .bg = color.gray3 }};
+    pub const selection_normal = &[_]Attribute{.{ .bg = color.gray2 }};
+    pub const highlight = &[_]Attribute{.{ .bg = color.gray3 }};
+    pub const keyword = &[_]Attribute{.{ .fg = color.magenta }};
+    pub const string = &[_]Attribute{.{ .fg = color.green }};
+    pub const literal = &[_]Attribute{.{ .fg = color.yellow }};
+    pub const comment = &[_]Attribute{.{ .fg = color.gray7 }};
+    pub const completion_menu = &[_]Attribute{.{ .bg = color.gray2 }};
+    pub const completion_menu_active = &[_]Attribute{.{ .bg = color.gray4 }};
+    pub const overlay = &[_]Attribute{.{ .bg = color.gray2 }};
+    pub const message = &[_]Attribute{.{ .bg = color.gray2 }};
+    pub const command_line = &[_]Attribute{.{ .bg = color.gray2 }};
+    pub const number_line = &[_]Attribute{.{ .fg = color.gray4 }};
+    pub const git_added = &[_]Attribute{ .{ .fg = color.green }, .bold };
+    pub const git_modified = &[_]Attribute{ .{ .fg = color.yellow }, .bold };
+    pub const git_deleted = &[_]Attribute{ .{ .fg = color.red }, .bold };
+    pub const diagnostic_error = &[_]Attribute{ .curly_underline, .{ .underline = color.red } };
+    pub const diagnostic_warn = &[_]Attribute{ .curly_underline, .{ .underline = color.yellow } };
+    pub const diagnostic_info = &[_]Attribute{ .curly_underline, .{ .underline = color.magenta } };
+    pub const diagnostic_hint = &[_]Attribute{.{ .fg = color.gray6 }};
 
-    pub fn write(attrs: []const Attr, writer: *std.io.Writer) !void {
+    pub fn writeSlice(attrs: []const Attribute, writer: *std.io.Writer) !void {
         for (attrs) |attr| {
             try attr.write(writer);
         }
+    }
+
+    pub fn diagnosticSeverity(severity: lsp.types.DiagnosticSeverity) []const Attribute {
+        return switch (severity) {
+            .Warning => diagnostic_warn,
+            .Information => diagnostic_info,
+            .Hint => diagnostic_hint,
+            else => diagnostic_error,
+        };
     }
 };
