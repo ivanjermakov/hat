@@ -1,5 +1,5 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index f3c72f9..14b45b3 100644
+index f66ebf1..8e01912 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
 @@ -81,6 +81,7 @@ pub const Buffer = struct {
@@ -27,31 +27,6 @@ index f3c72f9..14b45b3 100644
          if (self.uncommitted_changes.items.len == 0) {
              log.debug(@This(), "no changes to commit\n", .{});
              return;
-@@ -721,6 +723,24 @@ pub const Buffer = struct {
-         return self.content_raw.items[bs.start..bs.end];
-     }
- 
-+    pub fn goToDefinition(self: *Buffer) !void {
-+        for (self.lsp_connections.items) |conn| {
-+            try conn.goToDefinition();
-+        }
-+    }
-+
-+    pub fn findReferences(self: *Buffer) !void {
-+        for (self.lsp_connections.items) |conn| {
-+            try conn.findReferences();
-+        }
-+    }
-+
-+    pub fn showHover(self: *Buffer) !void {
-+        for (self.lsp_connections.items) |conn| {
-+            try conn.hover();
-+        }
-+    }
-+
-     pub fn renamePrompt(self: *Buffer) !void {
-         const cmd = &main.editor.command_line;
-         const line = self.lineContent(@intCast(self.cursor.row));
 diff --git a/src/color.zig b/src/color.zig
 index 0a32a64..1732a02 100644
 --- a/src/color.zig

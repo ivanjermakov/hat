@@ -1,8 +1,8 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index f3c72f9..226249f 100644
+index f66ebf1..c65a993 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
-@@ -768,6 +768,12 @@ pub const Buffer = struct {
+@@ -757,6 +757,12 @@ pub const Buffer = struct {
          try self.commitChanges();
      }
  

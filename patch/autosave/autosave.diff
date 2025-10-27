@@ -1,5 +1,5 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index f3c72f9..1d100d8 100644
+index f66ebf1..a23bd61 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
 @@ -241,14 +241,6 @@ pub const Buffer = struct {
@@ -29,7 +29,7 @@ index f3c72f9..1d100d8 100644
      }
  
      pub fn changeInsertText(self: *Buffer, text: []const u21) FatalError!void {
-@@ -634,6 +631,11 @@ pub const Buffer = struct {
+@@ -623,6 +620,11 @@ pub const Buffer = struct {
                  self.moveCursor(inv_change.new_span.?.start);
              }
              self.history_index = if (h_idx > 0) h_idx - 1 else null;
@@ -41,7 +41,7 @@ index f3c72f9..1d100d8 100644
          }
      }
  
-@@ -649,6 +651,11 @@ pub const Buffer = struct {
+@@ -638,6 +640,11 @@ pub const Buffer = struct {
              self.moveCursor(change.new_span.?.start);
          }
          self.history_index = redo_idx;

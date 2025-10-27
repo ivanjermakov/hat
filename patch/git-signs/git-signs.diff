@@ -1,5 +1,5 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index f3c72f9..2f58b44 100644
+index f66ebf1..78b0642 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
 @@ -23,6 +23,7 @@ const reg = @import("regex.zig");
@@ -43,7 +43,7 @@ index f3c72f9..2f58b44 100644
          self.allocator.free(self.path);
  
          if (self.ts_state) |*ts_state| ts_state.deinit();
-@@ -622,6 +629,31 @@ pub const Buffer = struct {
+@@ -611,6 +618,31 @@ pub const Buffer = struct {
          }
      }
  

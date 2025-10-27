@@ -1,5 +1,5 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index f3c72f9..01b4e99 100644
+index f66ebf1..129ddc5 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
 @@ -23,6 +23,7 @@ const reg = @import("regex.zig");
@@ -26,7 +26,7 @@ index f3c72f9..01b4e99 100644
      }
  
      pub fn centerCursor(self: *Buffer) void {
-@@ -721,6 +724,21 @@ pub const Buffer = struct {
+@@ -710,6 +713,21 @@ pub const Buffer = struct {
          return self.content_raw.items[bs.start..bs.end];
      }
  
