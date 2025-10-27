@@ -8,5 +8,5 @@ Define a keymap to invoke `Buffer.format()`:
 
 ```zig
 } else if (editor.mode == .normal and eql(u8, multi_key, " l")) {
-    try buffer.format();
+    buffer.format() catch |e| log.err(@This(), "format LSP error: {}", .{e}, @errorReturnTrace());
 ```
