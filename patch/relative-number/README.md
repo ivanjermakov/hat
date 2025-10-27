@@ -1,14 +1,14 @@
 # Relative line numbers
 
-Adds editor option `.number_line_mode` with values `.absolute` (default) and `.relative`.
+Adds editor option `number_line_mode` with values `.absolute` (default) and `.relative`.
 
 Changes number line to show line numbers relative to cursor.
 Similar to Vim's [`relativenumber`](https://vimhelp.org/options.txt.html#%27relativenumber%27).
 
 # Usage
 
-Configure fields in `config` in `editor.zig`:
+Configure fields in `Config` in `editor.zig`:
 
 ```zig
-.number_line_moe = .relative,
+pub const number_line_mode: NumberLineMode = .relative;
 ```

@@ -566,17 +566,6 @@ pub const Buffer = struct {
         log.trace(@This(), "line byte positions: {any}\n", .{self.line_positions.items});
     }
 
-    pub fn updateIndents(self: *Buffer) FatalError!void {
-        if (self.ts_state == null or self.ts_state.?.indent == null) return;
-        try self.reparse();
-
-        self.indents.clearRetainingCapacity();
-        for (0..self.line_byte_positions.items.len) |row| {
-            try self.indents.append(self.allocator, try self.lineIndent(row));
-        }
-        log.debug(@This(), "indents: {any}\n", .{self.indents.items});
-    }
-
     pub fn lineIndent(self: *Buffer, row: usize) FatalError!usize {
         const ts_state = if (self.ts_state) |ts_state| ts_state else return 0;
         const query = ts_state.indent orelse return 0;

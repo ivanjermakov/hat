@@ -1,17 +1,17 @@
 # Buffer centering
 
-Adds editor option `.centering_width`
+Adds editor option `centering_width`
 
-* `.centering_width = N` means that the buffer will be left padded, so that line with N width is horizontally
+* `centering_width = N` means that the buffer will be left padded, so that line with N width is horizontally
 centered within the terminal
-* `.centering_width = null` means do not pad, default behavior
+* `centering_width = null` means do not pad, default behavior
 
 ## Usage
 
-Configure fields in `config` in `editor.zig`:
+Configure fields in `Config` in `editor.zig`:
 
 ```zig
-.centering_width = 140,
+pub const centering_width: ?usize = 140;
 ```
 
 ## Screenshots
