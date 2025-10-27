@@ -1,8 +1,8 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index 5b1c666..d0d94e1 100644
+index f3c72f9..1d100d8 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
-@@ -223,14 +223,6 @@ pub const Buffer = struct {
+@@ -241,14 +241,6 @@ pub const Buffer = struct {
          _ = try self.syncFs();
  
          self.file_history_index = self.history_index;
@@ -17,36 +17,36 @@ index 5b1c666..d0d94e1 100644
      }
  
      pub fn moveCursor(self: *Buffer, new_cursor: Cursor) void {
-@@ -428,6 +420,11 @@ pub const Buffer = struct {
+@@ -498,6 +490,11 @@ pub const Buffer = struct {
          self.history_index = self.history.items.len - 1;
  
          main.editor.dotRepeatCommitReady();
 +
-+        if (edi.config.autosave) {
++        if (edi.Config.autosave) {
 +            log.debug(@This(), "autosave {s}\n", .{self.path});
 +            self.write() catch |e| log.err(@This(), "write buffer error: {}", .{e});
 +        }
      }
  
      pub fn changeInsertText(self: *Buffer, text: []const u21) FatalError!void {
-@@ -546,6 +543,11 @@ pub const Buffer = struct {
+@@ -634,6 +631,11 @@ pub const Buffer = struct {
                  self.moveCursor(inv_change.new_span.?.start);
              }
              self.history_index = if (h_idx > 0) h_idx - 1 else null;
 +
-+            if (edi.config.autosave) {
++            if (edi.Config.autosave) {
 +                self.write() catch |e| log.err(@This(), "write buffer error: {}", .{e});
 +                log.debug(@This(), "autosave {s}\n", .{self.path});
 +            }
          }
      }
  
-@@ -561,6 +563,11 @@ pub const Buffer = struct {
+@@ -649,6 +651,11 @@ pub const Buffer = struct {
              self.moveCursor(change.new_span.?.start);
          }
          self.history_index = redo_idx;
 +
-+        if (edi.config.autosave) {
++        if (edi.Config.autosave) {
 +            self.write() catch |e| log.err(@This(), "write buffer error: {}", .{e});
 +            log.debug(@This(), "autosave {s}\n", .{self.path});
 +        }
@@ -54,21 +54,14 @@ index 5b1c666..d0d94e1 100644
  
      pub fn textAt(self: *const Buffer, span: Span) []const u21 {
 diff --git a/src/editor.zig b/src/editor.zig
-index 9e47642..cfa00fa 100644
+index 8986a02..8d412aa 100644
 --- a/src/editor.zig
 +++ b/src/editor.zig
-@@ -19,12 +19,14 @@ const ur = @import("uri.zig");
- 
- pub const config = Config{
-     .end_of_buffer_char = null,
-+    .autosave = false,
- };
- 
- pub const Config = struct {
-     /// Char to denote terminal lines after end of buffer
-     /// See vim's :h fillchars -> eob
-     end_of_buffer_char: ?u8,
-+    autosave: bool,
+@@ -24,6 +24,7 @@ pub const Config = struct {
+     /// Attempt to find matching pair when cursor is over one of these [start, end] chars
+     /// If start == end, will only check forward until first encountered match
+     pub const matching_pair_chars: ?[]const [2]u21 = &.{ .{ '{', '}' }, .{ '[', ']' }, .{ '(', ')' }, .{ '<', '>' }, .{ '|', '|' } };
++    pub const autosave: bool = false;
  };
  
  pub const Dirty = struct {

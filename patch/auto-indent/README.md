@@ -4,14 +4,14 @@ Tree-sitter powered insert mode auto-indenting.
 
 Adds editor options:
 
-- `.indent_newline`: auto-indent inserted newline
-- `.reindent_block_end`: reindent current line upon insertion of one of `reindent_block_end_chars`
+- `indent_newline`: auto-indent inserted newline
+- `reindent_block_end_chars`: reindent current line upon insertion of one of these chars
 
 ## Usage
 
-Configure auto-indent fields in `config` in `editor.zig`:
+Configure auto-indent fields in `Config` in `editor.zig`:
 
 ```zig
-.indent_newline = true,
-.reindent_block_end = true,
+pub const indent_newline: bool = true;
+pub const reindent_block_end_chars: ?[]const u21 = &.{ '}', ']', ')' };
 ```
