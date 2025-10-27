@@ -1,5 +1,5 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index 5b1c666..d160cfe 100644
+index f3c72f9..2f58b44 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
 @@ -23,6 +23,7 @@ const reg = @import("regex.zig");
@@ -20,8 +20,8 @@ index 5b1c666..d160cfe 100644
      stat: ?std.fs.File.Stat = null,
      /// Incremented on every content change
 @@ -91,12 +94,14 @@ pub const Buffer = struct {
-         const file_ext = std.fs.path.extension(buf_path);
          const file_type = ft.file_type.get(file_ext) orelse ft.plain;
+         log.debug(@This(), "file type: {s}\n", .{file_type.name});
          const file = try std.fs.cwd().openFile(buf_path, .{});
 +        const git_root = git.gitRoot(allocator, buf_path) catch null;
  
@@ -34,15 +34,7 @@ index 5b1c666..d160cfe 100644
              .allocator = allocator,
          };
  
-@@ -111,6 +116,7 @@ pub const Buffer = struct {
-             self.ts_state = try ts.State.init(allocator, ts_conf);
-         }
-         try self.reparse();
-+        try self.updateGitHunks();
-         return self;
-     }
- 
-@@ -157,6 +163,8 @@ pub const Buffer = struct {
+@@ -160,6 +165,8 @@ pub const Buffer = struct {
          self.lsp_connections.deinit(self.allocator);
  
          self.allocator.free(self.uri);
@@ -51,7 +43,7 @@ index 5b1c666..d160cfe 100644
          self.allocator.free(self.path);
  
          if (self.ts_state) |*ts_state| ts_state.deinit();
-@@ -534,6 +542,31 @@ pub const Buffer = struct {
+@@ -622,6 +629,31 @@ pub const Buffer = struct {
          }
      }
  
@@ -84,38 +76,53 @@ index 5b1c666..d160cfe 100644
          log.debug(@This(), "undo: {?}/{}\n", .{ self.history_index, self.history.items.len });
          if (self.history_index) |h_idx| {
 diff --git a/src/color.zig b/src/color.zig
-index f6ee63d..5f4dd32 100644
+index 0a32a64..f3923c8 100644
 --- a/src/color.zig
 +++ b/src/color.zig
-@@ -70,6 +70,7 @@ pub const Attr = union(enum) {
+@@ -69,6 +69,7 @@ pub const Attribute = union(enum) {
      bg: RgbColor,
      underline: RgbColor,
      curly_underline,
 +    bold,
  
-     pub fn write(self: Attr, writer: *std.io.Writer) !void {
+     pub fn write(self: Attribute, writer: *std.io.Writer) !void {
          switch (self) {
-@@ -77,6 +78,7 @@ pub const Attr = union(enum) {
+@@ -76,6 +77,7 @@ pub const Attribute = union(enum) {
              .bg => |c| try writer.print("\x1b[48;2;{};{};{}m", .{ c.r, c.g, c.b }),
              .underline => |c| try writer.print("\x1b[58;2;{};{};{}m", .{ c.r, c.g, c.b }),
              .curly_underline => _ = try writer.write("\x1b[4:3m"),
 +            .bold => _ = try writer.write("\x1b[1m"),
          }
      }
- };
-@@ -95,6 +97,9 @@ pub const attributes = enum {
-     pub const message = &[_]Attr{.{ .bg = color.gray2 }};
-     pub const command_line = &[_]Attr{.{ .bg = color.gray2 }};
-     pub const number_line = &[_]Attr{.{ .fg = color.gray4 }};
-+    pub const git_added = &[_]Attr{ .{ .fg = color.green }, .bold };
-+    pub const git_modified = &[_]Attr{ .{ .fg = color.yellow }, .bold };
-+    pub const git_deleted = &[_]Attr{ .{ .fg = color.red }, .bold };
  
-     pub fn write(attrs: []const Attr, writer: *std.io.Writer) !void {
+@@ -95,7 +97,10 @@ pub const Attribute = union(enum) {
+     pub const diagnostic_error = &[_]Attribute{ .curly_underline, .{ .underline = color.red } };
+     pub const diagnostic_warn = &[_]Attribute{ .curly_underline, .{ .underline = color.yellow } };
+     pub const diagnostic_info = &[_]Attribute{ .curly_underline, .{ .underline = color.magenta } };
+-    pub const diagnostic_hint = &[_]Attribute{ .{ .fg = color.gray6 } };
++    pub const diagnostic_hint = &[_]Attribute{.{ .fg = color.gray6 }};
++    pub const git_added = &[_]Attribute{ .{ .fg = color.green }, .bold };
++    pub const git_modified = &[_]Attribute{ .{ .fg = color.yellow }, .bold };
++    pub const git_deleted = &[_]Attribute{ .{ .fg = color.red }, .bold };
+ 
+     pub fn writeSlice(attrs: []const Attribute, writer: *std.io.Writer) !void {
          for (attrs) |attr| {
+diff --git a/src/editor.zig b/src/editor.zig
+index 8986a02..985ba01 100644
+--- a/src/editor.zig
++++ b/src/editor.zig
+@@ -91,6 +91,8 @@ pub const Editor = struct {
+         var buffer = try self.allocator.create(buf.Buffer);
+         buffer.* = b;
+ 
++        try buffer.updateGitHunks();
++
+         try self.buffers.insert(self.allocator, 0, buffer);
+         self.active_buffer = buffer;
+         main.editor.dirty.draw = true;
 diff --git a/src/git.zig b/src/git.zig
 new file mode 100644
-index 0000000..75687c7
+index 0000000..80a2962
 --- /dev/null
 +++ b/src/git.zig
 @@ -0,0 +1,142 @@
@@ -151,7 +158,7 @@ index 0000000..75687c7
 +    try path_arg.appendSlice(allocator, file_path);
 +    const args = .{ "git", "--no-pager", "show", path_arg.items };
 +    var exit_code: u8 = undefined;
-+    const content = try ext.runExternalWait(allocator, &args, null, &exit_code);
++    const content = try ext.runExternalWait(allocator, &args, .{ .exit_code = &exit_code });
 +    errdefer allocator.free(content);
 +    if (exit_code != 0) return error.GitError;
 +    return content;
@@ -160,7 +167,7 @@ index 0000000..75687c7
 +pub fn diffHunks(allocator: Allocator, file_before: []const u8, file_after: []const u8) !?[]const Hunk {
 +    const args = .{ "git", "--no-pager", "diff", "--unified=0", "--no-color", file_before, file_after };
 +    var exit_code: u8 = undefined;
-+    const diff = try ext.runExternalWait(allocator, &args, null, &exit_code);
++    const diff = try ext.runExternalWait(allocator, &args, .{ .exit_code = &exit_code });
 +    if (exit_code == 0) return null;
 +    if (exit_code != 1) return error.GitError;
 +    defer allocator.free(diff);
@@ -262,27 +269,19 @@ index 0000000..75687c7
 +    try std.testing.expectEqualDeep(hunks[1], Hunk{ .type = .delete, .line = 37, .len = 0 });
 +}
 diff --git a/src/main.zig b/src/main.zig
-index bab23db..4d7e195 100644
+index d117195..a9390cd 100644
 --- a/src/main.zig
 +++ b/src/main.zig
-@@ -43,6 +43,7 @@ pub var std_err_writer: *std.io.Writer = undefined;
- 
- pub var tty_in: std.fs.File = undefined;
- 
-+
- pub var editor: edi.Editor = undefined;
- pub var term: ter.Terminal = undefined;
- 
-@@ -509,6 +510,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+@@ -600,6 +600,7 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
              buffer.version += 1;
              buffer.clearDiagnostics();
              try buffer.reparse();
-+            buffer.updateGitHunks() catch |e| log.err(@This(), "git hunk update error: {}", .{e});
++            buffer.updateGitHunks() catch |e| log.err(@This(), "git hunk update error: {}", .{e}, @errorReturnTrace());
              perf.parse = timer.lap();
              for (buffer.lsp_connections.items) |conn| {
-                 conn.didChange(editor.active_buffer) catch |e| log.err(@This(), "did change LSP error: {}\n", .{e});
+                 conn.didChange(editor.active_buffer) catch |e|
 diff --git a/src/terminal.zig b/src/terminal.zig
-index 99cd154..910b19a 100644
+index 908d5e8..af3eb41 100644
 --- a/src/terminal.zig
 +++ b/src/terminal.zig
 @@ -154,6 +154,38 @@ pub const Terminal = struct {
@@ -305,15 +304,15 @@ index 99cd154..910b19a 100644
 +                    try self.moveCursor(.{ .row = @intCast(term_row), .col = area.pos.col });
 +                    switch (hunk.type) {
 +                        .add => {
-+                            try co.attributes.write(co.attributes.git_added, self.writer);
++                            try co.Attribute.writeSlice(co.Attribute.git_added, self.writer);
 +                            try self.writer.writeAll("┃");
 +                        },
 +                        .delete => {
-+                            try co.attributes.write(co.attributes.git_deleted, self.writer);
++                            try co.Attribute.writeSlice(co.Attribute.git_deleted, self.writer);
 +                            try self.writer.writeAll("▁");
 +                        },
 +                        .modify => {
-+                            try co.attributes.write(co.attributes.git_modified, self.writer);
++                            try co.Attribute.writeSlice(co.Attribute.git_modified, self.writer);
 +                            try self.writer.writeAll("┃");
 +                        },
 +                    }
@@ -324,7 +323,7 @@ index 99cd154..910b19a 100644
      }
  
      fn drawBuffer(self: *Terminal, buffer: *buf.Buffer, area: Area) !void {
-@@ -400,7 +432,7 @@ pub fn terminalSize() !Dimensions {
+@@ -404,7 +436,7 @@ pub fn terminalSize() !Dimensions {
  }
  
  pub fn computeLayout(term_dims: Dimensions) Layout {

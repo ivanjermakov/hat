@@ -1,6 +1,7 @@
 # Tree-sitter symbol picker
 
 Fzf picker listing document symbols based on tree-sitter query.
+Compatible with [aerial.nvim](https://github.com/stevearc/aerial.nvim) symbol queries.
 
 ## Usage
 
@@ -13,7 +14,7 @@ pub const file_type = std.StaticStringMap(FileTypeConfig).initComptime(.{
         .name = "typescript",
         .ts = .{
             // ...
-            .symbol_query = TsConfig.symbol_query_from_aerial("typescript"),
+            .symbol_query = "./queries/typescript/symbols.scm",
         },
     } },
 });
@@ -28,7 +29,7 @@ Create a mapping:
 
 ## Screenshots
 
-![Screenshot screen centering](/img/screenshot-ts-symbol-picker.png)
+![Screenshot symbol picker](/img/screenshot-ts-symbol-picker.png)
 
 ## Credit
 

@@ -1,5 +1,5 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index 5b1c666..8bacc00 100644
+index f3c72f9..01b4e99 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
 @@ -23,6 +23,7 @@ const reg = @import("regex.zig");
@@ -10,15 +10,15 @@ index 5b1c666..8bacc00 100644
  const fzf = @import("ui/fzf.zig");
  const uni = @import("unicode.zig");
  const ur = @import("uri.zig");
-@@ -187,6 +188,7 @@ pub const Buffer = struct {
+@@ -189,6 +190,7 @@ pub const Buffer = struct {
  
      pub fn enterMode(self: *Buffer, mode: Mode) FatalError!void {
          main.editor.resetHover();
 +        main.editor.resetCodeActions();
  
          if (self.mode == mode) return;
-         if (self.mode == .insert) try self.commitChanges();
-@@ -312,6 +314,7 @@ pub const Buffer = struct {
+         if (self.mode == .insert) {
+@@ -330,6 +332,7 @@ pub const Buffer = struct {
  
          main.editor.dirty.cursor = true;
          main.editor.resetHover();
@@ -26,21 +26,30 @@ index 5b1c666..8bacc00 100644
      }
  
      pub fn centerCursor(self: *Buffer) void {
-@@ -628,6 +631,12 @@ pub const Buffer = struct {
+@@ -721,6 +724,21 @@ pub const Buffer = struct {
          return self.content_raw.items[bs.start..bs.end];
      }
  
 +    pub fn codeActionExecute(self: *Buffer, code_action: act.CodeAction) !void {
-+        const parse_result = try std.json.parseFromSlice(lsp.types.WorkspaceEdit, self.allocator, code_action.edit_json, .{});
-+        defer parse_result.deinit();
-+        try main.editor.applyWorkspaceEdit(parse_result.value);
++        if (code_action.edit_json) |edit_json| {
++            const parse_result = try std.json.parseFromSlice(lsp.types.WorkspaceEdit, self.allocator, edit_json, .{});
++            defer parse_result.deinit();
++            try main.editor.applyWorkspaceEdit(parse_result.value);
++        }
++        if (code_action.command_json) |command_json| {
++            log.debug(@This(), "executing command {s}\n", .{command_json});
++            const parse_result = try std.json.parseFromSlice(lsp.types.Command, self.allocator, command_json, .{});
++            defer parse_result.deinit();
++            const command = parse_result.value;
++            try code_action.connection.executeCommand(command);
++        }
 +    }
 +
      pub fn renamePrompt(self: *Buffer) !void {
          const cmd = &main.editor.command_line;
          const line = self.lineContent(@intCast(self.cursor.row));
 diff --git a/src/editor.zig b/src/editor.zig
-index 9e47642..239094d 100644
+index 8986a02..24c4b9d 100644
 --- a/src/editor.zig
 +++ b/src/editor.zig
 @@ -13,6 +13,7 @@ const main = @import("main.zig");
@@ -51,7 +60,7 @@ index 9e47642..239094d 100644
  const fzf = @import("ui/fzf.zig");
  const uni = @import("unicode.zig");
  const ur = @import("uri.zig");
-@@ -53,6 +54,7 @@ pub const Editor = struct {
+@@ -52,6 +53,7 @@ pub const Editor = struct {
      messages: std.array_list.Aligned([]const u8, null) = .empty,
      message_read_idx: usize = 0,
      hover_contents: ?[]const u8 = null,
@@ -59,7 +68,7 @@ index 9e47642..239094d 100644
      key_queue: std.array_list.Aligned(inp.Key, null) = .empty,
      dot_repeat_input: std.array_list.Aligned(inp.Key, null) = .empty,
      dot_repeat_input_uncommitted: std.array_list.Aligned(inp.Key, null) = .empty,
-@@ -156,6 +158,7 @@ pub const Editor = struct {
+@@ -155,6 +157,7 @@ pub const Editor = struct {
          self.messages.deinit(self.allocator);
  
          self.resetHover();
@@ -67,7 +76,7 @@ index 9e47642..239094d 100644
  
          self.key_queue.deinit(self.allocator);
          self.dot_repeat_input.deinit(self.allocator);
-@@ -330,6 +333,15 @@ pub const Editor = struct {
+@@ -336,6 +339,15 @@ pub const Editor = struct {
          }
      }
  
@@ -84,7 +93,7 @@ index 9e47642..239094d 100644
          const keys = try ter.getKeys(self.allocator, str);
          defer self.allocator.free(keys);
 diff --git a/src/lsp.zig b/src/lsp.zig
-index 99bc179..3a8028a 100644
+index c09c036..61702ff 100644
 --- a/src/lsp.zig
 +++ b/src/lsp.zig
 @@ -9,12 +9,14 @@ const buf = @import("buffer.zig");
@@ -102,15 +111,47 @@ index 99bc179..3a8028a 100644
  
  pub const lsp_config = [_]LspConfig{};
  
-@@ -93,6 +95,7 @@ pub const LspConnection = struct {
+@@ -52,11 +54,11 @@ pub const LspConnectionStatus = enum {
+ 
+ pub const LspConnection = struct {
+     config: LspConfig,
+-    status: LspConnectionStatus,
++    status: LspConnectionStatus = .created,
+     child: std.process.Child,
+     messages_unreplied: std.AutoHashMap(i64, LspRequest),
+     poll_buf: std.array_list.Aligned(u8, null) = .empty,
+-    poll_header: ?lsp.BaseProtocolHeader,
++    poll_header: ?lsp.BaseProtocolHeader = null,
+     buffers: std.array_list.Aligned(*buf.Buffer, null) = .empty,
+     thread: std.Thread,
+     client_capabilities: types.ClientCapabilities,
+@@ -96,11 +98,17 @@ pub const LspConnection = struct {
                  .rename = .{
                      .prepareSupport = true,
                  },
-+                .codeAction = .{},
++                .codeAction = .{
++                    .codeActionLiteralSupport = .{
++                        .codeActionKind = .{ .valueSet = &code_action_kinds },
++                    },
++                },
              },
              .workspace = .{
                  .workspaceFolders = true,
-@@ -185,6 +188,8 @@ pub const LspConnection = struct {
+                 .configuration = true,
+                 .didChangeConfiguration = .{},
++                .executeCommand = .{},
+             },
+         };
+ 
+@@ -109,7 +117,6 @@ pub const LspConnection = struct {
+             .status = .created,
+             .child = child,
+             .messages_unreplied = std.AutoHashMap(i64, LspRequest).init(allocator),
+-            .poll_header = null,
+             .thread = undefined,
+             .client_capabilities = client_capabilities,
+             .stdin_writer = undefined,
+@@ -190,6 +197,8 @@ pub const LspConnection = struct {
                          try self.handleHoverResponse(arena.allocator(), response_result);
                      } else if (std.mem.eql(u8, method, "textDocument/rename")) {
                          try self.handleRenameResponse(arena.allocator(), response_result);
@@ -119,46 +160,99 @@ index 99bc179..3a8028a 100644
                      }
                  },
                  .notification => |notif| {
-@@ -236,6 +241,15 @@ pub const LspConnection = struct {
+@@ -205,6 +214,8 @@ pub const LspConnection = struct {
+                     log.trace(@This(), "< raw request: {s}\n", .{raw_msg_json});
+                     if (std.mem.eql(u8, request.method, "workspace/configuration")) {
+                         try self.handleConfigurationRequest(arena.allocator(), request);
++                    } else if (std.mem.eql(u8, request.method, "workspace/applyEdit")) {
++                        try self.handleApplyEditRequest(arena.allocator(), request);
+                     }
+                 },
+             }
+@@ -250,6 +261,38 @@ pub const LspConnection = struct {
          });
      }
  
 +    pub fn codeAction(self: *LspConnection) !void {
++        if ((self.server_init orelse return).value.capabilities.codeActionProvider == null) return;
 +        const buffer = main.editor.active_buffer;
-+        try self.sendRequest("textDocument/codeAction", .{
++
++        const arena = try self.allocator.create(std.heap.ArenaAllocator);
++        defer self.allocator.destroy(arena);
++        arena.* = std.heap.ArenaAllocator.init(self.allocator);
++        defer arena.deinit();
++
++        var diagnostics: std.array_list.Aligned(types.Diagnostic, null) = .empty;
++        defer diagnostics.deinit(self.allocator);
++        for (buffer.diagnostics.items) |diagnostic| {
++            if (diagnostic.span.inRange(buffer.cursor)) {
++                try diagnostics.append(self.allocator, try diagnostic.toLsp(arena.allocator()));
++            }
++        }
++
++        try self.sendRequest("textDocument/codeAction", types.CodeActionParams{
 +            .textDocument = .{ .uri = buffer.uri },
 +            .range = (Span{ .start = buffer.cursor, .end = buffer.cursor }).toLsp(),
-+            .context = .{ .diagnostics = &.{} },
++            .context = .{ .diagnostics = diagnostics.items },
++        });
++    }
++
++    pub fn executeCommand(self: *LspConnection, command: types.Command) !void {
++        log.trace(@This(), "command {}\n", .{command});
++        try self.sendRequest("workspace/executeCommand", types.ExecuteCommandParams{
++            .command = command.command,
++            .arguments = command.arguments,
 +        });
 +    }
 +
      pub fn rename(self: *LspConnection, new_name: []const u8) !void {
          if ((self.server_init orelse return).value.capabilities.renameProvider == null) return;
          const buffer = main.editor.active_buffer;
-@@ -533,6 +547,18 @@ pub const LspConnection = struct {
-         try main.editor.applyWorkspaceEdit(result.value);
+@@ -578,6 +621,23 @@ pub const LspConnection = struct {
+         try self.sendResponse("workspace/configuration", request.id, response.items);
      }
  
-+    fn handleCodeActionResponse(self: *LspConnection, arena: Allocator, resp: ?std.json.Value) !void {
++    fn handleApplyEditRequest(self: *LspConnection, arena: Allocator, request: lsp.JsonRPCMessage.Request) !void {
 +        _ = self;
++        const params = (try std.json.parseFromValue(types.ApplyWorkspaceEditParams, arena, request.params.?, .{})).value;
++        try main.editor.applyWorkspaceEdit(params.edit);
++    }
++
++    fn handleCodeActionResponse(self: *LspConnection, arena: Allocator, resp: ?std.json.Value) !void {
 +        if (resp == null or resp.? == .null) return;
 +        const result = try std.json.parseFromValue([]const types.CodeAction, arena, resp.?, .{});
 +        const editor = &main.editor;
 +
 +        editor.resetCodeActions();
-+        editor.code_actions = try act.fromLsp(editor.allocator, result.value);
++        editor.code_actions = try act.fromLsp(self, result.value);
 +        log.debug(@This(), "got {} code actions\n", .{editor.code_actions.?.len});
 +        editor.dirty.draw = true;
 +    }
 +
-     fn handleNotification(self: *LspConnection, arena: Allocator, notif: lsp.JsonRPCMessage.Notification) !void {
-         log.trace(@This(), "notification: {s}\n", .{notif.method});
-         if (std.mem.eql(u8, notif.method, "window/logMessage")) {
+     const parse_opts = std.json.ParseOptions{ .ignore_unknown_fields = true };
+     const stringify_opts = std.json.Stringify.Options{ .emit_null_optional_fields = false };
+ };
+@@ -600,3 +660,15 @@ pub fn extractTextEdit(item: types.CompletionItem) ?types.TextEdit {
+     }
+     return null;
+ }
++
++const code_action_kinds = [_]types.CodeActionKind{
++    .empty,
++    .quickfix,
++    .refactor,
++    .@"refactor.extract",
++    .@"refactor.inline",
++    .@"refactor.rewrite",
++    .source,
++    .@"source.organizeImports",
++    .@"source.fixAll",
++};
 diff --git a/src/main.zig b/src/main.zig
-index bab23db..c29ce01 100644
+index d117195..7641f3a 100644
 --- a/src/main.zig
 +++ b/src/main.zig
-@@ -178,6 +178,14 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+@@ -180,6 +180,14 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                  const cmd_active = editor.command_line.command != null;
                  var repeat_or_1: i32 = 1;
                  if (repeat_count) |rc| repeat_or_1 = @intCast(rc);
@@ -173,30 +267,32 @@ index bab23db..c29ce01 100644
  
                  // command line menu
                  if (cmd_active) {
-@@ -205,6 +213,10 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
-                 } else if (cmp_menu_active and eql(u8, key, "\n")) {
-                     editor.completion_menu.accept() catch |e| log.err(@This(), "cmp accept error: {}\n", .{e});
+@@ -209,6 +217,11 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+                     editor.completion_menu.accept() catch |e|
+                         log.err(@This(), "cmp accept error: {}\n", .{e}, @errorReturnTrace());
  
 +                    // code action menu
 +                } else if (code_action) |action| {
-+                    buffer.codeActionExecute(action) catch |e| log.err(@This(), "code action exec error: {}\n", .{e});
++                    buffer.codeActionExecute(action) catch |e|
++                        log.err(@This(), "code action exec error: {}\n", .{e}, @errorReturnTrace());
 +
                      // text insertion
                  } else if (buffer.mode == .insert and editor.key_queue.items[0].printable != null) {
                      var printable: std.array_list.Aligned(u21, null) = .empty;
-@@ -447,6 +459,10 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
-                         for (buffer.lsp_connections.items) |conn| {
-                             conn.findReferences() catch |e| log.err(@This(), "find references LSP error: {}\n", .{e});
+@@ -538,6 +551,11 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+                             conn.findReferences() catch |e|
+                                 log.err(@This(), "find references LSP error: {}\n", .{e}, @errorReturnTrace());
                          }
 +                    } else if (buffer.mode == .normal and eql(u8, multi_key, " c")) {
 +                        for (buffer.lsp_connections.items) |conn| {
-+                            conn.codeAction() catch |e| log.err(@This(), "code action LSP error: {}\n", .{e});
++                            conn.codeAction() catch |e|
++                                log.err(@This(), "code action LSP error: {}\n", .{e}, @errorReturnTrace());
 +                        }
                      } else if (buffer.mode == .normal and eql(u8, multi_key, " n")) {
                          try buffer.renamePrompt();
                      } else if (buffer.mode == .normal and eql(u8, key, "r") and key2.printable != null) {
 diff --git a/src/terminal.zig b/src/terminal.zig
-index 99cd154..6df359b 100644
+index 908d5e8..458b313 100644
 --- a/src/terminal.zig
 +++ b/src/terminal.zig
 @@ -16,6 +16,7 @@ const log = @import("log.zig");
@@ -215,7 +311,7 @@ index 99cd154..6df359b 100644
          if (main.editor.command_line.command == null) try self.drawMessage();
          try self.updateCursor();
          if (main.editor.command_line.command != null) try self.drawCmd(&main.editor.command_line);
-@@ -336,6 +338,34 @@ pub const Terminal = struct {
+@@ -340,6 +342,34 @@ pub const Terminal = struct {
          try self.drawOverlay(doc_lines.items, doc_pos);
      }
  
@@ -252,47 +348,60 @@ index 99cd154..6df359b 100644
      fn drawOverlay(self: *Terminal, lines: []const []const u8, pos: Cursor) !void {
 diff --git a/src/ui/code_action.zig b/src/ui/code_action.zig
 new file mode 100644
-index 0000000..8246f40
+index 0000000..ec7fcc7
 --- /dev/null
 +++ b/src/ui/code_action.zig
-@@ -0,0 +1,67 @@
+@@ -0,0 +1,90 @@
 +const std = @import("std");
 +const Allocator = std.mem.Allocator;
 +
 +const lsp = @import("../lsp.zig");
++const log = @import("../log.zig");
 +
 +pub const hint_bag: []const u8 = &.{ 'f', 'j', 'd', 'k', 's', 'l', 'a', 'b', 'c', 'e', 'g', 'h', 'i', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z' };
 +
 +pub const CodeAction = struct {
++    connection: *lsp.LspConnection,
 +    hint: u8,
 +    title: []const u8,
 +    /// Stringified `lsp.types.WorkspaceEdit`
-+    edit_json: []const u8,
++    edit_json: ?[]const u8,
++    /// Stringified `lsp.types.Command`
++    command_json: ?[]const u8,
 +    allocator: Allocator,
 +
-+    pub fn init(allocator: Allocator, code_action: lsp.types.CodeAction) !CodeAction {
++    pub fn init(connection: *lsp.LspConnection, code_action: lsp.types.CodeAction) !CodeAction {
++        const allocator = connection.allocator;
++        log.trace(@This(), "raw code action: {}\n", .{code_action});
++        if (code_action.command) |c| {
++            log.trace(@This(), "command: {s}\n", .{c.title});
++        }
 +        const title = try allocator.dupe(u8, code_action.title);
 +        return .{
++            .connection = connection,
 +            .hint = title[0],
 +            .title = title,
-+            .edit_json = try std.json.Stringify.valueAlloc(allocator, code_action.edit.?, .{}),
++            .edit_json = if (code_action.edit) |e| try std.json.Stringify.valueAlloc(allocator, e, .{}) else null,
++            .command_json = if (code_action.command) |c| try std.json.Stringify.valueAlloc(allocator, c, .{}) else null,
 +            .allocator = allocator,
 +        };
 +    }
 +
 +    pub fn deinit(self: *const CodeAction) void {
 +        self.allocator.free(self.title);
-+        self.allocator.free(self.edit_json);
++        if (self.edit_json) |e| self.allocator.free(e);
++        if (self.command_json) |c| self.allocator.free(c);
 +    }
 +};
 +
-+pub fn fromLsp(allocator: Allocator, lsp_code_actions: []const lsp.types.CodeAction) ![]const CodeAction {
++pub fn fromLsp(connection: *lsp.LspConnection, lsp_code_actions: []const lsp.types.CodeAction) ![]const CodeAction {
++    const allocator = connection.allocator;
 +    var bag: std.array_list.Aligned(u8, null) = .empty;
 +    try bag.appendSlice(allocator, hint_bag);
 +    defer bag.deinit(allocator);
 +    var code_actions = std.array_list.Managed(CodeAction).init(allocator);
 +    for (lsp_code_actions) |lsp_code_action| {
-+        var action = try CodeAction.init(allocator, lsp_code_action);
++        var action = try CodeAction.init(connection, lsp_code_action);
 +        if (std.mem.indexOfScalar(u8, bag.items, action.hint)) |available_idx| {
 +            _ = bag.orderedRemove(available_idx);
 +        } else {
@@ -305,7 +414,17 @@ index 0000000..8246f40
 +
 +test "fromLsp with collisions" {
 +    const allocator = std.testing.allocator;
-+    const result = try fromLsp(allocator, &.{
++    var connection = lsp.LspConnection{
++        .config = undefined,
++        .child = undefined,
++        .messages_unreplied = undefined,
++        .thread = undefined,
++        .client_capabilities = undefined,
++        .stdin_writer = undefined,
++        .allocator = allocator,
++    };
++
++    const result = try fromLsp(&connection, &.{
 +        .{ .title = "foo", .edit = .{} },
 +        .{ .title = "bar", .edit = .{} },
 +        .{ .title = "baz", .edit = .{} },
@@ -323,3 +442,34 @@ index 0000000..8246f40
 +    try std.testing.expectEqual('d', result[3].hint);
 +    try std.testing.expectEqual('k', result[4].hint);
 +}
+diff --git a/src/ui/diagnostic.zig b/src/ui/diagnostic.zig
+index 2d8e855..b9ac011 100644
+--- a/src/ui/diagnostic.zig
++++ b/src/ui/diagnostic.zig
+@@ -10,6 +10,7 @@ pub const Diagnostic = struct {
+     span: Span,
+     message: []const u8,
+     severity: lsp.types.DiagnosticSeverity,
++    raw_json: []const u8,
+     allocator: Allocator,
+ 
+     pub fn fromLsp(allocator: Allocator, lsp_diagnostic: lsp.types.Diagnostic) !Diagnostic {
+@@ -17,12 +18,18 @@ pub const Diagnostic = struct {
+             .span = Span.fromLsp(lsp_diagnostic.range),
+             .message = try allocator.dupe(u8, lsp_diagnostic.message),
+             .severity = lsp_diagnostic.severity orelse .Error,
++            .raw_json = try std.json.Stringify.valueAlloc(allocator, lsp_diagnostic, .{}),
+             .allocator = allocator,
+         };
+     }
+ 
++    pub fn toLsp(self: *const Diagnostic, arena: Allocator) !lsp.types.Diagnostic {
++        return try std.json.parseFromSliceLeaky(lsp.types.Diagnostic, arena, self.raw_json, .{});
++    }
++
+     pub fn deinit(self: *Diagnostic) void {
+         self.allocator.free(self.message);
++        self.allocator.free(self.raw_json);
+     }
+ 
+     pub fn lessThan(_: void, a: Diagnostic, b: Diagnostic) bool {

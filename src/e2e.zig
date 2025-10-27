@@ -13,6 +13,8 @@ const main = @import("main.zig");
 const ter = @import("terminal.zig");
 const ur = @import("uri.zig");
 
+/// E2E test suite requires zls LSP server
+/// Start test suite with SKIP_E2E=true to skip E2E tests
 fn e2eSetup() !bool {
     main.std_err_file_writer = main.std_err.writer(&main.std_err_buf);
     log.level = .debug;
