@@ -1,8 +1,8 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index 5b1c666..5a1fb75 100644
+index f3c72f9..f6bab8d 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
-@@ -406,7 +406,7 @@ pub const Buffer = struct {
+@@ -476,7 +476,7 @@ pub const Buffer = struct {
          main.editor.dirty.completion = true;
      }
  
@@ -11,7 +11,7 @@ index 5b1c666..5a1fb75 100644
          if (self.uncommitted_changes.items.len == 0) {
              log.debug(@This(), "no changes to commit\n", .{});
              return;
-@@ -628,6 +628,27 @@ pub const Buffer = struct {
+@@ -721,6 +721,27 @@ pub const Buffer = struct {
          return self.content_raw.items[bs.start..bs.end];
      }
  
@@ -24,7 +24,7 @@ index 5b1c666..5a1fb75 100644
 +                    log.debug(@This(), "symbol span: {s}\n", .{symbol_name});
 +                }
 +                const pick_result = fzf.pickSymbol(self.allocator, self, parse_result.spans.items) catch |e| {
-+                    log.err(@This(), "{}\n", .{e});
++                    log.err(@This(), "{}\n", .{e}, @errorReturnTrace());
 +                    if (@errorReturnTrace()) |trace| log.errPrint("{f}\n", .{trace.*});
 +                    return;
 +                };
@@ -40,7 +40,7 @@ index 5b1c666..5a1fb75 100644
          const cmd = &main.editor.command_line;
          const line = self.lineContent(@intCast(self.cursor.row));
 diff --git a/src/core.zig b/src/core.zig
-index 046dce8..23a46d1 100644
+index a09c2e0..12cc04c 100644
 --- a/src/core.zig
 +++ b/src/core.zig
 @@ -88,6 +88,11 @@ pub const SpanFlat = struct {
@@ -55,44 +55,11 @@ index 046dce8..23a46d1 100644
      pub fn fromBufSpan(buffer: *const buf.Buffer, span: Span) SpanFlat {
          return .{
              .start = buffer.cursorToPos(span.start),
-diff --git a/src/file_type.zig b/src/file_type.zig
-index 0048f51..281d36f 100644
---- a/src/file_type.zig
-+++ b/src/file_type.zig
-@@ -23,6 +23,7 @@ pub const TsConfig = struct {
-     lib_symbol: []const u8,
-     highlight_query: []const u8,
-     indent_query: []const u8,
-+    symbol_query: ?[]const u8,
- 
-     pub fn from_nvim(comptime name: []const u8) TsConfig {
-         return .{
-@@ -30,6 +31,7 @@ pub const TsConfig = struct {
-             .lib_symbol = "tree_sitter_" ++ name,
-             .highlight_query = highlight_query_from_nvim(name),
-             .indent_query = indent_query_from_nvim(name),
-+            .symbol_query = symbol_query_from_aerial(name),
-         };
-     }
- 
-@@ -62,7 +64,12 @@ pub const TsConfig = struct {
-         return nvim_ts_path ++ "/queries/" ++ name ++ "/indents.scm";
-     }
- 
-+    pub fn symbol_query_from_aerial(comptime name: []const u8) []const u8 {
-+        return nvim_aerial_path ++ "/queries/" ++ name ++ "/aerial.scm";
-+    }
-+
-     const nvim_ts_path = "$HOME/.local/share/nvim/lazy/nvim-treesitter";
-+    const nvim_aerial_path = "$HOME/.local/share/nvim/lazy/aerial.nvim";
- };
- 
- pub const plain: FileTypeConfig = .{ .name = "plain", .ts = null };
 diff --git a/src/main.zig b/src/main.zig
-index bab23db..6c77b5b 100644
+index d117195..5bc6b0a 100644
 --- a/src/main.zig
 +++ b/src/main.zig
-@@ -449,6 +449,8 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+@@ -540,6 +540,8 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
                          }
                      } else if (buffer.mode == .normal and eql(u8, multi_key, " n")) {
                          try buffer.renamePrompt();
@@ -102,58 +69,49 @@ index bab23db..6c77b5b 100644
                          const macro_name: u8 = @intCast(key2.printable.?);
                          try editor.startMacro(macro_name);
 diff --git a/src/ts.zig b/src/ts.zig
-index 1c63d02..fa110d5 100644
+index a7de638..e36ae8e 100644
 --- a/src/ts.zig
 +++ b/src/ts.zig
-@@ -70,6 +70,7 @@ pub const State = struct {
+@@ -101,6 +101,7 @@ pub const State = struct {
      tree: ?*ts.TSTree = null,
-     highlight: ParseResult(AttrsSpan),
-     indent: ParseResult(IndentSpanTuple),
+     highlight: ?ParseResult(AttrsSpan) = null,
+     indent: ?Query = null,
 +    symbol: ?ParseResult(SpanFlat) = null,
      allocator: Allocator,
  
      pub fn init(allocator: Allocator, ts_conf: ft.TsConfig) !State {
-@@ -78,14 +79,18 @@ pub const State = struct {
-         defer allocator.free(highlight_query);
-         const indent_query = try ft.TsConfig.loadQuery(allocator, ts_conf.indent_query);
-         defer allocator.free(indent_query);
-+        const symbol_query = if (ts_conf.symbol_query) |sq| try ft.TsConfig.loadQuery(allocator, sq) else null;
-+        defer if (symbol_query) |sq| allocator.free(sq);
+@@ -119,6 +120,10 @@ pub const State = struct {
+         defer if (indent_query) |q| allocator.free(q);
+         if (indent_query) |q| self.indent = try .init(allocator, language, q);
  
--        const self = State{
-+        var self = State{
-             .parser = ts.ts_parser_new(),
-             .allocator = allocator,
-             .highlight = try ParseResult(AttrsSpan).init(allocator, language(), highlight_query),
-             .indent = try ParseResult(IndentSpanTuple).init(allocator, language(), indent_query),
-         };
-+        if (symbol_query) |sq| self.symbol = try ParseResult(SpanFlat).init(allocator, language(), sq);
-         _ = ts.ts_parser_set_language(self.parser, language());
++        const symbol_query = if (ts_conf.symbol_query) |q| try ft.TsConfig.loadQuery(allocator, q) else null;
++        defer if (symbol_query) |q| allocator.free(q);
++        if (symbol_query) |q| self.symbol = try ParseResult(SpanFlat).init(allocator, language, q);
 +
-         return self;
-     }
+         _ = ts.ts_parser_set_language(self.parser, language);
  
-@@ -113,6 +118,7 @@ pub const State = struct {
+         return self;
+@@ -158,6 +163,7 @@ pub const State = struct {
          if (self.tree) |t| ts.ts_tree_delete(t);
-         self.highlight.deinit();
-         self.indent.deinit();
+         if (self.highlight) |*h| h.deinit();
+         if (self.indent) |*i| i.deinit();
 +        if (self.symbol) |*s| s.deinit();
      }
  };
  
 diff --git a/src/ui/fzf.zig b/src/ui/fzf.zig
-index 3852c7a..407ad67 100644
+index 339dca8..26339b2 100644
 --- a/src/ui/fzf.zig
 +++ b/src/ui/fzf.zig
-@@ -5,6 +5,7 @@ const buf = @import("../buffer.zig");
- const col = @import("../color.zig");
+@@ -6,6 +6,7 @@ const col = @import("../color.zig");
+ const Color = col.color;
  const core = @import("../core.zig");
  const Cursor = core.Cursor;
 +const SpanFlat = core.SpanFlat;
  const ext = @import("../external.zig");
  const log = @import("../log.zig");
  const lsp = @import("../lsp.zig");
-@@ -26,7 +27,7 @@ pub const FindResult = struct {
+@@ -27,7 +28,7 @@ pub const FindResult = struct {
      position: Cursor,
  
      pub fn init(allocator: Allocator, fzf_out: []const u8) !FindResult {
@@ -162,7 +120,7 @@ index 3852c7a..407ad67 100644
          return .{
              .path = try allocator.dupe(u8, iter.next().?),
              .position = .{
-@@ -89,6 +90,32 @@ pub fn pickLspLocation(allocator: Allocator, locations: []const lsp.types.Locati
+@@ -90,6 +91,32 @@ pub fn pickLspLocation(allocator: Allocator, locations: []const lsp.types.Locati
      return .init(allocator, out);
  }
  
@@ -186,7 +144,7 @@ index 3852c7a..407ad67 100644
 +    defer allocator.free(preview_cmd);
 +
 +    const cmd: []const []const u8 = fzf_command ++ .{ "--preview", preview_cmd, "--delimiter", ":" };
-+    const out = try ext.runExternalWait(allocator, cmd, lines.written(), null);
++    const out = try ext.runExternalWait(allocator, cmd, .{ .input = lines.written() });
 +    defer allocator.free(out);
 +    if (out.len == 0) return error.EmptyOut;
 +    return .init(allocator, out);
