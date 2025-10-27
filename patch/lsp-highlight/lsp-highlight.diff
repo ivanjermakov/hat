@@ -1,8 +1,8 @@
 diff --git a/src/buffer.zig b/src/buffer.zig
-index 5b1c666..1ed21e2 100644
+index f3c72f9..14b45b3 100644
 --- a/src/buffer.zig
 +++ b/src/buffer.zig
-@@ -83,6 +83,7 @@ pub const Buffer = struct {
+@@ -81,6 +81,7 @@ pub const Buffer = struct {
      uncommitted_changes: std.array_list.Aligned(cha.Change, null) = .empty,
      lsp_connections: std.array_list.Aligned(*lsp.LspConnection, null) = .empty,
      scratch: bool = false,
@@ -10,15 +10,15 @@ index 5b1c666..1ed21e2 100644
      allocator: Allocator,
  
      pub fn init(allocator: Allocator, uri: []const u8) !Buffer {
-@@ -170,6 +171,7 @@ pub const Buffer = struct {
+@@ -172,6 +173,7 @@ pub const Buffer = struct {
+ 
          self.line_positions.deinit(self.allocator);
          self.line_byte_positions.deinit(self.allocator);
-         self.indents.deinit(self.allocator);
 +        self.highlights.deinit(self.allocator);
  
          for (self.history.items) |*i| {
              for (i.items) |*c| c.deinit();
-@@ -406,7 +408,7 @@ pub const Buffer = struct {
+@@ -476,7 +478,7 @@ pub const Buffer = struct {
          main.editor.dirty.completion = true;
      }
  
@@ -27,7 +27,7 @@ index 5b1c666..1ed21e2 100644
          if (self.uncommitted_changes.items.len == 0) {
              log.debug(@This(), "no changes to commit\n", .{});
              return;
-@@ -628,6 +630,24 @@ pub const Buffer = struct {
+@@ -721,6 +723,24 @@ pub const Buffer = struct {
          return self.content_raw.items[bs.start..bs.end];
      }
  
@@ -53,19 +53,24 @@ index 5b1c666..1ed21e2 100644
          const cmd = &main.editor.command_line;
          const line = self.lineContent(@intCast(self.cursor.row));
 diff --git a/src/color.zig b/src/color.zig
-index f6ee63d..42478e5 100644
+index 0a32a64..1732a02 100644
 --- a/src/color.zig
 +++ b/src/color.zig
-@@ -84,6 +84,7 @@ pub const Attr = union(enum) {
- pub const attributes = enum {
-     pub const text = &[_]Attr{.{ .fg = color.white }};
-     pub const selection = &[_]Attr{.{ .bg = color.gray3 }};
-+    pub const highlight = &[_]Attr{.{ .bg = color.gray3 }};
-     pub const keyword = &[_]Attr{.{ .fg = color.magenta }};
-     pub const string = &[_]Attr{.{ .fg = color.green }};
-     pub const literal = &[_]Attr{.{ .fg = color.yellow }};
+@@ -96,6 +96,7 @@ pub const Attribute = union(enum) {
+     pub const diagnostic_warn = &[_]Attribute{ .curly_underline, .{ .underline = color.yellow } };
+     pub const diagnostic_info = &[_]Attribute{ .curly_underline, .{ .underline = color.magenta } };
+     pub const diagnostic_hint = &[_]Attribute{ .{ .fg = color.gray6 } };
++    pub const highlight = &[_]Attribute{ .{ .bg = color.gray3 } };
+ 
+     pub fn writeSlice(attrs: []const Attribute, writer: *std.io.Writer) !void {
+         for (attrs) |attr| {
+@@ -112,3 +113,4 @@ pub const Attribute = union(enum) {
+         };
+     }
+ };
++
 diff --git a/src/lsp.zig b/src/lsp.zig
-index 99bc179..5c5f26d 100644
+index c09c036..474223b 100644
 --- a/src/lsp.zig
 +++ b/src/lsp.zig
 @@ -9,6 +9,7 @@ const buf = @import("buffer.zig");
@@ -76,7 +81,7 @@ index 99bc179..5c5f26d 100644
  const fs = @import("fs.zig");
  const log = @import("log.zig");
  const main = @import("main.zig");
-@@ -93,6 +94,7 @@ pub const LspConnection = struct {
+@@ -96,6 +97,7 @@ pub const LspConnection = struct {
                  .rename = .{
                      .prepareSupport = true,
                  },
@@ -84,7 +89,7 @@ index 99bc179..5c5f26d 100644
              },
              .workspace = .{
                  .workspaceFolders = true,
-@@ -185,6 +187,8 @@ pub const LspConnection = struct {
+@@ -190,6 +192,8 @@ pub const LspConnection = struct {
                          try self.handleHoverResponse(arena.allocator(), response_result);
                      } else if (std.mem.eql(u8, method, "textDocument/rename")) {
                          try self.handleRenameResponse(arena.allocator(), response_result);
@@ -93,7 +98,7 @@ index 99bc179..5c5f26d 100644
                      }
                  },
                  .notification => |notif| {
-@@ -236,6 +240,14 @@ pub const LspConnection = struct {
+@@ -250,6 +254,14 @@ pub const LspConnection = struct {
          });
      }
  
@@ -108,8 +113,8 @@ index 99bc179..5c5f26d 100644
      pub fn rename(self: *LspConnection, new_name: []const u8) !void {
          if ((self.server_init orelse return).value.capabilities.renameProvider == null) return;
          const buffer = main.editor.active_buffer;
-@@ -533,6 +545,20 @@ pub const LspConnection = struct {
-         try main.editor.applyWorkspaceEdit(result.value);
+@@ -578,6 +590,20 @@ pub const LspConnection = struct {
+         try self.sendResponse("workspace/configuration", request.id, response.items);
      }
  
 +    fn handleHighlightResponse(self: *LspConnection, arena: Allocator, resp: ?std.json.Value) !void {
@@ -126,18 +131,20 @@ index 99bc179..5c5f26d 100644
 +        }
 +    }
 +
-     fn handleNotification(self: *LspConnection, arena: Allocator, notif: lsp.JsonRPCMessage.Notification) !void {
-         log.trace(@This(), "notification: {s}\n", .{notif.method});
-         if (std.mem.eql(u8, notif.method, "window/logMessage")) {
+     const parse_opts = std.json.ParseOptions{ .ignore_unknown_fields = true };
+     const stringify_opts = std.json.Stringify.Options{ .emit_null_optional_fields = false };
+ };
 diff --git a/src/main.zig b/src/main.zig
-index bab23db..46c62f8 100644
+index d117195..148847d 100644
 --- a/src/main.zig
 +++ b/src/main.zig
-@@ -526,6 +526,16 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
-             term.draw() catch |e| log.err(@This(), "draw error: {}\n", .{e});
+@@ -618,8 +618,17 @@ pub fn startEditor(allocator: std.mem.Allocator) FatalError!void {
+             term.draw() catch |e| log.err(@This(), "draw error: {}\n", .{e}, @errorReturnTrace());
          } else if (editor.dirty.cursor) {
              editor.dirty.cursor = false;
-+            term.updateCursor() catch |e| log.err(@This(), "update cursor error: {}", .{e});
+-            term.updateCursor() catch |e|
+-                log.err(@This(), "update cursor error: {}\n", .{e}, @errorReturnTrace());
++            term.updateCursor() catch |e| log.err(@This(), "update cursor error: {}", .{e}, @errorReturnTrace());
 +
 +            if (buffer.highlights.items.len > 0) {
 +                buffer.highlights.clearRetainingCapacity();
@@ -145,27 +152,28 @@ index bab23db..46c62f8 100644
 +                editor.dirty.draw = true;
 +            }
 +            for (buffer.lsp_connections.items) |conn| {
-+                conn.highlight() catch |e| log.err(@This(), "highlight LSP error: {}", .{e});
++                conn.highlight() catch |e| log.err(@This(), "highlight LSP error: {}", .{e}, @errorReturnTrace());
 +            }
-             term.updateCursor() catch |e| log.err(@This(), "update cursor error: {}\n", .{e});
++            term.updateCursor() catch |e| log.err(@This(), "update cursor error: {}\n", .{e}, @errorReturnTrace());
          }
          perf.draw = timer.lap();
+ 
 diff --git a/src/terminal.zig b/src/terminal.zig
-index 99cd154..e4e7e88 100644
+index 908d5e8..867c7c6 100644
 --- a/src/terminal.zig
 +++ b/src/terminal.zig
-@@ -213,6 +213,14 @@ pub const Terminal = struct {
+@@ -215,6 +215,14 @@ pub const Terminal = struct {
+                         const attr = if (buffer.mode.isSelect()) co.Attribute.selection else co.Attribute.selection_normal;
+                         try co.Attribute.writeSlice(attr, &attrs_writer);
                      }
-                 }
- 
-+                if (buffer.mode == .normal) {
-+                    for (buffer.highlights.items) |hi| {
-+                        if (hi.inRange(.{ .row = buffer_row, .col = buffer_col })) {
-+                            try co.attributes.write(co.attributes.highlight, &attrs_writer);
++                } else {
++                    if (buffer.mode == .normal) {
++                        for (buffer.highlights.items) |hi| {
++                            if (hi.inRange(.{ .row = buffer_row, .col = buffer_col })) {
++                                try co.Attribute.writeSlice(co.Attribute.highlight, &attrs_writer);
++                            }
 +                        }
 +                    }
-+                }
-+
+                 }
+ 
                  if (buffer.diagnostics.items.len > 0) {
-                     for (buffer.diagnostics.items) |diagnostic| {
-                         const span = diagnostic.span;
